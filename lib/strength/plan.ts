@@ -3,7 +3,11 @@ import { db, ready } from "@/lib/db";
 import { strengthSessions, workouts, type Profile, type StrengthSession, type Workout } from "@/drizzle/schema";
 import { addDays, dayOfWeek, todayISO } from "@/lib/date";
 import { phaseFor, type Phase } from "@/lib/plan/types";
+import { KEYS, getSetting, setSetting } from "@/lib/settings";
 import { blocksFor, coreLevelFor, strengthLevelFor, type Focus, type StrengthVariant } from "./exercises";
+
+/** Bump when the WorkoutX-backed catalog changes so planned sessions rewrite. */
+export const STRENGTH_CATALOG_VERSION = "wx-runner-2026-08-05";
 
 /**
  * Strength sits on a fixed weekly grid relative to the long run:
@@ -189,17 +193,26 @@ async function insertSeeds(seeds: StrengthSeed[]): Promise<void> {
 
 export async function ensureStrengthPlan(current: Profile): Promise<void> {
   await ready();
+  const version = await getSetting(KEYS.strengthCatalog);
   const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(strengthSessions);
-  if (Number(count) > 0) return;
 
-  const plan = await db.select().from(workouts).orderBy(workouts.date);
-  await insertSeeds(
-    buildStrengthPlan(plan, {
-      strengthDays: current.strengthDays,
-      absGoal: current.absGoal === 1,
-      raceDate: current.raceDate,
-    }),
-  );
+  if (Number(count) === 0) {
+    const plan = await db.select().from(workouts).orderBy(workouts.date);
+    await insertSeeds(
+      buildStrengthPlan(plan, {
+        strengthDays: current.strengthDays,
+        absGoal: current.absGoal === 1,
+        raceDate: current.raceDate,
+      }),
+    );
+    await setSetting(KEYS.strengthCatalog, STRENGTH_CATALOG_VERSION);
+    return;
+  }
+
+  if (version !== STRENGTH_CATALOG_VERSION) {
+    await regenerateStrengthPlan(current);
+    await setSetting(KEYS.strengthCatalog, STRENGTH_CATALOG_VERSION);
+  }
 }
 
 /**

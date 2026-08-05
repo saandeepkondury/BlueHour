@@ -1,5 +1,6 @@
+import { exerciseById } from "@/lib/strength/exercises";
 import { KEYS, getSetting, setSetting } from "@/lib/settings";
-import { WORKOUTX_QUERY } from "./queries";
+import { wxIdFor } from "./queries";
 
 const BASE = "https://api.workoutxapp.com/v1";
 
@@ -50,48 +51,28 @@ async function writeCache(cache: CacheMap): Promise<void> {
   await setSetting(KEYS.workoutxCache, JSON.stringify(cache));
 }
 
-function scoreMatch(query: string, name: string): number {
-  const q = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const n = name.toLowerCase();
-  let hits = 0;
-  for (const word of q) if (n.includes(word)) hits += 1;
-  return hits / Math.max(1, q.length);
-}
-
-async function searchByName(query: string): Promise<WorkoutXExercise | null> {
-  const res = await wxFetch(`/exercises/name/${encodeURIComponent(query)}?limit=8`);
-  if (!res.ok) return null;
-  const data = (await res.json()) as WorkoutXExercise[] | { data?: WorkoutXExercise[] };
-  const list = Array.isArray(data) ? data : Array.isArray(data.data) ? data.data : [];
-  if (list.length === 0) return null;
-  return [...list].sort((a, b) => scoreMatch(query, b.name) - scoreMatch(query, a.name))[0] ?? null;
-}
-
 export async function resolveDemo(exerciseId: string): Promise<WorkoutXExercise | null> {
-  if (!apiKey()) return null;
+  const wxId = wxIdFor(exerciseId);
+  if (!wxId || !apiKey()) return null;
 
+  const local = exerciseById(exerciseId);
   const cache = await readCache();
   const hit = cache[exerciseId];
-  if (hit) {
-    if (!hit.id) return null;
-    return { id: hit.id, name: hit.name, gifUrl: hit.gifUrl };
+  if (hit?.id === wxId) {
+    return { id: hit.id, name: hit.name || local?.name || wxId, gifUrl: hit.gifUrl };
   }
 
-  const query = WORKOUTX_QUERY[exerciseId];
-  if (!query) return null;
-
   try {
-    const match = await searchByName(query);
-    if (!match?.id) {
-      cache[exerciseId] = { id: "", name: "" };
-      await writeCache(cache);
-      return null;
-    }
-    cache[exerciseId] = { id: match.id, name: match.name, gifUrl: match.gifUrl };
+    const detail = await getWorkoutXExercise(wxId);
+    cache[exerciseId] = {
+      id: wxId,
+      name: detail?.name || local?.name || wxId,
+      gifUrl: detail?.gifUrl,
+    };
     await writeCache(cache);
-    return match;
+    return detail ?? { id: wxId, name: local?.name || wxId };
   } catch {
-    return null;
+    return { id: wxId, name: local?.name || wxId };
   }
 }
 

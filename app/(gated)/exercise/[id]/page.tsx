@@ -56,7 +56,7 @@ export default async function ExercisePage({
               ) : (
                 <p className="card__sub">
                   {workoutxConfigured()
-                    ? "No matching WorkoutX demo for this move yet. Cue below still stands."
+                    ? "WorkoutX had no GIF for this catalog id. Cue below still stands."
                     : "Add WORKOUTX_API_KEY in .env.local to load the looping demo."}
                 </p>
               )}
