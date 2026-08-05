@@ -28,6 +28,7 @@ const DEFAULTS = { weightKg: 75, heightCm: 175, age: 32, sex: "unspecified" };
 const MIN_PER_MILE: Record<string, number> = {
   walk_run: 15,
   easy: 12,
+  quality: 11,
   long: 12.5,
   shakeout: 12,
   race: 11.5,
@@ -38,6 +39,7 @@ const CARBS_PER_KG: Record<string, number> = {
   cross: 4,
   walk_run: 4.5,
   easy: 4.5,
+  quality: 5.5,
   shakeout: 4.5,
   long: 6.5,
   race: 7,
@@ -150,6 +152,8 @@ function headlineFor(type: WorkoutType, needsDuringFuel: boolean, heat: boolean)
       return "Rest day. Slightly fewer carbs, same protein — recovery is built from protein.";
     case "cross":
       return "Cross-train day. Fuel it like an easy run.";
+    case "quality":
+      return "Quality day. A few more carbs than an easy day so the workout has something to burn.";
     default:
       return heat
         ? "Easy day. Front-load water in this Austin heat and keep protein steady."

@@ -29,6 +29,7 @@ export interface Block {
 }
 
 export type Focus = "full" | "core" | "mobility";
+export type StrengthVariant = "a" | "b";
 
 const WARMUP: Exercise[] = [
   {
@@ -378,8 +379,156 @@ export function strengthLevelFor(week: number, totalWeeks: number): number {
   return 3;
 }
 
+const STRENGTH_A_BY_LEVEL: Record<number, Exercise[]> = {
+  1: [
+    STRENGTH_BY_LEVEL[1][0],
+    STRENGTH_BY_LEVEL[1][1],
+    STRENGTH_BY_LEVEL[1][2],
+    {
+      id: "sl-glute-bridge",
+      name: "Single-leg glute bridge",
+      prescription: "3 × 10 each side",
+      cue: "Ribs down, pause at the top. The hip that keeps you stacked at mile 11.",
+      pattern: "single-leg",
+    },
+    STRENGTH_BY_LEVEL[1][5],
+    {
+      id: "core-side-plank-a",
+      name: "Side plank",
+      prescription: "3 × 30 sec each side",
+      cue: "Shoulders stacked, hips high. Anti-collapse for the late miles.",
+      pattern: "core",
+    },
+  ],
+  2: [
+    STRENGTH_BY_LEVEL[2][0],
+    STRENGTH_BY_LEVEL[2][1],
+    STRENGTH_BY_LEVEL[2][2],
+    STRENGTH_BY_LEVEL[2][5] ?? STRENGTH_BY_LEVEL[1][5],
+    STRENGTH_BY_LEVEL[1][5],
+    {
+      id: "core-side-plank-a2",
+      name: "Side plank with dip",
+      prescription: "3 × 8 each side",
+      cue: "Small controlled dips. Stop if the top hip sags.",
+      pattern: "core",
+    },
+  ],
+  3: [
+    STRENGTH_BY_LEVEL[3][0],
+    STRENGTH_BY_LEVEL[3][1],
+    STRENGTH_BY_LEVEL[3][2],
+    STRENGTH_BY_LEVEL[3][5],
+    {
+      id: "core-side-plank-a3",
+      name: "Weighted side plank",
+      prescription: "3 × 20 sec each side",
+      cue: "Light plate on the hip. Shape first, load second.",
+      pattern: "core",
+    },
+  ],
+};
+
+const STRENGTH_B_BY_LEVEL: Record<number, Exercise[]> = {
+  1: [
+    STRENGTH_BY_LEVEL[1][3],
+    STRENGTH_BY_LEVEL[1][4],
+    {
+      id: "hi-single-rdl-b",
+      name: "Single-leg Romanian deadlift",
+      prescription: "3 × 8 each leg",
+      cue: "Light load, hips square. Balance is the work.",
+      pattern: "hinge",
+    },
+    {
+      id: "lat-band-walk",
+      name: "Lateral band walk",
+      prescription: "3 × 12 each way",
+      cue: "Soft knees, band above the knees, no waddle.",
+      pattern: "single-leg",
+    },
+    {
+      id: "core-dead-bug-b",
+      name: "Dead bug",
+      prescription: "3 × 6 each side, slow",
+      cue: "Low back pinned. If it arches, shorten the reach.",
+      pattern: "core",
+    },
+    {
+      id: "cr-farmer-b",
+      name: "Farmer or suitcase carry",
+      prescription: "3 × 30–40 sec each side",
+      cue: "Walk tall, do not lean. This is what abs do when you run.",
+      pattern: "carry",
+    },
+  ],
+  2: [
+    STRENGTH_BY_LEVEL[2][3],
+    STRENGTH_BY_LEVEL[2][4],
+    STRENGTH_BY_LEVEL[2][1],
+    {
+      id: "lat-band-walk-2",
+      name: "Lateral band walk",
+      prescription: "3 × 15 each way",
+      cue: "Heavier band if 12 was easy. Knees track over mid-foot.",
+      pattern: "single-leg",
+    },
+    STRENGTH_BY_LEVEL[2][5],
+  ],
+  3: [
+    STRENGTH_BY_LEVEL[3][3],
+    STRENGTH_BY_LEVEL[3][4],
+    STRENGTH_BY_LEVEL[2][1],
+    STRENGTH_BY_LEVEL[2][5],
+    {
+      id: "cr-farmer-b3",
+      name: "Heavy suitcase carry",
+      prescription: "3 × 40 sec each side",
+      cue: "Heavy enough that the brace is automatic. No lean, no rush.",
+      pattern: "carry",
+    },
+  ],
+};
+
+const ABS_B_FINISHER: Exercise[] = [
+  {
+    id: "abs-b-side",
+    name: "Side plank",
+    prescription: "30 sec each side",
+    cue: "Quick finisher. Quality over time.",
+    pattern: "core",
+  },
+  {
+    id: "abs-b-heel",
+    name: "Heel taps or reverse crunch",
+    prescription: "10 slow reps",
+    cue: "Curl the pelvis, do not yank the neck.",
+    pattern: "core",
+  },
+  {
+    id: "abs-b-squeeze",
+    name: "Ball or fist squeeze between knees",
+    prescription: "20 sec",
+    cue: "Adductor short hold — groin insurance as mileage climbs.",
+    pattern: "core",
+  },
+  {
+    id: "abs-b-carry",
+    name: "Suitcase carry",
+    prescription: "30 sec each side",
+    cue: "One more anti-lean walk if the main lifts skipped it.",
+    pattern: "carry",
+  },
+];
+
 /** Peak and taper weeks trim volume rather than dropping strength entirely. */
-export function blocksFor(focus: Focus, level: number, coreLevel: number, deload: boolean): Block[] {
+export function blocksFor(
+  focus: Focus,
+  level: number,
+  coreLevel: number,
+  deload: boolean,
+  variant: StrengthVariant = "a",
+): Block[] {
   if (focus === "mobility") {
     return [{ name: "Loosen up", exercises: MOBILITY }];
   }
@@ -389,15 +538,23 @@ export function blocksFor(focus: Focus, level: number, coreLevel: number, deload
   if (focus === "core") {
     return [
       { name: "Warm-up", exercises: WARMUP.slice(0, 2) },
-      { name: `Core circuit — level ${coreLevel}`, exercises: deload ? core.slice(0, 3) : core },
+      { name: `Abs A — level ${coreLevel}`, exercises: deload ? core.slice(0, 3) : core },
     ];
   }
 
-  const lifts = STRENGTH_BY_LEVEL[Math.min(3, Math.max(1, level))];
+  if (variant === "b") {
+    const lifts = STRENGTH_B_BY_LEVEL[Math.min(3, Math.max(1, level))];
+    return [
+      { name: "Warm-up", exercises: WARMUP.slice(0, 2) },
+      { name: "Strength B — upper, hips, anti-collapse", exercises: deload ? lifts.slice(0, 4) : lifts },
+      { name: "Abs B finisher", exercises: deload ? ABS_B_FINISHER.slice(0, 2) : ABS_B_FINISHER },
+    ];
+  }
+
+  const lifts = STRENGTH_A_BY_LEVEL[Math.min(3, Math.max(1, level))];
   return [
     { name: "Warm-up", exercises: WARMUP },
-    { name: "Strength", exercises: deload ? lifts.slice(0, 4) : lifts },
-    { name: `Core — level ${coreLevel}`, exercises: core.slice(0, deload ? 2 : 3) },
+    { name: "Strength A — lower + posterior", exercises: deload ? lifts.slice(0, 4) : lifts },
   ];
 }
 

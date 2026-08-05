@@ -2,7 +2,7 @@ import { desc, isNotNull, lte, and, gte } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
 import { healthDays, type Profile } from "@/drizzle/schema";
 import { addDays, daysBetween, formatShort } from "@/lib/date";
-import type { Phase, WorkoutType } from "@/lib/plan/types";
+import { phaseFor, type Phase, type WorkoutType } from "@/lib/plan/types";
 
 /**
  * The abs goal is a body-fat problem, not a crunches problem — and it competes
@@ -21,6 +21,7 @@ const KCAL_PER_KG_FAT = 7700;
 const PHASE_DEFICIT: Record<Phase, number> = {
   base: 450,
   build: 350,
+  specific: 200,
   peak: 150,
   taper: 0,
   race: 0,
@@ -125,8 +126,14 @@ export function deficitFor(
   absGoal: boolean,
 ): { kcal: number; note: string } {
   if (!absGoal) return { kcal: 0, note: "Eating at maintenance." };
-  if (type === "long" || type === "race") {
-    return { kcal: 0, note: "Long-run day — fuelled fully, no deficit. The cut waits for tomorrow." };
+  if (type === "long" || type === "race" || type === "quality") {
+    return {
+      kcal: 0,
+      note:
+        type === "quality"
+          ? "Quality day — fuelled fully so the workout has something to burn. The cut waits for tomorrow."
+          : "Long-run day — fuelled fully, no deficit. The cut waits for tomorrow.",
+    };
   }
   const kcal = PHASE_DEFICIT[phase] ?? 0;
   if (kcal === 0) {
@@ -141,8 +148,8 @@ export function deficitFor(
   return {
     kcal,
     note:
-      phase === "peak"
-        ? `Small ${kcal} kcal trim only — peak mileage takes priority over the mirror.`
+      phase === "peak" || phase === "specific"
+        ? `Small ${kcal} kcal trim only — race fitness takes priority over the mirror.`
         : `${kcal} kcal below maintenance, with protein held high.`,
   };
 }
@@ -151,7 +158,7 @@ export function deficitFor(
 export function proteinPerKgFor(deficitKcal: number, type: WorkoutType): number {
   if (deficitKcal >= 300) return 2;
   if (deficitKcal > 0) return 1.9;
-  return type === "long" || type === "race" ? 1.8 : 1.6;
+  return type === "long" || type === "race" || type === "quality" ? 1.8 : 1.6;
 }
 
 export async function absStatus(
@@ -232,7 +239,7 @@ export async function absStatus(
   let firstWeekLoss = 0;
   while (remaining > 0 && weeks < 78) {
     const out = weeksToRace - weeks;
-    const phase: Phase = out > 12 ? "base" : out > 4 ? "build" : out > 2 ? "peak" : out > 0 ? "taper" : "base";
+    const phase = phaseFor(out);
     // Six cutting days a week: the long run gets its calories back.
     const weekly = ((PHASE_DEFICIT[phase] ?? 0) * 6) / KCAL_PER_KG_FAT;
     weeks += 1;
