@@ -30,6 +30,7 @@ export async function sendPush(payload: {
   title: string;
   body: string;
   url: string;
+  tag?: string;
 }): Promise<PushResult> {
   if (!configure()) return { sent: 0, removed: 0, reason: "VAPID keys are not set" };
 

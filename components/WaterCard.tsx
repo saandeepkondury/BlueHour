@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { Icon } from "@/components/Icon";
 import { Ring } from "@/components/Ring";
+import { CUP_OZ } from "@/lib/notify/water";
 
 /**
  * Hydration is the most-tapped control in the app, so it reads and writes
@@ -38,6 +39,10 @@ export function WaterCard({
   }
 
   const pct = target > 0 ? (local / target) * 100 : 0;
+  const cups = local / CUP_OZ;
+  const targetCups = target / CUP_OZ;
+  const cupsLabel = Number.isInteger(cups) ? String(cups) : cups.toFixed(1);
+  const targetLabel = Number.isInteger(targetCups) ? String(targetCups) : targetCups.toFixed(1);
 
   return (
     <div className="card">
@@ -48,8 +53,8 @@ export function WaterCard({
             Water
           </p>
           <p className="tile__value" style={{ marginTop: "0.3rem" }}>
-            {local}
-            <small>/ {target} oz</small>
+            {cupsLabel}
+            <small>/ {targetLabel} cups</small>
           </p>
         </div>
         <Ring
@@ -63,15 +68,12 @@ export function WaterCard({
       </div>
 
       <div className="btnrow btnrow--split" style={{ marginTop: "0.875rem" }}>
-        <button className="btn btn--ghost btn--sm" type="button" onClick={() => add(-8)}>
-          <Icon name="minus" size={15} />8
+        <button className="btn btn--ghost btn--sm" type="button" onClick={() => add(-CUP_OZ)}>
+          <Icon name="minus" size={15} />1 cup
         </button>
-        {[8, 16, 24].map((oz) => (
-          <button className="btn btn--ghost btn--sm" type="button" key={oz} onClick={() => add(oz)}>
-            <Icon name="plus" size={15} />
-            {oz}
-          </button>
-        ))}
+        <button className="btn btn--primary btn--sm" type="button" onClick={() => add(CUP_OZ)}>
+          <Icon name="plus" size={15} />1 cup
+        </button>
       </div>
     </div>
   );

@@ -82,8 +82,10 @@ There is a manual entry form for mornings the sync did not run.
    and `VAPID_SUBJECT`. Web push on iOS only works once the app is added to the home screen.
 4. **Cron** — `vercel.json` runs `/api/cron/remind` daily at 12:00 UTC (Hobby limit). That is 6am
    Austin in winter and 7am in summer. The route also accepts the following hour so DST does not
-   skip a send, and records the day so a retry cannot double up. Vercel provides `CRON_SECRET`.
-   On Pro you can switch the schedule back to hourly.
+   skip a send, and records the day so a retry cannot double up. Set `CRON_SECRET` yourself (Vercel
+   will use it for the morning job) and add the same value plus `APP_URL` as GitHub Actions secrets
+   so `.github/workflows/water-reminder.yml` can hit `/api/cron/water` every hour. The route only
+   notifies on even Austin hours from 8am to 10pm, and skips once the day's water target is met.
 5. **`NEXT_PUBLIC_APP_URL`** — the absolute URL, used in reminder links and the Shortcut setup.
 
 Copy `.env.example` to `.env.local` for local overrides. Check the morning brief before you trust

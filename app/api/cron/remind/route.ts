@@ -1,10 +1,10 @@
-import { timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db, ready } from "@/lib/db";
 import { reminderRuns } from "@/drizzle/schema";
 import { hourInTimeZone, todayISO } from "@/lib/date";
 import { buildBrief } from "@/lib/notify/brief";
+import { cronAuthorized } from "@/lib/notify/cron-auth";
 import { sendPush } from "@/lib/notify/push";
 import { getProfile } from "@/lib/store";
 import { refreshCoach } from "@/lib/coach/store";
@@ -20,17 +20,6 @@ export const dynamic = "force-dynamic";
  * a retry from delivering the brief twice.
  */
 
-function authorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return process.env.NODE_ENV !== "production";
-
-  const header = request.headers.get("authorization") ?? "";
-  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
-  const a = Buffer.from(token);
-  const b = Buffer.from(secret);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
 async function alreadySent(date: string): Promise<boolean> {
   await ready();
   const [row] = await db.select().from(reminderRuns).where(eq(reminderRuns.date, date));
@@ -38,7 +27,7 @@ async function alreadySent(date: string): Promise<boolean> {
 }
 
 export async function GET(request: Request) {
-  if (!authorized(request)) {
+  if (!cronAuthorized(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

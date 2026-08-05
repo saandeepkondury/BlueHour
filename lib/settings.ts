@@ -14,6 +14,7 @@ export const KEYS = {
   openaiModel: "openai_model",
   ingestToken: "health_ingest_token",
   lastCoachRun: "last_coach_run",
+  waterPushSlot: "water_push_slot",
 } as const;
 
 export type SettingKey = (typeof KEYS)[keyof typeof KEYS];

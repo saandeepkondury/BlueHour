@@ -292,6 +292,10 @@ export default async function SettingsPage() {
           </div>
           <div className="card stack">
             <PushToggle vapidKey={vapidKey} />
+            <p className="small muted">
+              With push on, a water reminder lands every two hours from 8am to 10pm Austin time.
+              Pause morning reminders in the section above to stop both.
+            </p>
             <hr className="card__divide" />
             {brief ? (
               <details className="fold">
