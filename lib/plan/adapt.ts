@@ -4,7 +4,7 @@ import { workouts, type Workout } from "@/drizzle/schema";
 import { addDays, dayOfWeek, startOfWeek } from "@/lib/date";
 
 /**
- * The three escape hatches that keep a 27-week block survivable: skip a day,
+ * The three escape hatches that keep a 28-week block survivable: skip a day,
  * repeat a week, or move the long run. None of them punish the runner by
  * stacking missed mileage onto later weeks.
  */
@@ -132,7 +132,7 @@ export async function scaleWeek(weekStart: string, pct: number): Promise<void> {
 
   for (const day of week) {
     if (day.status !== "planned") continue;
-    if (day.type === "rest" || day.type === "race" || day.phase === "race") continue;
+    if (day.type === "rest" || day.type === "race" || day.type === "cross" || day.phase === "race") continue;
 
     const distanceMi = day.distanceMi > 0 ? Math.max(1, round25(day.distanceMi * factor)) : 0;
     const durationMin = day.durationMin ? Math.max(15, Math.round(day.durationMin * factor)) : day.durationMin;

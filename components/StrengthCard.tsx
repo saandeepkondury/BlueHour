@@ -10,7 +10,7 @@ import type { StrengthLog, StrengthSession } from "@/drizzle/schema";
 
 const FOCUS_LABEL: Record<string, string> = {
   full: "Strength",
-  core: "Core",
+  core: "Abs",
   mobility: "Mobility",
 };
 
