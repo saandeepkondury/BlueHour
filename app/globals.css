@@ -779,6 +779,10 @@ legend {
   color: var(--ink-faint);
 }
 
+.day--quality .day-name {
+  color: var(--blue-hour);
+}
+
 .day-date {
   font-family: var(--display);
   font-size: 0.68rem;

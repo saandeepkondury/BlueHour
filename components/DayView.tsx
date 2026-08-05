@@ -108,7 +108,7 @@ export function DayView({
             <form action={completeRestDay} className="btn-row">
               <input type="hidden" name="date" value={date} />
               <button className="btn" type="submit">
-                Rest honored
+                {bundle.strength ? "No run today — honor it" : "Rest honored"}
               </button>
             </form>
           ) : null}

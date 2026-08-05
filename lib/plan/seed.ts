@@ -12,7 +12,7 @@ const DEFAULT_RACE = {
 };
 
 /**
- * Creates the profile row and the 27-week block on first load. Both steps are
+ * Creates the profile row and the 28-week block on first load. Both steps are
  * skipped once data exists, so this is safe to call from any page render.
  */
 export async function ensureSeeded(): Promise<Profile> {
