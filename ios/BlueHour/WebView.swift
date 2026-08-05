@@ -29,7 +29,7 @@ struct WebView: UIViewRepresentable {
         view.allowsBackForwardNavigationGestures = true
         view.scrollView.contentInsetAdjustmentBehavior = .always
         view.isOpaque = false
-        view.backgroundColor = UIColor(Palette.skyDeep)
+        view.backgroundColor = UIColor(red: 0.949, green: 0.941, blue: 0.918, alpha: 1)
         context.coordinator.attach(view)
         context.coordinator.load(url)
         return view

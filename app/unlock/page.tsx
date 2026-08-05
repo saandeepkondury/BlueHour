@@ -32,7 +32,7 @@ export default async function UnlockPage({
   return (
     <main className="unlock">
       <BrandLockup />
-      <p className="small muted">Thirteen point one miles down Congress Avenue.</p>
+      <p className="small muted unlock__lede">Thirteen point one miles down Congress Avenue.</p>
       <form action={unlock}>
         {bad ? <p className="notice notice--bad">That is not the passcode.</p> : null}
         <label className="field">

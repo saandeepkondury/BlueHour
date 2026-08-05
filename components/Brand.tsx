@@ -1,8 +1,14 @@
+import { useId } from "react";
 import Link from "next/link";
 
 type MarkTone = "seal" | "plain";
 
-/** Moon over paired horizons — blue hour as a seal, not a landscape. */
+const CRESCENT =
+  "M25.3 10.45A10.8 10.8 0 1 0 31.03 28.22A9.4 9.4 0 1 1 25.3 10.45Z";
+const RIDGE =
+  "M0 46.2C11 43 17 44.5 25 39.5c7-4.3 13-2 19-7.3 7-5.7 13-2.7 20-4.9V64H0Z";
+
+/** Waxing crescent over a Hill Country ridge — blue hour as a seal. */
 export function BrandMark({
   size = 32,
   tone = "seal",
@@ -12,8 +18,8 @@ export function BrandMark({
   tone?: MarkTone;
   title?: string;
 }) {
-  const moon = tone === "seal" ? "#f3efe6" : "#3f7196";
-  const ground = tone === "seal" ? "#3f7196" : "transparent";
+  const clip = `bh${useId().replace(/:/g, "")}`;
+  const ink = tone === "seal" ? "#f3efe6" : "#2f6d99";
 
   return (
     <svg
@@ -24,10 +30,25 @@ export function BrandMark({
       role="img"
       aria-label={title}
     >
-      {tone === "seal" ? <circle cx="32" cy="32" r="32" fill={ground} /> : null}
-      <circle cx="32" cy="25" r="8.2" fill={moon} />
-      <rect x="22.5" y="39.6" width="19" height="1.5" rx="0.75" fill="#d9d0c0" />
-      <rect x="19" y="44.4" width="26" height="2.6" rx="1.3" fill={moon} />
+      {tone === "seal" ? (
+        <>
+          <defs>
+            <clipPath id={clip}>
+              <circle cx="32" cy="32" r="32" />
+            </clipPath>
+          </defs>
+          <circle cx="32" cy="32" r="32" fill="#2f6d99" />
+          <g clipPath={`url(#${clip})`}>
+            <path fill={ink} d={CRESCENT} />
+            <path fill="#e6ddd0" d={RIDGE} />
+          </g>
+        </>
+      ) : (
+        <>
+          <path fill={ink} d={CRESCENT} />
+          <path fill={ink} d={RIDGE} />
+        </>
+      )}
     </svg>
   );
 }
@@ -43,7 +64,7 @@ export function Wordmark({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
 export function BrandRow({ href }: { href?: string }) {
   const inner = (
     <>
-      <BrandMark size={24} />
+      <BrandMark size={26} />
       <Wordmark size="sm" />
     </>
   );
@@ -62,7 +83,7 @@ export function BrandRow({ href }: { href?: string }) {
 export function BrandLockup() {
   return (
     <div className="brandrow brandrow--stack">
-      <BrandMark size={64} />
+      <BrandMark size={88} />
       <Wordmark size="lg" />
     </div>
   );

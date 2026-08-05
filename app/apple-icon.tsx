@@ -3,7 +3,7 @@ import { ImageResponse } from "next/og";
 export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 
-/** Matches public/icon.svg — cream moon over paired horizons on blue-hour. */
+/** Matches public/icon.svg — dusk sky, waxing crescent, limestone ridge. */
 export default function AppleIcon() {
   return new ImageResponse(
     (
@@ -11,7 +11,7 @@ export default function AppleIcon() {
         style={{
           width: "100%",
           height: "100%",
-          background: "#3f7196",
+          background: "linear-gradient(180deg, #16324a 0%, #2a6188 48%, #3f7196 100%)",
           position: "relative",
           display: "flex",
           overflow: "hidden",
@@ -20,34 +20,48 @@ export default function AppleIcon() {
         <div
           style={{
             position: "absolute",
-            top: 48,
-            left: 58,
-            width: 64,
-            height: 64,
-            borderRadius: 64,
+            top: 26,
+            left: 34,
+            width: 59,
+            height: 59,
+            borderRadius: 59,
             background: "#f3efe6",
           }}
         />
         <div
           style={{
             position: "absolute",
-            left: 62,
-            right: 62,
-            bottom: 62,
-            height: 6,
-            borderRadius: 6,
-            background: "#d9d0c0",
+            top: 22,
+            left: 56,
+            width: 53,
+            height: 53,
+            borderRadius: 53,
+            background: "#1d4460",
           }}
         />
         <div
           style={{
             position: "absolute",
-            left: 48,
-            right: 48,
-            bottom: 44,
-            height: 10,
-            borderRadius: 10,
-            background: "#f3efe6",
+            left: -12,
+            right: -18,
+            bottom: 22,
+            height: 62,
+            background: "#c5d0d6",
+            borderTopLeftRadius: 80,
+            borderTopRightRadius: 50,
+            opacity: 0.55,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: -12,
+            right: -18,
+            bottom: 0,
+            height: 52,
+            background: "#eae4d8",
+            borderTopLeftRadius: 64,
+            borderTopRightRadius: 88,
           }}
         />
       </div>

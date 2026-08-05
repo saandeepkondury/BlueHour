@@ -24,16 +24,17 @@ export default function OpenGraphImage() {
             width: 168,
             height: 168,
             borderRadius: 168,
-            background: "#3f7196",
+            background: "#2f6d99",
             position: "relative",
             display: "flex",
+            overflow: "hidden",
           }}
         >
           <div
             style={{
               position: "absolute",
-              top: 46,
-              left: 56,
+              top: 28,
+              left: 34,
               width: 56,
               height: 56,
               borderRadius: 56,
@@ -43,23 +44,24 @@ export default function OpenGraphImage() {
           <div
             style={{
               position: "absolute",
-              left: 58,
-              right: 58,
-              bottom: 58,
-              height: 6,
-              borderRadius: 6,
-              background: "#d9d0c0",
+              top: 24,
+              left: 56,
+              width: 50,
+              height: 50,
+              borderRadius: 50,
+              background: "#2f6d99",
             }}
           />
           <div
             style={{
               position: "absolute",
-              left: 46,
-              right: 46,
-              bottom: 42,
-              height: 10,
-              borderRadius: 10,
-              background: "#f3efe6",
+              left: -8,
+              right: -12,
+              bottom: 0,
+              height: 58,
+              background: "#e6ddd0",
+              borderTopLeftRadius: 48,
+              borderTopRightRadius: 72,
             }}
           />
         </div>
@@ -79,7 +81,7 @@ export default function OpenGraphImage() {
               fontSize: 72,
               fontStyle: "italic",
               fontWeight: 500,
-              color: "#3f7196",
+              color: "#2f6d99",
               fontFamily: "Georgia, 'Times New Roman', serif",
             }}
           >

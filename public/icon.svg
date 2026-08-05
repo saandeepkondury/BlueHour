@@ -1,6 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Blue Hour">
-  <rect width="512" height="512" fill="#3f7196"/>
-  <circle cx="256" cy="196" r="62" fill="#f3efe6"/>
-  <rect x="176" y="318" width="160" height="10" rx="5" fill="#d9d0c0"/>
-  <rect x="148" y="352" width="216" height="18" rx="9" fill="#f3efe6"/>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#16324a"/>
+      <stop offset="48%" stop-color="#2a6188"/>
+      <stop offset="100%" stop-color="#3f7196"/>
+    </linearGradient>
+    <radialGradient id="dawn" cx="100%" cy="62%" r="58%">
+      <stop offset="0%" stop-color="#d4a86a" stop-opacity="0.42"/>
+      <stop offset="42%" stop-color="#d4a86a" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#d4a86a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#sky)"/>
+  <rect width="512" height="512" fill="url(#dawn)"/>
+  <path fill="#f3efe6" d="M188.68 74.96A84 84 0 1 0 237.3 215.43A76 76 0 1 1 188.68 74.96Z"/>
+  <path fill="#c5d0d6" opacity=".55" d="M0 350C58 328 108 344 164 312c62-36 112-12 178-46 54-28 100-8 170-22v268H0Z"/>
+  <path fill="#eae4d8" d="M0 412C64 384 116 404 176 366c68-44 122-14 196-54 52-28 90-12 140-22v222H0Z"/>
 </svg>

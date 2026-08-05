@@ -8,11 +8,11 @@ function Ridge() {
   return (
     <svg className="hero__ridge" viewBox="0 0 1200 70" preserveAspectRatio="none" aria-hidden="true">
       <path
-        d="M0 52 L120 38 L215 46 L330 18 L430 36 L520 24 L640 50 L760 28 L880 44 L980 20 L1080 40 L1200 30 L1200 70 L0 70 Z"
+        d="M0 54 C90 46 150 50 230 36 C330 18 400 28 520 14 C640 0 720 18 860 8 C980 0 1080 12 1200 6 L1200 70 L0 70 Z"
         fill="var(--accent-wash)"
       />
       <path
-        d="M0 52 L120 38 L215 46 L330 18 L430 36 L520 24 L640 50 L760 28 L880 44 L980 20 L1080 40 L1200 30"
+        d="M0 54 C90 46 150 50 230 36 C330 18 400 28 520 14 C640 0 720 18 860 8 C980 0 1080 12 1200 6"
         fill="none"
         stroke="var(--accent)"
         strokeWidth="1.5"
