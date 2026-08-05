@@ -46,7 +46,6 @@ export const DEFAULT_PROFILE = {
   experience: "beginner",
   goal: "finish",
   longRunDay: 6,
-  email: "sandeepkondury@gmail.com",
   reminderHour: 6,
 } as const;
 

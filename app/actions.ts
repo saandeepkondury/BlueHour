@@ -20,7 +20,6 @@ import {
 } from "@/lib/coach/store";
 import { KEYS, setSetting } from "@/lib/settings";
 import { buildBrief } from "@/lib/notify/brief";
-import { sendEmail } from "@/lib/notify/email";
 import { sendPush } from "@/lib/notify/push";
 import {
   addFoodLog,
@@ -257,7 +256,6 @@ export async function saveProfile(formData: FormData): Promise<void> {
     sex: str(formData.get("sex")) || current.sex,
     dietPref: str(formData.get("dietPref")) || current.dietPref,
     allergies: str(formData.get("allergies")),
-    email: str(formData.get("email")) || current.email,
     reminderHour: num(formData.get("reminderHour")) ?? current.reminderHour,
     remindersEnabled: str(formData.get("remindersEnabled")) === "1" ? 1 : 0,
     onboardedAt: current.onboardedAt ?? new Date().toISOString(),
@@ -387,26 +385,15 @@ export async function clearFuelOverrides(): Promise<void> {
 }
 
 /**
- * Sends the morning brief right now, ignoring the reminder hour. The point is to
- * find out whether email and push are actually wired up before a race morning
- * depends on it.
+ * Sends the morning brief as a push notification right now, ignoring the
+ * reminder hour. Use it to confirm the device is subscribed before race week.
  */
 export async function sendTestBrief(): Promise<void> {
-  const current = await getProfile();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "http://localhost:3000";
   const brief = await buildBrief(todayISO(), appUrl);
   if (!brief) return;
 
-  await Promise.all([
-    sendEmail({
-      to: current.email,
-      subject: `Blue Hour — ${brief.subject}`,
-      text: brief.text,
-      html: brief.html,
-    }),
-    sendPush(brief.push),
-  ]);
-
+  await sendPush(brief.push);
   revalidatePath("/settings");
 }
 

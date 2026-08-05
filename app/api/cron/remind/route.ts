@@ -5,7 +5,6 @@ import { db, ready } from "@/lib/db";
 import { reminderRuns } from "@/drizzle/schema";
 import { hourInTimeZone, todayISO } from "@/lib/date";
 import { buildBrief } from "@/lib/notify/brief";
-import { sendEmail } from "@/lib/notify/email";
 import { sendPush } from "@/lib/notify/push";
 import { getProfile } from "@/lib/store";
 import { refreshCoach } from "@/lib/coach/store";
@@ -14,9 +13,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Called hourly by Vercel Cron. It sends nothing unless the current Austin hour
- * matches the runner's chosen reminder hour, and records the send so a retried
- * invocation cannot deliver the brief twice.
+ * Called by Vercel Cron. Hobby is limited to one run per day, so vercel.json
+ * fires at 12:00 UTC (6am CST / 7am CDT). Pro can switch that back to hourly.
+ * We send when the Austin hour is the chosen reminder hour, or one hour later
+ * to cover the DST offset on a once-a-day schedule. A recorded send prevents
+ * a retry from delivering the brief twice.
  */
 
 function authorized(request: Request): boolean {
@@ -51,7 +52,9 @@ export async function GET(request: Request) {
   }
 
   const hour = hourInTimeZone(new Date());
-  if (hour !== current.reminderHour && !force) {
+  const due =
+    hour === current.reminderHour || hour === (current.reminderHour + 1) % 24;
+  if (!due && !force) {
     return NextResponse.json({ ok: true, skipped: `hour ${hour} is not ${current.reminderHour}` });
   }
 
@@ -68,34 +71,21 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, skipped: "no session scheduled today" });
   }
 
-  const [email, push] = await Promise.all([
-    sendEmail({
-      to: current.email,
-      subject: `Blue Hour — ${brief.subject}`,
-      text: brief.text,
-      html: brief.html,
-    }),
-    sendPush(brief.push),
-  ]);
+  const push = await sendPush(brief.push);
 
-  const channels = [email.sent ? "email" : null, push.sent > 0 ? "push" : null]
-    .filter(Boolean)
-    .join(",");
-
-  if (channels !== "") {
+  if (push.sent > 0) {
     await db
       .insert(reminderRuns)
-      .values({ date, sentAt: new Date().toISOString(), channels })
+      .values({ date, sentAt: new Date().toISOString(), channels: "push" })
       .onConflictDoUpdate({
         target: reminderRuns.date,
-        set: { sentAt: new Date().toISOString(), channels },
+        set: { sentAt: new Date().toISOString(), channels: "push" },
       });
   }
 
   return NextResponse.json({
     ok: true,
     date,
-    email,
     push,
     subject: brief.subject,
   });

@@ -73,7 +73,7 @@ export function PushToggle({ vapidKey }: { vapidKey: string }) {
       setState("on");
       setMessage("Push is on for this device.");
     } catch {
-      setMessage("Could not turn on push. Email reminders still work.");
+      setMessage("Could not turn on push. Check that VAPID keys are set and try again.");
     } finally {
       setBusy(false);
     }
@@ -134,7 +134,7 @@ export function PushToggle({ vapidKey }: { vapidKey: string }) {
 
       {state === "unsupported" ? (
         <p className="small muted">
-          This browser will not do web push. Email reminders cover you.
+          This browser will not do web push. Install Blue Hour on your phone for morning reminders.
         </p>
       ) : null}
 

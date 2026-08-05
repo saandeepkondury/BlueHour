@@ -1,8 +1,8 @@
 # Blue Hour
 
 A personal training, fueling, and strength app for the Ascension Seton Austin Half Marathon on
-14 February 2027. Installable as a PWA on iPhone, emails a brief every morning, reads Apple Watch
-data, and proposes plan changes it will not make without permission.
+14 February 2027. Installable as a PWA on iPhone, sends a morning push notification, reads Apple
+Watch data, and proposes plan changes it will not make without permission.
 
 ## Running it
 
@@ -29,7 +29,7 @@ npm run build       # production build
 | Strength, core, and the abs math | `lib/strength/` |
 | Apple Health ingest and readiness | `lib/health/` |
 | Coach snapshot, guardrail rules, OpenAI | `lib/coach/` |
-| Morning brief, email, web push | `lib/notify/` |
+| Morning brief and web push | `lib/notify/` |
 | Screens | `app/` |
 
 Everything is a server component with server actions, so the client bundle stays near 100 kB and
@@ -76,17 +76,16 @@ There is a manual entry form for mornings the sync did not run.
 1. **Database** — create a Turso database and set `DATABASE_URL` and `DATABASE_AUTH_TOKEN`. Tables
    are created on first connection; there is no migration step to forget.
 2. **Passcode** — set `APP_PASSCODE`. Without it the deployed app is open to anyone with the URL.
-3. **Email** — set `RESEND_API_KEY` and `REMINDER_FROM`. Verify a domain in Resend if you want the
-   brief to come from your own address.
-4. **Push** — `npm run keys:vapid`, then set `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+3. **Push** — `npm run keys:vapid`, then set `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
    and `VAPID_SUBJECT`. Web push on iOS only works once the app is added to the home screen.
-5. **Cron** — `vercel.json` already runs `/api/cron/remind` hourly; the route sends only when the
-   Austin hour matches your reminder hour, and records the send so a retry cannot double up.
-   Vercel provides `CRON_SECRET` automatically.
-6. **`NEXT_PUBLIC_APP_URL`** — the absolute URL, used in reminder links and the Shortcut setup.
+4. **Cron** — `vercel.json` runs `/api/cron/remind` daily at 12:00 UTC (Hobby limit). That is 6am
+   Austin in winter and 7am in summer. The route also accepts the following hour so DST does not
+   skip a send, and records the day so a retry cannot double up. Vercel provides `CRON_SECRET`.
+   On Pro you can switch the schedule back to hourly.
+5. **`NEXT_PUBLIC_APP_URL`** — the absolute URL, used in reminder links and the Shortcut setup.
 
 Copy `.env.example` to `.env.local` for local overrides. Check the morning brief before you trust
-it: **Settings → The morning brief** renders exactly what would be sent and can send it on demand.
+it: **Settings → The morning brief** previews today's notification and can send a test push.
 
 ## Not medical advice
 

@@ -9,7 +9,6 @@ const DEFAULT_RACE = {
   raceName: "Ascension Seton Austin Half Marathon",
   raceDate: "2027-02-14",
   longRunDay: 6,
-  email: "sandeepkondury@gmail.com",
 };
 
 /**
@@ -31,7 +30,6 @@ export async function ensureSeeded(): Promise<Profile> {
           raceDate: DEFAULT_RACE.raceDate,
           startDate: startOfWeek(todayISO()),
           longRunDay: DEFAULT_RACE.longRunDay,
-          email: DEFAULT_RACE.email,
           updatedAt: new Date().toISOString(),
         })
         .returning()
