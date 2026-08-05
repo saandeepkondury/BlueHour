@@ -2,17 +2,29 @@ import SwiftUI
 import WebKit
 
 /// Blue Hour's own pages, wrapped so the native side can trigger a refresh
-/// after Health data lands.
+/// after Health data lands — and so the web Sync button can ask for one.
 struct WebView: UIViewRepresentable {
     let url: URL
     let reloadToken: Int
+    var notice: SyncNotice?
+    var onRequestSync: () -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(url: url)
+        Coordinator(url: url, onRequestSync: onRequestSync)
     }
 
     func makeUIView(context: Context) -> WKWebView {
-        let view = WKWebView()
+        let config = WKWebViewConfiguration()
+        config.userContentController.add(context.coordinator, name: "blueHour")
+        config.userContentController.addUserScript(
+            WKUserScript(
+                source: "window.__BLUE_HOUR_NATIVE__ = true;",
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            )
+        )
+
+        let view = WKWebView(frame: .zero, configuration: config)
         view.navigationDelegate = context.coordinator
         view.allowsBackForwardNavigationGestures = true
         view.scrollView.contentInsetAdjustmentBehavior = .always
@@ -25,21 +37,33 @@ struct WebView: UIViewRepresentable {
 
     func updateUIView(_ view: WKWebView, context: Context) {
         context.coordinator.parentURL = url
+        context.coordinator.onRequestSync = onRequestSync
+        if let notice, context.coordinator.lastNoticeId != notice.id {
+            context.coordinator.lastNoticeId = notice.id
+            context.coordinator.notifySync(ok: notice.ok, message: notice.message)
+        }
         guard context.coordinator.loadedToken != reloadToken else { return }
         context.coordinator.loadedToken = reloadToken
         context.coordinator.reloadWhenIdle()
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
+        uiView.configuration.userContentController.removeScriptMessageHandler(forName: "blueHour")
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var loadedToken = 0
+        var lastNoticeId: UUID?
         var parentURL: URL
+        var onRequestSync: () -> Void
         private weak var webView: WKWebView?
         private var isLoading = false
         private var pendingReload = false
         private var retries = 0
 
-        init(url: URL) {
+        init(url: URL, onRequestSync: @escaping () -> Void) {
             parentURL = url
+            self.onRequestSync = onRequestSync
         }
 
         func attach(_ view: WKWebView) {
@@ -59,6 +83,29 @@ struct WebView: UIViewRepresentable {
                 return
             }
             webView.reload()
+        }
+
+        func notifySync(ok: Bool, message: String) {
+            let payload = #"{"ok":\#(ok ? "true" : "false"),"message":\#(Self.jsonString(message))}"#
+            webView?.evaluateJavaScript("window.__blueHourOnSync && window.__blueHourOnSync(\(payload))")
+        }
+
+        func userContentController(
+            _ userContentController: WKUserContentController,
+            didReceive message: WKScriptMessage
+        ) {
+            guard message.name == "blueHour" else { return }
+            let action: String
+            if let body = message.body as? [String: Any], let value = body["action"] as? String {
+                action = value
+            } else if let value = message.body as? String {
+                action = value
+            } else {
+                return
+            }
+            if action == "syncHealth" {
+                onRequestSync()
+            }
         }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
@@ -94,6 +141,11 @@ struct WebView: UIViewRepresentable {
                 guard let self else { return }
                 self.load(self.parentURL)
             }
+        }
+
+        private static func jsonString(_ value: String) -> String {
+            let data = try? JSONSerialization.data(withJSONObject: value, options: .fragmentsAllowed)
+            return String(data: data ?? Data("\"\"".utf8), encoding: .utf8) ?? "\"\""
         }
     }
 }

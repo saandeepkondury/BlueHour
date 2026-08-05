@@ -7,18 +7,46 @@ enum SyncState: Equatable {
     case failed(String)
 }
 
+struct SyncNotice: Equatable {
+    let id = UUID()
+    let ok: Bool
+    let message: String
+}
+
 @MainActor
 final class SyncModel: ObservableObject {
     @Published var state: SyncState = .idle
     @Published var showSettings = false
     @Published var reloadToken = 0
+    @Published var notice: SyncNotice?
 
     private let bridge = HealthBridge()
     private let client = SyncClient()
     private var inFlight = false
 
     func syncIfPossible() async {
-        guard Settings.isConfigured, !inFlight else { return }
+        await sync(reload: true, notifyWeb: false)
+    }
+
+    func syncFromWeb() async {
+        while inFlight {
+            try? await Task.sleep(for: .milliseconds(150))
+        }
+        let result = await sync(reload: false, notifyWeb: true)
+        if result.ok {
+            try? await Task.sleep(for: .milliseconds(450))
+            reloadToken += 1
+        }
+    }
+
+    @discardableResult
+    private func sync(reload: Bool, notifyWeb: Bool) async -> (ok: Bool, message: String) {
+        guard Settings.isConfigured else {
+            let message = SyncError.notConfigured.localizedDescription
+            if notifyWeb { notice = SyncNotice(ok: false, message: message) }
+            return (false, message)
+        }
+        guard !inFlight else { return (false, "Already syncing") }
         inFlight = true
         defer { inFlight = false }
 
@@ -27,10 +55,16 @@ final class SyncModel: ObservableObject {
             try await bridge.requestAccess()
             let payload = try await bridge.collect()
             let result = try await client.send(payload)
-            state = .done(Self.summary(for: result))
-            reloadToken += 1
+            let message = Self.summary(for: result)
+            state = .done(message)
+            if notifyWeb { notice = SyncNotice(ok: true, message: message) }
+            if reload { reloadToken += 1 }
+            return (true, message)
         } catch {
-            state = .failed(error.localizedDescription)
+            let message = error.localizedDescription
+            state = .failed(message)
+            if notifyWeb { notice = SyncNotice(ok: false, message: message) }
+            return (false, message)
         }
     }
 
@@ -57,7 +91,11 @@ struct RootView: View {
                     StatusBar(model: model)
                     WebView(
                         url: URL(string: Settings.baseURL)!,
-                        reloadToken: model.reloadToken
+                        reloadToken: model.reloadToken,
+                        notice: model.notice,
+                        onRequestSync: {
+                            Task { await model.syncFromWeb() }
+                        }
                     )
                 }
                 .ignoresSafeArea(.container, edges: .bottom)
@@ -68,6 +106,10 @@ struct RootView: View {
         .task { await model.syncIfPossible() }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
+            Task { await model.syncIfPossible() }
+        }
+        .onOpenURL { url in
+            guard url.scheme == "bluehour" else { return }
             Task { await model.syncIfPossible() }
         }
         .sheet(isPresented: $model.showSettings) {

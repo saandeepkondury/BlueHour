@@ -2,9 +2,7 @@
 
 A small native shell whose only jobs are reading Apple Health and showing the Blue Hour web app. Apple Health has no web API, so a Safari tab can never see your Watch data — this app is the bridge.
 
-It reads and never writes: workouts, sleep, resting heart rate, and HRV from the last 14 days, posted to `/api/health/ingest` every time you open or return to the app.
-
-**You may not need this.** The same endpoint accepts a flat daily payload, which means an iPhone **Shortcut** can do the job with no Xcode, no developer certificate, and no seven-day expiry — and it can also send weight and waist, which this shell does not. The app walks you through it at **Settings → Apple Health sync**. Build this native shell only if you want the sync to happen the moment you open the app rather than on a morning automation.
+It reads and never writes: workouts, sleep, resting heart rate, and HRV from the last 14 days, posted to `/api/health/ingest` every time you open or return to the app. **Settings → Apple Health** also has a Sync button that asks this shell to pull again.
 
 ## One-time setup
 
@@ -44,11 +42,11 @@ On first launch the app asks for two things:
 
 It verifies both before asking for anything else. Then iOS shows the Health permission sheet: turn on **Workouts**, **Sleep**, **Heart Rate**, **Resting Heart Rate**, and **Heart Rate Variability**, and tap Allow.
 
-The key is stored in the iPhone keychain, not in this repo.
+The key is stored in the iPhone keychain, not in this repo. You only enter it once in this native Connect screen — not in the web UI.
 
 ## Daily use
 
-Open the app. It syncs in the background and reloads Today when new data lands. The status strip at the top shows what happened; the arrow re-syncs by hand, the gear reopens the connection settings.
+Open the app. It syncs in the background and reloads Today when new data lands. The status strip at the top shows what happened; the arrow re-syncs by hand, the gear reopens the connection settings. On the Apple Health page, **Sync from Apple Health** does the same pull.
 
 ## The seven-day thing
 
