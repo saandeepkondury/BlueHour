@@ -9,7 +9,7 @@ import { AppBar } from "@/components/AppBar";
 import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
-import { formatShort } from "@/lib/date";
+import { formatShort, isoInTimeZone } from "@/lib/date";
 import {
   changesOf,
   decidedSuggestions,
@@ -102,7 +102,7 @@ function Suggestion({ row, open }: { row: CoachSuggestion; open: boolean }) {
           </form>
           <form action={deleteSuggestionAction} style={{ flex: "1 1 7rem" }}>
             <input type="hidden" name="id" value={row.id} />
-            <button className="btn btn--ghost btn--sm btn--block" type="submit">
+            <button className="btn btn--danger btn--sm btn--block" type="submit">
               Delete
             </button>
           </form>
@@ -110,7 +110,7 @@ function Suggestion({ row, open }: { row: CoachSuggestion; open: boolean }) {
       ) : (
         <form action={deleteSuggestionAction} style={{ marginTop: "0.65rem" }}>
           <input type="hidden" name="id" value={row.id} />
-          <button className="btn btn--ghost btn--sm" type="submit">
+          <button className="btn btn--danger btn--sm" type="submit">
             Delete
           </button>
         </form>
@@ -132,7 +132,7 @@ export default async function CoachPage() {
   ]);
 
   const hasOverrides = overrides.calorieDelta !== 0 || overrides.proteinFloor !== null;
-  const lastRunDay = run.lastRunAt ? formatShort(run.lastRunAt.slice(0, 10)) : null;
+  const lastRunDay = run.lastRunAt ? formatShort(isoInTimeZone(new Date(run.lastRunAt))) : null;
 
   return (
     <>
