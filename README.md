@@ -2,9 +2,10 @@
 
 A personal training, fueling, and strength app for the Ascension Seton Austin Half Marathon on
 14 February 2027. Twenty-eight weeks: base, build, specific (quality Tuesdays), peak, and taper,
-with Strength A / Abs A / Strength B+Abs B locked to the long-run grid. Installable as a PWA on
-iPhone, sends a morning push notification, reads Apple Watch data, and proposes plan changes it
-will not make without permission.
+with Strength A / Abs A / Strength B+Abs B locked to the long-run grid. The iPhone app in `ios/`
+reads Apple Watch data and fires native local notifications (morning brief + water every two
+hours). The site is also installable as a PWA, and proposes plan changes it will not make without
+permission.
 
 ## Running it
 
@@ -42,15 +43,19 @@ the app works on a bad connection at 5 a.m.
 Two layers, and the first one is free:
 
 1. **Guardrails** — deterministic rules in `lib/coach/rules.ts` that watch resting heart rate
-   against its own baseline, HRV, sleep debt, missed runs, weekly mileage jumps, protein and
-   calorie adherence, strength adherence, and whether the body-fat target still fits the calendar.
-   They run on every page load and after every Watch sync. No API key, no data leaving the machine.
-2. **The model** — press *Ask the coach* and a ~6 kB summary of the last fourteen days goes to
-   OpenAI. No name, no email. It can only answer in the operation vocabulary in
+   against its own baseline, HRV, sleep debt, missed runs, skipped rest, weekly mileage jumps,
+   protein and calorie adherence, uneaten meals, ignored recipes, strength adherence, and whether
+   the body-fat target still fits the calendar. They run on every page load and after every Watch
+   sync. No API key, no data leaving the machine.
+2. **Daily review** — once per Austin calendar day (morning cron, or the first open of Coach), a
+   compact summary goes to OpenAI: planned versus completed running and rest, sleep, meals eaten or
+   ignored, grocery checks, strength, body-fat trend, and which suggestions you already applied or
+   dismissed. No name, no email, no chat prompt. It can only answer in the operation vocabulary in
    `lib/coach/types.ts`; anything else it invents is dropped, and out-of-range values are clamped.
 
-Nothing either layer proposes is applied until you press Apply. Dismissed suggestions do not come
-back — each one carries a fingerprint.
+Nothing either layer proposes is applied until you press Apply. **No thanks** archives the card
+under Already decided. **Delete** removes it entirely. Dismissed fingerprints do not come back the
+same week.
 
 Add the key in **Settings → OpenAI** (stored in the database) or set `OPENAI_API_KEY` in the
 environment, which takes precedence.
@@ -79,8 +84,9 @@ Set `HEALTH_INGEST_SECRET` (see `ios/README.md`) so the phone can authenticate.
 5. **`NEXT_PUBLIC_APP_URL`** — the absolute URL, used in reminder links.
 6. **`HEALTH_INGEST_SECRET`** — required for Apple Health sync from the iPhone app.
 
-Copy `.env.example` to `.env.local` for local overrides. Check the morning brief before you trust
-it: **Settings → The morning brief** previews today's notification and can send a test push.
+Copy `.env.example` to `.env.local` for local overrides. On the iPhone app, notifications are native: allow them when asked, then use the gear sheet's
+test button. Web push (VAPID) is only for the home-screen PWA. **Settings → Notifications**
+previews today's morning brief.
 
 ## Not medical advice
 

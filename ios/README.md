@@ -1,6 +1,6 @@
 # Blue Hour for iPhone
 
-A small native shell whose only jobs are reading Apple Health and showing the Blue Hour web app. Apple Health has no web API, so a Safari tab can never see your Watch data — this app is the bridge.
+A small native shell: it reads Apple Health, shows the Blue Hour web app, and fires **local notifications** for the morning brief and water reminders. Apple Health has no web API, so a Safari tab can never see your Watch data — this app is the bridge.
 
 It reads and never writes: workouts, sleep, resting heart rate, and HRV from the last 14 days, posted to `/api/health/ingest` every time you open or return to the app. **Settings → Apple Health** also has a Sync button that asks this shell to pull again.
 
@@ -40,13 +40,25 @@ On first launch the app asks for two things:
 - **Address** — the deployed site (`https://…vercel.app`), or `http://192.168.1.174:3000` while `npm run dev` is running on this Mac and the phone is on the same Wi-Fi. `npm run dev` listens on every interface so the phone can reach the Mac.
 - **Sync key** — the same value as `HEALTH_INGEST_SECRET`.
 
-It verifies both before asking for anything else. Then iOS shows the Health permission sheet: turn on **Workouts**, **Sleep**, **Heart Rate**, **Resting Heart Rate**, and **Heart Rate Variability**, and tap Allow.
+It verifies both before asking for anything else. Then iOS shows the Health permission sheet: turn on **Workouts**, **Sleep**, **Heart Rate**, **Resting Heart Rate**, and **Heart Rate Variability**, and tap Allow. Shortly after, it asks to send notifications — allow that too.
 
 The key is stored in the iPhone keychain, not in this repo. You only enter it once in this native Connect screen — not in the web UI.
 
+## Notifications
+
+These are native local notifications on this phone, not Safari web push.
+
+- **Morning brief** — at the reminder hour in Settings (default 6am Austin), with that day's workout copy.
+- **Water** — every even hour from 8am to 10pm Austin, skipped once the day's water target is logged.
+- Both stop if morning reminders are paused on the website.
+
+Open the app (or return to it) to refresh the next few days of copy. Gear → **Send a test notification** to confirm iOS will show banners.
+
+If you denied the prompt: **Settings → Notifications → Blue Hour → Allow**.
+
 ## Daily use
 
-Open the app. It syncs in the background and reloads Today when new data lands. The status strip at the top shows what happened; the arrow re-syncs by hand, the gear reopens the connection settings. On the Apple Health page, **Sync from Apple Health** does the same pull.
+Open the app. It syncs Health, reschedules notifications, and reloads Today when new data lands. The status strip at the top shows what happened; the arrow re-syncs by hand, the gear reopens the connection settings. On the Apple Health page, **Sync from Apple Health** does the same pull.
 
 ## The seven-day thing
 
@@ -56,4 +68,4 @@ Apps signed with a free Apple ID stop working after 7 days. When Blue Hour refus
 
 - HealthKit denials are silent by design: iOS never tells an app which read permissions you refused, so a missing metric shows as "—" rather than an error.
 - To change what it can see later: **Health app → Sharing → Apps → Blue Hour**.
-- Sync happens only while the app is open. There is no background delivery, which is why the morning routine is "open Blue Hour" rather than "wait for a push."
+- Health sync happens only while the app is open. Notifications are scheduled on-device for the next few days, so briefs and water pings still fire if you do not open the app that morning.

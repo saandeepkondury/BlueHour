@@ -26,6 +26,7 @@ final class SyncModel: ObservableObject {
 
     func syncIfPossible() async {
         await sync(reload: true, notifyWeb: false)
+        await NotificationScheduler.refresh()
     }
 
     func syncFromWeb() async {
@@ -100,7 +101,9 @@ struct RootView: View {
                 }
                 .ignoresSafeArea(.container, edges: .bottom)
             } else {
-                SetupView { model.showSettings = false }
+                SetupView {
+                    Task { await model.syncIfPossible() }
+                }
             }
         }
         .task { await model.syncIfPossible() }
@@ -113,7 +116,10 @@ struct RootView: View {
             Task { await model.syncIfPossible() }
         }
         .sheet(isPresented: $model.showSettings) {
-            SetupView { model.showSettings = false }
+            SetupView {
+                model.showSettings = false
+                Task { await model.syncIfPossible() }
+            }
         }
     }
 }
@@ -123,12 +129,11 @@ private struct StatusBar: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            BrandGlyph()
-                .frame(width: 18, height: 18)
+            BrandMark(size: 22, tone: .glyph)
 
             Text("Blue Hour")
-                .font(.system(.footnote, design: .serif))
-                .tracking(1.2)
+                .font(.system(.footnote, design: .serif).italic())
+                .tracking(0.4)
                 .foregroundStyle(Palette.cream.opacity(0.95))
 
             Spacer()
@@ -168,7 +173,7 @@ private struct StatusBar: View {
         .font(.footnote)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .background(Palette.skyDeep)
+        .background(Palette.skyDeep.gradient)
     }
 }
 
@@ -183,6 +188,20 @@ private struct SetupView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    VStack(spacing: 12) {
+                        BrandMark(size: 72)
+                        Text("Blue Hour")
+                            .font(.system(.title2, design: .serif))
+                        Text("Connect this phone to the trainer.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .listRowBackground(Color.clear)
+                }
+
                 Section {
                     TextField("https://blue-hour.vercel.app", text: $baseURL)
                         .textInputAutocapitalization(.never)
@@ -211,6 +230,18 @@ private struct SetupView: View {
                 Section {
                     Button(checking ? "Checking…" : "Save and connect") { save() }
                         .disabled(checking || baseURL.trimmed.isEmpty || secret.trimmed.isEmpty)
+                }
+
+                if Settings.isConfigured {
+                    Section {
+                        Button("Send a test notification") {
+                            Task { await NotificationScheduler.sendTest() }
+                        }
+                    } header: {
+                        Text("Notifications")
+                    } footer: {
+                        Text("Morning briefs and water reminders (every 2 hours, 8am–10pm Austin) are scheduled on this phone. Open the app once a day so copy stays current. Pause them in the website Settings if you want silence.")
+                    }
                 }
             }
             .navigationTitle("Connect")
@@ -263,29 +294,3 @@ private struct SetupView: View {
     }
 }
 
-private struct BrandGlyph: View {
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(Palette.cream)
-                .frame(width: 7.5, height: 7.5)
-                .offset(y: -3.2)
-            Capsule()
-                .fill(Palette.limestone)
-                .frame(width: 9, height: 1.2)
-                .offset(y: 3.4)
-            Capsule()
-                .fill(Palette.cream)
-                .frame(width: 13, height: 1.8)
-                .offset(y: 6.2)
-        }
-        .accessibilityHidden(true)
-    }
-}
-
-enum Palette {
-    static let skyDeep = Color(red: 0.247, green: 0.443, blue: 0.588)
-    static let cream = Color(red: 0.953, green: 0.937, blue: 0.902)
-    static let limestone = Color(red: 0.851, green: 0.816, blue: 0.753)
-    static let warn = Color(red: 0.957, green: 0.812, blue: 0.616)
-}

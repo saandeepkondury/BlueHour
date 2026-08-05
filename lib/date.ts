@@ -25,6 +25,49 @@ export function hourInTimeZone(date: Date, tz: string = TZ): number {
   return Number(hour) % 24;
 }
 
+/**
+ * Instant when `dateISO` at `hour:minute` occurs in `tz`. Used to drop
+ * already-passed local notification slots before handing them to iOS.
+ */
+export function wallTimeInZone(
+  dateISO: string,
+  hour: number,
+  minute = 0,
+  tz: string = TZ,
+): Date {
+  const [year, month, day] = dateISO.split("-").map(Number);
+  const utcGuess = Date.UTC(year, month - 1, day, hour, minute, 0);
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+
+  const partsOf = (ms: number) => {
+    const map: Record<string, string> = {};
+    for (const part of dtf.formatToParts(new Date(ms))) {
+      if (part.type !== "literal") map[part.type] = part.value;
+    }
+    return map;
+  };
+
+  const zoned = partsOf(utcGuess);
+  const zonedAsUtc = Date.UTC(
+    Number(zoned.year),
+    Number(zoned.month) - 1,
+    Number(zoned.day),
+    Number(zoned.hour) % 24,
+    Number(zoned.minute),
+    Number(zoned.second),
+  );
+  return new Date(utcGuess - (zonedAsUtc - utcGuess));
+}
+
 /** Anchors a date-only string at UTC noon so arithmetic never crosses a day boundary. */
 export function parseISO(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
