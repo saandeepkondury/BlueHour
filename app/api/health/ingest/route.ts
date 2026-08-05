@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { ingestHealth, parsePayload, PayloadError } from "@/lib/health/ingest";
 import { lastSync } from "@/lib/health/read";
 import { refreshCoach } from "@/lib/coach/store";
@@ -65,16 +65,23 @@ export async function POST(request: Request) {
   try {
     const result = await ingestHealth(parsePayload(body));
 
-    // New data can change what the guardrails see, so re-run them immediately.
-    // The model is left for the coach screen, where a person is watching.
-    const current = await getProfile();
-    const coach = await refreshCoach(current, { useModel: false });
-
     revalidatePath("/");
     revalidatePath("/core");
     revalidatePath("/coach");
 
-    return NextResponse.json({ ok: true, ...result, suggestions: coach.pending });
+    // Coach refresh is useful but must not block the phone — a cold Next compile
+    // plus rules can exceed the iOS URLSession timeout and look like a failed sync.
+    after(async () => {
+      try {
+        const current = await getProfile();
+        await refreshCoach(current, { useModel: false });
+        revalidatePath("/coach");
+      } catch (error) {
+        console.error("post-ingest coach refresh failed", error);
+      }
+    });
+
+    return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     if (error instanceof PayloadError) {
       return NextResponse.json({ error: error.message }, { status: 400 });

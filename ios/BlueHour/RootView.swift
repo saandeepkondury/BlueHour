@@ -81,11 +81,13 @@ private struct StatusBar: View {
 
     var body: some View {
         HStack(spacing: 10) {
+            BrandGlyph()
+                .frame(width: 18, height: 18)
+
             Text("Blue Hour")
                 .font(.system(.footnote, design: .serif))
-                .tracking(2)
-                .textCase(.uppercase)
-                .foregroundStyle(Palette.cream.opacity(0.9))
+                .tracking(1.2)
+                .foregroundStyle(Palette.cream.opacity(0.95))
 
             Spacer()
 
@@ -198,7 +200,7 @@ private struct SetupView: View {
 
             var request = URLRequest(url: url)
             request.setValue("Bearer \(Settings.ingestSecret)", forHTTPHeaderField: "Authorization")
-            request.timeoutInterval = 15
+            request.timeoutInterval = 45
 
             do {
                 let (_, response) = try await URLSession.shared.data(for: request)
@@ -208,6 +210,10 @@ private struct SetupView: View {
                 } else {
                     message = SyncError.server(status: status, message: "").localizedDescription
                 }
+            } catch let error as URLError where error.code == .timedOut {
+                message = SyncError.timeout.localizedDescription
+            } catch let error as URLError {
+                message = SyncError.unreachable.localizedDescription + " (\(error.localizedDescription))"
             } catch {
                 message = error.localizedDescription
             }
@@ -215,8 +221,29 @@ private struct SetupView: View {
     }
 }
 
+private struct BrandGlyph: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Palette.cream)
+                .frame(width: 7.5, height: 7.5)
+                .offset(y: -3.2)
+            Capsule()
+                .fill(Palette.limestone)
+                .frame(width: 9, height: 1.2)
+                .offset(y: 3.4)
+            Capsule()
+                .fill(Palette.cream)
+                .frame(width: 13, height: 1.8)
+                .offset(y: 6.2)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 enum Palette {
-    static let skyDeep = Color(red: 0.133, green: 0.110, blue: 0.267)
-    static let cream = Color(red: 0.976, green: 0.945, blue: 0.867)
+    static let skyDeep = Color(red: 0.247, green: 0.443, blue: 0.588)
+    static let cream = Color(red: 0.953, green: 0.937, blue: 0.902)
+    static let limestone = Color(red: 0.851, green: 0.816, blue: 0.753)
     static let warn = Color(red: 0.957, green: 0.812, blue: 0.616)
 }

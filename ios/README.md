@@ -39,7 +39,7 @@ Put it in `.env.local` for local runs, and in Vercel's environment variables for
 
 On first launch the app asks for two things:
 
-- **Address** — the deployed site (`https://…vercel.app`), or `http://192.168.1.174:3000` while `npm run dev` is running on this Mac and the phone is on the same Wi-Fi.
+- **Address** — the deployed site (`https://…vercel.app`), or `http://192.168.1.174:3000` while `npm run dev` is running on this Mac and the phone is on the same Wi-Fi. `npm run dev` listens on every interface so the phone can reach the Mac.
 - **Sync key** — the same value as `HEALTH_INGEST_SECRET`.
 
 It verifies both before asking for anything else. Then iOS shows the Health permission sheet: turn on **Workouts**, **Sleep**, **Heart Rate**, **Resting Heart Rate**, and **Heart Rate Variability**, and tap Allow.

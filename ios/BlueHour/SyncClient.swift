@@ -46,17 +46,23 @@ struct HealthPayload: Encodable {
 struct IngestResponse: Decodable {
     let daysWritten: Int
     let workoutsWritten: Int
-    let markedDone: [String]
+    let markedDone: [String]?
 }
 
 enum SyncError: LocalizedError {
     case notConfigured
+    case timeout
+    case unreachable
     case server(status: Int, message: String)
 
     var errorDescription: String? {
         switch self {
         case .notConfigured:
             return "Set the Blue Hour address and sync key first."
+        case .timeout:
+            return "Sync timed out. Is npm run dev running on the Mac?"
+        case .unreachable:
+            return "Cannot reach the trainer. Same Wi‑Fi, and Mac awake?"
         case let .server(status, message):
             if status == 401 { return "Sync key rejected. Check it matches HEALTH_INGEST_SECRET." }
             if status == 503 { return "The server has no HEALTH_INGEST_SECRET set." }
@@ -75,12 +81,35 @@ struct SyncClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(Settings.ingestSecret)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = 30
+        // Cold Next.js compiles of this route have taken ~30s locally.
+        request.timeoutInterval = 90
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         request.httpBody = try encoder.encode(payload)
 
+        do {
+            return try await perform(request)
+        } catch let error as URLError where error.code == .timedOut {
+            do {
+                return try await perform(request)
+            } catch {
+                throw SyncError.timeout
+            }
+        } catch let error as URLError where Self.unreachableCodes.contains(error.code) {
+            throw SyncError.unreachable
+        }
+    }
+
+    private static let unreachableCodes: Set<URLError.Code> = [
+        .cannotConnectToHost,
+        .cannotFindHost,
+        .networkConnectionLost,
+        .notConnectedToInternet,
+        .dnsLookupFailed,
+    ]
+
+    private func perform(_ request: URLRequest) async throws -> IngestResponse {
         let (data, response) = try await URLSession.shared.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
 
