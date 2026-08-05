@@ -1,8 +1,10 @@
 # Blue Hour
 
 A personal training, fueling, and strength app for the Ascension Seton Austin Half Marathon on
-14 February 2027. Installable as a PWA on iPhone, sends a morning push notification, reads Apple
-Watch data, and proposes plan changes it will not make without permission.
+14 February 2027. Twenty-eight weeks: base, build, specific (quality Tuesdays), peak, and taper,
+with Strength A / Abs A / Strength B+Abs B locked to the long-run grid. Installable as a PWA on
+iPhone, sends a morning push notification, reads Apple Watch data, and proposes plan changes it
+will not make without permission.
 
 ## Running it
 
