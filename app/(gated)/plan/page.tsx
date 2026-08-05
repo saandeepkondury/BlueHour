@@ -1,12 +1,22 @@
 import Link from "next/link";
 import { Nav } from "@/components/Nav";
+import { Shell } from "@/components/Shell";
 import { formatRange, formatShort, startOfWeek, todayISO, weekdayShort } from "@/lib/date";
 import { formatMiles } from "@/lib/format";
 import { PHASE_BLURB, PHASE_LABEL, type Phase } from "@/lib/plan/types";
 import { getAllWorkouts, getAllWorkoutLogs, getProfile } from "@/lib/store";
-import type { Workout } from "@/drizzle/schema";
+import { strengthBetween } from "@/lib/strength/plan";
+import type { StrengthSession, Workout } from "@/drizzle/schema";
 
 export const dynamic = "force-dynamic";
+
+function dayLabel(day: Workout, strength?: StrengthSession): string {
+  if (day.type !== "rest") return day.title;
+  if (!strength) return "Rest";
+  if (strength.focus === "core") return strength.title;
+  if (strength.focus === "mobility") return strength.title;
+  return strength.title;
+}
 
 interface WeekGroup {
   weekStart: string;
@@ -21,6 +31,11 @@ export default async function PlanPage() {
   const workouts = await getAllWorkouts();
   const logs = await getAllWorkoutLogs();
   const loggedByDate = new Map(logs.map((log) => [log.date, log]));
+  const strengthRows =
+    workouts.length > 0
+      ? await strengthBetween(workouts[0].date, workouts[workouts.length - 1].date)
+      : [];
+  const strengthByDate = new Map(strengthRows.map((session) => [session.date, session]));
   const today = todayISO();
   const thisWeek = startOfWeek(today);
 
@@ -71,27 +86,33 @@ export default async function PlanPage() {
 
         {week.days.map((day) => {
           const logged = loggedByDate.get(day.date);
+          const strength = strengthByDate.get(day.date);
           const classes = ["day"];
           if (day.date === today) classes.push("day--today");
-          if (day.type === "rest") classes.push("day--rest");
+          if (day.type === "rest" && !strength) classes.push("day--rest");
+          if (day.type === "quality") classes.push("day--quality");
 
           return (
             <Link className={classes.join(" ")} href={`/day/${day.date}`} key={day.date}>
               <span className="day-date">
                 {weekdayShort(day.date)} {formatShort(day.date).split(" ")[1]}
               </span>
-              <span className="day-name">
-                {day.type === "rest" ? "Rest" : day.title}
-              </span>
+              <span className="day-name">{dayLabel(day, strength)}</span>
               <span className="day-dist">
                 {day.type === "rest"
-                  ? ""
+                  ? strength
+                    ? `${strength.minutes} min`
+                    : ""
                   : logged
                     ? `${formatMiles(logged.distanceMi)} mi`
                     : `${formatMiles(day.distanceMi)} mi`}
               </span>
               <span className="day-flag">
-                {day.status === "done" ? "✓" : day.status === "skipped" ? "skipped" : ""}
+                {day.status === "done" || strength?.status === "done"
+                  ? "✓"
+                  : day.status === "skipped"
+                    ? "skipped"
+                    : ""}
               </span>
             </Link>
           );
@@ -101,15 +122,15 @@ export default async function PlanPage() {
   };
 
   return (
-    <main className="shell shell--wide">
+    <Shell wide>
       <section className="sec">
         <p className="sec-label">II · The plan</p>
         <h2 className="sec-title">
-          Twenty-seven weeks to <em>Congress Avenue</em>
+          Twenty-eight weeks to <em>Congress Avenue</em>
         </h2>
         <p className="sec-intro">
-          {weeks.length} weeks, built backward from {profile.raceName}. Tap any day to log it, swap a
-          meal, or read why the session exists.
+          {weeks.length} weeks: base, build, specific, peak, taper. Runs, strength, and abs on a
+          fixed weekly grid, built backward from {profile.raceName}. Tap any day to log it.
         </p>
       </section>
 
@@ -125,6 +146,6 @@ export default async function PlanPage() {
       {upcoming.map(renderWeek)}
 
       <Nav />
-    </main>
+    </Shell>
   );
 }

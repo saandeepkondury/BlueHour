@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { saveCoachSettings, saveGoals, saveProfile, sendTestBrief } from "@/app/actions";
 import { Nav } from "@/components/Nav";
+import { Shell } from "@/components/Shell";
 import { PushToggle } from "@/components/PushToggle";
 import { pendingCount } from "@/lib/coach/store";
 import { todayISO } from "@/lib/date";
@@ -39,10 +40,9 @@ export default async function SettingsPage() {
     buildBrief(todayISO(), appUrl),
   ]);
   const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
-  const emailConfigured = Boolean(process.env.RESEND_API_KEY);
 
   return (
-    <main className="shell">
+    <Shell>
       <section className="sec">
         <p className="sec-label">Settings</p>
         <h2 className="sec-title">
@@ -179,23 +179,17 @@ export default async function SettingsPage() {
         </fieldset>
 
         <fieldset>
-          <legend>Daily reminder</legend>
-          <div className="field-row">
-            <label className="field">
-              <span className="field-label">Email</span>
-              <input name="email" type="email" defaultValue={profile.email} />
-            </label>
-            <label className="field">
-              <span className="field-label">Hour (Austin time)</span>
-              <select name="reminderHour" defaultValue={String(profile.reminderHour)}>
-                {Array.from({ length: 24 }, (_, hour) => (
-                  <option key={hour} value={hour}>
-                    {hourLabel(hour)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <legend>Daily notification</legend>
+          <label className="field">
+            <span className="field-label">Hour (Austin time)</span>
+            <select name="reminderHour" defaultValue={String(profile.reminderHour)}>
+              {Array.from({ length: 24 }, (_, hour) => (
+                <option key={hour} value={hour}>
+                  {hourLabel(hour)}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="field">
             <span className="field-label">Send reminders</span>
             <select name="remindersEnabled" defaultValue={profile.remindersEnabled ? "1" : "0"}>
@@ -203,12 +197,10 @@ export default async function SettingsPage() {
               <option value="0">Pause them</option>
             </select>
           </label>
-          {!emailConfigured ? (
-            <p className="field-hint">
-              Email is not wired up yet. Add a <code>RESEND_API_KEY</code> when you deploy and the
-              morning brief starts arriving.
-            </p>
-          ) : null}
+          <p className="field-hint">
+            A push notification on this device — not email. Turn push on below, and on iPhone add
+            Blue Hour to the home screen first.
+          </p>
         </fieldset>
 
         <button className="btn btn--full" type="submit">
@@ -361,15 +353,10 @@ export default async function SettingsPage() {
           )}
           <form action={sendTestBrief}>
             <button className="btn btn--ghost btn--small" type="submit">
-              Send it to me now
+              Send a test notification
             </button>
           </form>
-          {!emailConfigured ? (
-            <p className="tiny muted">
-              Without <code>RESEND_API_KEY</code> this only tries push. Nothing breaks; nothing
-              arrives either.
-            </p>
-          ) : null}
+          <p className="tiny muted">Sends today&apos;s brief as a push on devices that have opted in.</p>
         </article>
       </section>
 
@@ -377,8 +364,8 @@ export default async function SettingsPage() {
         <p className="sec-label">Push notifications</p>
         <article className="plaque">
           <p className="plaque-note">
-            Push is per-device. Email is the reliable channel; treat push as the nudge that reaches you
-            before you open anything.
+            This is how the daily reminder arrives. Enable it on each phone or laptop you want to
+            hear from in the morning.
           </p>
           <div style={{ marginTop: "1rem" }}>
             <PushToggle vapidKey={vapidKey} />
@@ -393,6 +380,6 @@ export default async function SettingsPage() {
       </p>
 
       <Nav pending={pending} />
-    </main>
+    </Shell>
   );
 }

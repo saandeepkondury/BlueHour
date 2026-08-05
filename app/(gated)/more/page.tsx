@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Nav } from "@/components/Nav";
+import { Shell } from "@/components/Shell";
 import { formatLong } from "@/lib/date";
 import { pendingCount } from "@/lib/coach/store";
 import { getProfile } from "@/lib/store";
@@ -21,7 +22,7 @@ export default async function MorePage() {
 
   return (
     <>
-      <main className="shell">
+      <Shell>
         <section className="sec">
           <p className="sec-label">Everything else</p>
           <h1 className="sec-title">
@@ -40,7 +41,7 @@ export default async function MorePage() {
             </Link>
           ))}
         </section>
-      </main>
+      </Shell>
       <Nav pending={pending} />
     </>
   );

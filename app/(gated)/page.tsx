@@ -3,6 +3,7 @@ import { DayView } from "@/components/DayView";
 import { Nav } from "@/components/Nav";
 import { RidgeHeader } from "@/components/RidgeHeader";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { Shell } from "@/components/Shell";
 import { formatLong, startOfWeek, todayISO } from "@/lib/date";
 import { closeOutMissedDays, longRunOptions } from "@/lib/plan/adapt";
 import { getAllWorkouts, getDayBundle, getProfile } from "@/lib/store";
@@ -28,7 +29,7 @@ export default async function TodayPage() {
     const first = all[0];
     return (
       <>
-        <main className="shell">
+        <Shell showBrand={false}>
           <RidgeHeader
             today={today}
             raceDate={current.raceDate}
@@ -55,7 +56,7 @@ export default async function TodayPage() {
               </Link>
             </div>
           </section>
-        </main>
+        </Shell>
         <Nav pending={pending.length} />
         <ServiceWorkerRegister />
       </>
@@ -66,7 +67,7 @@ export default async function TodayPage() {
 
   return (
     <>
-      <main className="shell">
+      <Shell showBrand={false}>
         <RidgeHeader
           today={today}
           raceDate={current.raceDate}
@@ -100,7 +101,7 @@ export default async function TodayPage() {
           isToday
           longRunOptions={options.map((day) => ({ date: day.date, title: day.title }))}
         />
-      </main>
+      </Shell>
       <Nav pending={pending.length} />
       <ServiceWorkerRegister />
     </>

@@ -1,4 +1,5 @@
 import { Nav } from "@/components/Nav";
+import { Shell } from "@/components/Shell";
 import { formatMiles } from "@/lib/format";
 import { PHASE_LABEL, type Phase } from "@/lib/plan/types";
 import { getProgress } from "@/lib/progress";
@@ -23,7 +24,7 @@ export default async function ProgressPage() {
       : Math.round((nutrition.avgProtein / nutrition.targetProtein) * 100);
 
   return (
-    <main className="shell shell--wide">
+    <Shell wide>
       <section className="sec">
         <p className="sec-label">IV · Progress</p>
         <h2 className="sec-title">
@@ -139,6 +140,6 @@ export default async function ProgressPage() {
       </section>
 
       <Nav />
-    </main>
+    </Shell>
   );
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { rotateIngestToken, saveHealthEntry } from "@/app/actions";
 import { Nav } from "@/components/Nav";
+import { Shell } from "@/components/Shell";
 import { todayISO } from "@/lib/date";
 import { lastSync } from "@/lib/health/read";
 import { getSetting, KEYS } from "@/lib/settings";
@@ -56,7 +57,7 @@ export default async function WatchPage() {
 
   return (
     <>
-      <main className="shell">
+      <Shell>
         <section className="sec">
           <p className="sec-label">Apple Watch</p>
           <h1 className="sec-title">
@@ -225,7 +226,7 @@ export default async function WatchPage() {
           to OpenAI as a summary of the last fourteen days. You can turn that off in{" "}
           <Link href="/settings">Settings</Link> and the guardrails keep working.
         </p>
-      </main>
+      </Shell>
       <Nav pending={pending} />
     </>
   );

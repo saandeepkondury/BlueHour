@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { saveHealthEntry } from "@/app/actions";
 import { Nav } from "@/components/Nav";
+import { Shell } from "@/components/Shell";
 import { addDays, formatLong, formatShort, todayISO, weekdayShort } from "@/lib/date";
 import { getWorkout } from "@/lib/store";
 import { getProfile } from "@/lib/store";
@@ -60,7 +61,7 @@ export default async function CorePage() {
 
   return (
     <>
-      <main className="shell">
+      <Shell>
         <section className="sec">
           <p className="sec-label">Second goal</p>
           <h1 className="sec-title">
@@ -250,7 +251,7 @@ export default async function CorePage() {
           Body-fat estimates from a tape measure carry a few points of error either way — use the
           direction of travel, not the decimal. Race day is {formatLong(current.raceDate)}.
         </p>
-      </main>
+      </Shell>
       <Nav pending={pending} />
     </>
   );

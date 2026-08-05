@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Nav } from "@/components/Nav";
+import { Shell } from "@/components/Shell";
 import { formatQty } from "@/lib/nutrition/grocery";
 import { recipeById, SLOT_LABEL } from "@/lib/nutrition/recipes";
 
@@ -10,7 +11,7 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
   if (!recipe) notFound();
 
   return (
-    <main className="shell">
+    <Shell>
       <section className="sec">
         <p className="sec-label">{SLOT_LABEL[recipe.slot]}</p>
         <h2 className="sec-title">{recipe.name}</h2>
@@ -72,6 +73,6 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
       </div>
 
       <Nav />
-    </main>
+    </Shell>
   );
 }

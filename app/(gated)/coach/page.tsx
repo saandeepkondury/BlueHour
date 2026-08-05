@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { applySuggestionAction, askCoach, clearFuelOverrides, dismissSuggestionAction } from "@/app/actions";
 import { Nav } from "@/components/Nav";
+import { Shell } from "@/components/Shell";
 import { formatShort, todayISO } from "@/lib/date";
 import { changesOf, decidedSuggestions, pendingSuggestions } from "@/lib/coach/store";
 import { describeChange } from "@/lib/coach/types";
@@ -87,7 +88,7 @@ export default async function CoachPage() {
 
   return (
     <>
-      <main className="shell">
+      <Shell>
         <section className="sec">
           <p className="sec-label">Coach</p>
           <h1 className="sec-title">
@@ -181,7 +182,7 @@ export default async function CoachPage() {
           Not medical advice. Pain that changes how you run, or anything that persists, is a
           conversation for a doctor or a physio — not for this app. Data as of {formatShort(todayISO())}.
         </p>
-      </main>
+      </Shell>
       <Nav pending={pending.length} />
     </>
   );

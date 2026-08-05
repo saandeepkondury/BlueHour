@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DayView } from "@/components/DayView";
 import { Nav } from "@/components/Nav";
+import { Shell } from "@/components/Shell";
 import { addDays, formatLong, startOfWeek, todayISO } from "@/lib/date";
 import { longRunOptions } from "@/lib/plan/adapt";
 import { getDayBundle } from "@/lib/store";
@@ -19,7 +20,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
   const options = await longRunOptions(startOfWeek(date));
 
   return (
-    <main className="shell">
+    <Shell>
       <header className="sec">
         <p className="sec-label">Plan · {formatLong(date)}</p>
         <div className="btn-row" style={{ marginTop: 0 }}>
@@ -42,6 +43,6 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
       />
 
       <Nav />
-    </main>
+    </Shell>
   );
 }
