@@ -122,7 +122,7 @@ function Suggestion({ row, open }: { row: CoachSuggestion; open: boolean }) {
 export default async function CoachPage() {
   const current = await getProfile();
   await expireOldSuggestions();
-  const run = await refreshCoach(current, { mode: "daily-if-due" });
+  const run = await refreshCoach(current);
 
   const [pending, decided, config, overrides] = await Promise.all([
     pendingSuggestions(),
@@ -137,7 +137,7 @@ export default async function CoachPage() {
   return (
     <>
       <Shell>
-        <AppBar title="Coach" subtitle="Daily review · proposes, never decides" pending={pending.length} />
+        <AppBar title="Coach" subtitle="Daily review · never auto-applies" pending={pending.length} />
 
         <section className="block block--tight">
           <div className="card">
@@ -151,14 +151,15 @@ export default async function CoachPage() {
 
             {!config.key ? (
               <p className="card__sub" style={{ marginTop: "0.75rem" }}>
-                Guardrails watch sleep, missed sessions, and fuel every day.{" "}
-                <Link href="/settings">Add an OpenAI key</Link> for a conservative daily synthesis on
-                top — meals, rest, lifting, grocery, and goals toward Feb 14.
+                Daily review watches what you actually complete — meals eaten vs skipped, workouts,
+                sleep, strength, fuel, grocery — and proposes small adjustments toward Feb 14.{" "}
+                <Link href="/settings">Add an OpenAI key</Link> for a once-a-day synthesis on top of
+                the guardrails. Nothing applies itself.
               </p>
             ) : current.aiEnabled !== 1 ? (
               <p className="card__sub" style={{ marginTop: "0.75rem" }}>
                 Daily model review is off in <Link href="/settings">Settings</Link>. Guardrails still
-                run.
+                run from your logs.
               </p>
             ) : (
               <p className="card__sub" style={{ marginTop: "0.75rem" }}>
@@ -166,8 +167,9 @@ export default async function CoachPage() {
                   ? `Today’s review just ran on ${config.model}.`
                   : lastRunDay
                     ? `Last daily review ${lastRunDay} · ${config.model}.`
-                    : `Daily review is armed on ${config.model}. Open this screen or wait for the morning brief.`}{" "}
-                It learns from what you complete, skip, eat, and dismiss — not from ad-hoc prompts.
+                    : `Daily review is armed on ${config.model}. It runs once a day from this screen or the morning brief.`}{" "}
+                It learns from what you complete vs skip — never from typed questions — and never
+                auto-applies.
               </p>
             )}
 
@@ -223,8 +225,8 @@ export default async function CoachPage() {
                   </span>
                   <p className="card__title">Nothing to decide</p>
                   <p className="small sub">
-                    Quiet is the good outcome. Keep logging — tomorrow’s review only speaks when the
-                    data does.
+                    Quiet is good. Review runs once a day from your logs — meals, workouts, sleep,
+                    strength, fuel, grocery — and only speaks when the data does.
                   </p>
                 </div>
               </div>

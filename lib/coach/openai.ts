@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { startOfWeek } from "@/lib/date";
 import type { Snapshot } from "./snapshot";
 import { parseChanges, type Change, type Confidence, type SuggestionDraft } from "./types";
@@ -72,8 +71,7 @@ Use only dates and recipe ids that appear in the snapshot. A suggestion may carr
 
 function fingerprint(kind: string, changes: Change[], today: string): string {
   const ops = changes.map((change) => change.op).sort().join("+") || "note";
-  const hash = createHash("sha256").update(`${kind}|${ops}`).digest("hex").slice(0, 10);
-  return `ai:${kind}:${ops}:${startOfWeek(today)}:${hash}`;
+  return `ai:${kind}:${ops}:${startOfWeek(today)}`;
 }
 
 function asConfidence(value: unknown): Confidence {

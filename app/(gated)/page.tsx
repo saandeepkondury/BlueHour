@@ -21,7 +21,7 @@ export default async function TodayPage() {
   await closeOutMissedDays(today);
 
   // Guardrails are cheap. The model runs at most once a day, from cron or Coach.
-  await refreshCoach(current, { mode: "rules" });
+  await refreshCoach(current, { skipModel: true });
 
   const [bundle, pending] = await Promise.all([getDayBundle(today), pendingSuggestions()]);
   const all = await getAllWorkouts();

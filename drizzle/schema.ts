@@ -240,6 +240,7 @@ export const coachSuggestions = sqliteTable("coach_suggestions", {
   confidence: text("confidence").notNull().default("medium"),
   /** JSON array of typed change operations the app knows how to perform. */
   changes: text("changes").notNull().default("[]"),
+  /** pending | applied | dismissed | expired | deleted (tombstone, never shown). */
   status: text("status").notNull().default("pending"),
   decidedAt: text("decided_at"),
   /** The data snapshot the advice was based on, for later reading. */

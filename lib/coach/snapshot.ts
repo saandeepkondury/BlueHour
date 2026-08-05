@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lte, ne } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
 import {
   coachSuggestions,
@@ -62,6 +62,8 @@ export interface Snapshot {
     longRunDay: number;
     strengthDays: number;
     absGoal: boolean;
+    dietPref: string;
+    allergies: string;
     weightKg: number | null;
     heightCm: number | null;
     age: number | null;
@@ -102,21 +104,23 @@ export interface Snapshot {
     fuelChecksDone14: number;
     fuelChecksPlanned14: number;
   };
-  intent: {
+  intention: {
     race: string;
     physique: string;
     diet: string;
   };
-  preferences: {
-    dietPref: string;
-    allergies: string;
-    bannedRecipes: string[];
+  adherence: {
+    byWorkoutType: Record<string, { planned: number; done: number; skipped: number }>;
+    restHonored: number;
+    restSkipped: number;
     mealsBySlot: Record<string, { planned: number; eaten: number }>;
     favoriteRecipes: { id: string; name: string; eaten: number }[];
-    ignoredRecipes: { id: string; name: string; planned: number; eaten: number }[];
+    avoidedRecipes: { id: string; name: string; planned: number; eaten: number }[];
     extraFoods: { name: string; times: number }[];
+    grocery: { items: number; checked: number; checkedPct: number | null };
+    bannedRecipes: string[];
   };
-  decisions: { date: string; kind: string; title: string; status: string; origin: string }[];
+  decisions: { date: string; kind: string; title: string; status: string }[];
   days: SnapshotDay[];
   /** Today plus the next seven days, so advice can name a real date. */
   ahead: { date: string; type: string; mi: number; strength: string | null }[];
@@ -190,12 +194,11 @@ export async function buildSnapshot(current: Profile, today: string): Promise<Sn
         kind: coachSuggestions.kind,
         title: coachSuggestions.title,
         status: coachSuggestions.status,
-        origin: coachSuggestions.origin,
       })
       .from(coachSuggestions)
-      .where(ne(coachSuggestions.status, "pending"))
+      .where(inArray(coachSuggestions.status, ["applied", "dismissed"]))
       .orderBy(desc(coachSuggestions.decidedAt))
-      .limit(20),
+      .limit(15),
     bannedRecipeIds(),
   ]);
 
@@ -342,6 +345,21 @@ export async function buildSnapshot(current: Profile, today: string): Promise<Sn
     extrasCount.set(key, (extrasCount.get(key) ?? 0) + 1);
   }
 
+  const byWorkoutType: Record<string, { planned: number; done: number; skipped: number }> = {};
+  for (const day of days) {
+    const bucket = byWorkoutType[day.type] ?? { planned: 0, done: 0, skipped: 0 };
+    bucket.planned += 1;
+    if (day.status === "done") bucket.done += 1;
+    if (day.status === "skipped") bucket.skipped += 1;
+    byWorkoutType[day.type] = bucket;
+  }
+
+  const restDays = days.filter((day) => day.type === "rest");
+  const restHonored = restDays.filter((day) => day.status === "done").length;
+  const restSkipped = restDays.filter(
+    (day) => day.status === "skipped" || (day.actualMi !== null && day.actualMi > 0),
+  ).length;
+
   return {
     today,
     race: {
@@ -355,6 +373,8 @@ export async function buildSnapshot(current: Profile, today: string): Promise<Sn
       longRunDay: current.longRunDay,
       strengthDays: current.strengthDays,
       absGoal: current.absGoal === 1,
+      dietPref: current.dietPref,
+      allergies: current.allergies,
       weightKg: round(current.weightKg),
       heightCm: current.heightCm,
       age: current.age,
@@ -382,22 +402,22 @@ export async function buildSnapshot(current: Profile, today: string): Promise<Sn
       deficitKcal: abs.deficitKcal,
     },
     totals,
-    intent: {
-      race: `${current.raceName} on ${current.raceDate} — finish healthy`,
+    intention: {
+      race: "Austin Half Marathon on February 14, 2027 — finish healthy",
       physique: "Visible abs by race day without starving the training",
-      diet: "A diet you actually eat, shop for, and can keep through February",
+      diet: "A diet he will actually eat, shop for, and keep through February",
     },
-    preferences: {
-      dietPref: current.dietPref,
-      allergies: current.allergies,
-      bannedRecipes: banned,
+    adherence: {
+      byWorkoutType,
+      restHonored,
+      restSkipped,
       mealsBySlot,
       favoriteRecipes: [...recipeStats.values()]
         .filter((recipe) => recipe.eaten > 0)
         .sort((a, b) => b.eaten - a.eaten)
         .slice(0, 6)
         .map(({ id, name, eaten }) => ({ id, name, eaten })),
-      ignoredRecipes: [...recipeStats.values()]
+      avoidedRecipes: [...recipeStats.values()]
         .filter((recipe) => recipe.planned >= 2 && recipe.eaten === 0)
         .sort((a, b) => b.planned - a.planned)
         .slice(0, 6),
@@ -405,6 +425,15 @@ export async function buildSnapshot(current: Profile, today: string): Promise<Sn
         .sort((a, b) => b[1] - a[1])
         .slice(0, 8)
         .map(([name, times]) => ({ name, times })),
+      grocery: {
+        items: grocery.length,
+        checked: grocery.filter((row) => row.checked === 1).length,
+        checkedPct:
+          grocery.length === 0
+            ? null
+            : round((grocery.filter((row) => row.checked === 1).length / grocery.length) * 100, 0),
+      },
+      bannedRecipes: banned,
     },
     decisions: history,
     days,

@@ -383,10 +383,9 @@ export default async function SettingsPage() {
                 </label>
               </div>
               <p className="small muted">
-                Once a day the model sees a fourteen-day summary: planned versus completed running,
-                rest, sleep, heart rate, meals eaten or ignored, grocery checks, strength, body-fat
-                trend, and which suggestions you already decided. No names, no email, no chat
-                prompt.
+                A fourteen-day summary is sent once a day automatically — planned versus completed
+                running, rest, sleep, meals eaten or ignored, grocery, strength, and past decisions.
+                Not when you ask. No names, no email, no chat prompt.
               </p>
               <button className="btn btn--ghost btn--block" type="submit">
                 Save coach settings

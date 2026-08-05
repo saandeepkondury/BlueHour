@@ -181,23 +181,24 @@ const absRunway: Rule = (snapshot) => {
 const mealsIgnored: Rule = (snapshot) => {
   const { mealsPlanned14, mealsEaten14 } = snapshot.totals;
   if (mealsPlanned14 < 8) return null;
-  if (mealsEaten14 / mealsPlanned14 >= 0.4) return null;
+  if (mealsEaten14 / mealsPlanned14 >= 0.55) return null;
 
+  const weekStart = nextWeekStart(snapshot);
   return {
     kind: "meals-ignored",
     title: "The meal plan is not the diet you are actually eating",
-    rationale: `Only ${mealsEaten14} of ${mealsPlanned14} planned meals were marked eaten. A perfect plan you skip does not get you to February with abs or a race in the tank. Repicking this week's uneaten meals is the smallest honest fix — keep what you ate, replace what you ignored.`,
+    rationale: `Only ${mealsEaten14} of ${mealsPlanned14} planned meals were marked eaten. A perfect plan you skip does not get you to February with abs or a race in the tank. Repicking next week's uneaten meals is the smallest honest fix — keep what you ate, replace what you ignored.`,
     confidence: "high",
-    changes: [{ op: "reshuffle_meals", weekStart: startOfWeek(snapshot.today) }],
-    fingerprint: `meals-ignored:${startOfWeek(snapshot.today)}`,
+    changes: [{ op: "reshuffle_meals", weekStart }],
+    fingerprint: `meals-ignored:${weekStart}`,
   };
 };
 
 /** A recipe offered repeatedly and never eaten is a preference, not a coincidence. */
 const recipeRejected: Rule = (snapshot) => {
-  const candidate = snapshot.preferences.ignoredRecipes[0];
-  if (!candidate || candidate.planned < 3) return null;
-  if (snapshot.preferences.bannedRecipes.includes(candidate.id)) return null;
+  const candidate = snapshot.adherence.avoidedRecipes[0];
+  if (!candidate || candidate.planned < 2) return null;
+  if (snapshot.adherence.bannedRecipes.includes(candidate.id)) return null;
 
   return {
     kind: "recipe-rejected",
@@ -217,13 +218,12 @@ const restIgnored: Rule = (snapshot) => {
   );
   if (broken.length < 2) return null;
 
-  const nextRest = snapshot.ahead.find((day) => day.type === "rest");
   return {
     kind: "rest-ignored",
     title: "Rest days keep getting skipped",
     rationale: `${broken.length} of the last ${restDays.length} rest days were skipped or still had miles on them. Visible abs and a February half both depend on absorbing the work. Protect the next rest day instead of turning it into bonus volume.`,
     confidence: "medium",
-    changes: nextRest ? [{ op: "convert_day", date: nextRest.date, to: "rest" }] : [],
+    changes: [],
     fingerprint: `rest-ignored:${startOfWeek(snapshot.today)}`,
   };
 };

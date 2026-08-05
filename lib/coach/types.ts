@@ -30,7 +30,7 @@ export interface SuggestionDraft {
   rationale: string;
   confidence: Confidence;
   changes: Change[];
-  /** Stable within a day so the same nudge is not raised twice. */
+  /** Stable id so dismiss/delete tombstones block the same idea from returning. */
   fingerprint: string;
 }
 

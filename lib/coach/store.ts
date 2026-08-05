@@ -1,17 +1,11 @@
-import { and, desc, eq, gte, ne } from "drizzle-orm";
+import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
 import { coachSuggestions, profile, strengthSessions, type CoachSuggestion, type Profile } from "@/drizzle/schema";
-import { addDays, startOfWeek, todayISO } from "@/lib/date";
+import { addDays, isoInTimeZone, startOfWeek, todayISO } from "@/lib/date";
 import { convertDay, holdWeek, moveLongRun, scaleWeek } from "@/lib/plan/adapt";
 import { regenerateStrengthPlan } from "@/lib/strength/plan";
 import { banRecipe, getSetting, KEYS, openaiConfig, setSetting } from "@/lib/settings";
-import {
-  clearMealPlan,
-  ensureWeekMeals,
-  resetGroceryChecks,
-  reshuffleWeekMeals,
-  updateProfile,
-} from "@/lib/store";
+import { reshuffleWeekMeals, updateProfile } from "@/lib/store";
 import { askOpenAI, CoachError } from "./openai";
 import { runRules } from "./rules";
 import { buildSnapshot, type Snapshot } from "./snapshot";
@@ -20,7 +14,7 @@ import { parseChanges, type Change, type SuggestionDraft } from "./types";
 /**
  * Suggestions are proposals, not decisions. The model is asked once a day from
  * what was actually logged — never as a chatbot. Nothing touches the plan
- * until Apply, and delete removes a card from history entirely.
+ * until Apply. Delete is a fingerprint tombstone so the same idea stays gone.
  */
 
 export interface CoachRun {
@@ -30,8 +24,6 @@ export interface CoachRun {
   error: string | null;
   lastRunAt: string | null;
 }
-
-export type CoachMode = "rules" | "daily" | "daily-if-due";
 
 async function persist(
   drafts: SuggestionDraft[],
@@ -67,17 +59,20 @@ async function persist(
   return created;
 }
 
-function ranToday(lastRunAt: string | null, today: string): boolean {
-  return Boolean(lastRunAt && lastRunAt.slice(0, 10) === today);
+function ranTodayInAustin(lastRunAt: string | null, today: string): boolean {
+  if (!lastRunAt) return false;
+  const parsed = new Date(lastRunAt);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return isoInTimeZone(parsed) === today;
 }
 
 /**
- * Guardrails always run. The model runs at most once per Austin calendar day,
- * from the cron or the first open of Coach after that day starts.
+ * Guardrails always run. The model runs at most once per Austin calendar day
+ * unless skipModel is set (Today and Health ingest stay cheap).
  */
 export async function refreshCoach(
   current: Profile,
-  options: { mode?: CoachMode } = {},
+  options?: { skipModel?: boolean },
 ): Promise<CoachRun> {
   await ready();
   const today = todayISO();
@@ -88,10 +83,10 @@ export async function refreshCoach(
   let askedModel = false;
   let error: string | null = null;
 
-  const mode = options.mode ?? "rules";
-  const due = !ranToday(lastRunAt, today);
   const wantsModel =
-    current.aiEnabled === 1 && (mode === "daily" || (mode === "daily-if-due" && due));
+    !options?.skipModel &&
+    current.aiEnabled === 1 &&
+    !ranTodayInAustin(lastRunAt, today);
 
   if (wantsModel) {
     const config = await openaiConfig();
@@ -146,7 +141,10 @@ export async function decidedSuggestions(limit = 30): Promise<CoachSuggestion[]>
     .select()
     .from(coachSuggestions)
     .where(
-      and(ne(coachSuggestions.status, "pending"), gte(coachSuggestions.date, addDays(todayISO(), -60))),
+      and(
+        inArray(coachSuggestions.status, ["applied", "dismissed", "expired"]),
+        gte(coachSuggestions.date, addDays(todayISO(), -60)),
+      ),
     )
     .orderBy(desc(coachSuggestions.decidedAt), desc(coachSuggestions.createdAt))
     .limit(limit);
@@ -218,21 +216,15 @@ async function applyChange(change: Change, current: Profile): Promise<Profile> {
     }
     case "set_diet_pref": {
       const next = await updateProfile({ dietPref: change.diet });
-      const from = todayISO();
-      await clearMealPlan(from, addDays(from, 13));
-      await ensureWeekMeals(startOfWeek(from));
-      await ensureWeekMeals(addDays(startOfWeek(from), 7));
+      await reshuffleWeekMeals(startOfWeek(todayISO()));
       return next;
     }
     case "reshuffle_meals":
       await reshuffleWeekMeals(change.weekStart);
-      await resetGroceryChecks(change.weekStart);
       return current;
     case "ban_recipe": {
       await banRecipe(change.recipeId);
-      const week = startOfWeek(todayISO());
-      await reshuffleWeekMeals(week);
-      await resetGroceryChecks(week);
+      await reshuffleWeekMeals(startOfWeek(todayISO()));
       return current;
     }
   }
@@ -264,5 +256,8 @@ export async function dismissSuggestion(id: number): Promise<void> {
 
 export async function deleteSuggestion(id: number): Promise<void> {
   await ready();
-  await db.delete(coachSuggestions).where(eq(coachSuggestions.id, id));
+  await db
+    .update(coachSuggestions)
+    .set({ status: "deleted", decidedAt: new Date().toISOString() })
+    .where(eq(coachSuggestions.id, id));
 }

@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     after(async () => {
       try {
         const current = await getProfile();
-        await refreshCoach(current, { mode: "rules" });
+        await refreshCoach(current, { skipModel: true });
         revalidatePath("/coach");
       } catch (error) {
         console.error("post-ingest coach refresh failed", error);

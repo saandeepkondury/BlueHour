@@ -53,7 +53,7 @@ export async function GET(request: Request) {
 
   // Once-a-day synthesis, then the brief can quote anything still waiting.
   await expireOldSuggestions();
-  await refreshCoach(current, { mode: "daily" });
+  await refreshCoach(current);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || url.origin;
   const brief = await buildBrief(date, appUrl);
