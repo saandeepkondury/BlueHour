@@ -1,10 +1,13 @@
 import Link from "next/link";
+import { AppBar } from "@/components/AppBar";
+import { BrandRow } from "@/components/Brand";
 import { DayView } from "@/components/DayView";
+import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
-import { RidgeHeader } from "@/components/RidgeHeader";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { Shell } from "@/components/Shell";
-import { formatLong, startOfWeek, todayISO } from "@/lib/date";
+import { TodayHero } from "@/components/TodayHero";
+import { formatShort, startOfWeek, todayISO } from "@/lib/date";
 import { closeOutMissedDays, longRunOptions } from "@/lib/plan/adapt";
 import { getAllWorkouts, getDayBundle, getProfile } from "@/lib/store";
 import { pendingSuggestions, refreshCoach } from "@/lib/coach/store";
@@ -29,8 +32,9 @@ export default async function TodayPage() {
     const first = all[0];
     return (
       <>
-        <Shell showBrand={false}>
-          <RidgeHeader
+        <Shell>
+          <AppBar title={<BrandRow />} pending={pending.length} />
+          <TodayHero
             today={today}
             raceDate={current.raceDate}
             raceName={current.raceName}
@@ -38,22 +42,27 @@ export default async function TodayPage() {
             week={0}
             totalWeeks={totalWeeks}
           />
-          <section className="sec">
-            <h2 className="sec-title">
-              Nothing on the <em>calendar</em> for today
-            </h2>
-            <p className="sec-intro">
-              {first && first.date > today
-                ? `The block opens ${formatLong(first.date)}. Until then, walk, sleep, and let the plan wait.`
-                : "The race has been run. Set a new date in Settings when you are ready for the next one."}
-            </p>
-            <div className="btn-row">
-              <Link className="btn" href="/plan">
-                See the plan
-              </Link>
-              <Link className="btn btn--ghost" href="/settings">
-                Settings
-              </Link>
+          <section className="block">
+            <div className="card">
+              <div className="empty">
+                <span className="empty__icon">
+                  <Icon name="rest" size={20} />
+                </span>
+                <p className="card__title">Nothing scheduled today</p>
+                <p className="small sub">
+                  {first && first.date > today
+                    ? `The block opens ${formatShort(first.date)}.`
+                    : "Set a new race date when you are ready for the next one."}
+                </p>
+                <div className="btnrow">
+                  <Link className="btn btn--primary btn--sm" href="/plan">
+                    See the plan
+                  </Link>
+                  <Link className="btn btn--ghost btn--sm" href="/settings">
+                    Settings
+                  </Link>
+                </div>
+              </div>
             </div>
           </section>
         </Shell>
@@ -67,8 +76,9 @@ export default async function TodayPage() {
 
   return (
     <>
-      <Shell showBrand={false}>
-        <RidgeHeader
+      <Shell>
+        <AppBar title={<BrandRow />} pending={pending.length} />
+        <TodayHero
           today={today}
           raceDate={current.raceDate}
           raceName={current.raceName}
@@ -78,22 +88,20 @@ export default async function TodayPage() {
         />
 
         {pending.length > 0 ? (
-          <section className="sec">
-            <p className="sec-label">From the coach</p>
-            <article className="plaque plaque--accent">
-              <p className="plaque-title" style={{ fontSize: "1.35rem" }}>
-                {pending[0].title}
-              </p>
-              <p className="plaque-note">{pending[0].rationale}</p>
-              <div className="btn-row">
-                <Link className="btn btn--accent btn--small" href="/coach">
-                  {pending.length === 1
-                    ? "Review it"
-                    : `Review all ${pending.length} suggestions`}
-                </Link>
-              </div>
-            </article>
-          </section>
+          <div style={{ paddingTop: "0.875rem" }}>
+            <Link className="banner cardlink" href="/coach">
+              <span className="row__lead row__lead--accent">
+                <Icon name="coach" size={18} />
+              </span>
+              <span className="banner__body">
+                <span className="banner__title">{pending[0].title}</span>
+                <span className="banner__sub">
+                  {pending.length === 1 ? "Tap to review" : `${pending.length} suggestions waiting`}
+                </span>
+              </span>
+              <Icon name="chevron" size={16} />
+            </Link>
+          </div>
         ) : null}
 
         <DayView

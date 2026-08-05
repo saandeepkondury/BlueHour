@@ -1,21 +1,22 @@
+import { AppBar } from "@/components/AppBar";
 import { FuelTabs } from "@/components/FuelTabs";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
+import { pendingCount } from "@/lib/coach/store";
 
-export default function FuelLayout({ children }: { children: React.ReactNode }) {
+export default async function FuelLayout({ children }: { children: React.ReactNode }) {
+  const pending = await pendingCount();
+
   return (
     <>
-      <Shell wide>
-        <section className="sec">
-          <p className="sec-label">III · Fuel</p>
-          <h2 className="sec-title">
-            What the week <em>asks you to eat</em>
-          </h2>
-        </section>
-        <FuelTabs />
+      <Shell>
+        <AppBar title="Fuel" pending={pending} />
+        <div style={{ paddingTop: "0.25rem" }}>
+          <FuelTabs />
+        </div>
         {children}
       </Shell>
-      <Nav />
+      <Nav pending={pending} />
     </>
   );
 }

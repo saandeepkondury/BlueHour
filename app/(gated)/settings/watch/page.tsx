@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { rotateIngestToken, saveHealthEntry } from "@/app/actions";
+import { AppBar } from "@/components/AppBar";
+import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { todayISO } from "@/lib/date";
@@ -8,6 +10,15 @@ import { getSetting, KEYS } from "@/lib/settings";
 import { pendingCount } from "@/lib/coach/store";
 
 export const dynamic = "force-dynamic";
+
+const SHORTCUT_STEPS = [
+  "Find Sleep Samples today → Calculate Statistics → Sum of Duration",
+  "Find Resting Heart Rate, HRV, Steps and Body Mass — today, limit 1 each",
+  "Find Workouts where Start Date is today",
+  "Text — paste the body below, dragging each magic variable in",
+  "Get Contents of URL — POST, Request Body: File, header Authorization: Bearer YOUR-KEY",
+  "Automation tab → Time of Day 7:00 AM → Run Immediately",
+];
 
 function relativeTime(iso: string): string {
   const minutes = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60_000));
@@ -58,173 +69,137 @@ export default async function WatchPage() {
   return (
     <>
       <Shell>
-        <section className="sec">
-          <p className="sec-label">Apple Watch</p>
-          <h1 className="sec-title">
-            Your Watch, talking to <em>Blue Hour</em>
-          </h1>
-          <p className="sec-intro">
-            Apple Health has no web API, so nothing on the open web can read your Watch directly.
-            The free way across is a Shortcut on your iPhone: it reads Health, posts the numbers
-            here, and runs itself every morning. No Xcode, no developer account, no seven-day
-            expiry.
-          </p>
+        <AppBar title="Apple Health" subtitle="Watch sync" back="/settings" pending={pending} />
 
-          <article className="plaque">
-            <p className="plaque-kicker">What lands here</p>
-            <p className="plaque-note">
-              Sleep, resting heart rate, HRV, steps, active calories, weight, and every run — with
-              distance, duration, and heart rate. An imported run closes out that day&apos;s planned
-              session on its own, so the only thing left to do is eat and sleep.
-            </p>
-            {sync ? (
-              <p className="plaque-tip">
-                Last sync {relativeTime(sync.at)}
-                {sync.device ? ` from ${sync.device}` : ""}.
-              </p>
-            ) : (
-              <p className="plaque-tip">Nothing has synced yet.</p>
-            )}
-          </article>
+        <section className="block block--tight">
+          <div className={sync ? "card card--good" : "card"}>
+            <div className="row">
+              <span className={`row__lead${sync ? " row__lead--good" : " row__lead--accent"}`}>
+                <Icon name="watch" size={18} />
+              </span>
+              <div className="row__body">
+                <span className="row__title">{sync ? "Syncing" : "Not connected"}</span>
+                <span className="row__sub">
+                  {sync
+                    ? `Last ${relativeTime(sync.at)}${sync.device ? ` from ${sync.device}` : ""}`
+                    : "Two steps, once, forever"}
+                </span>
+              </div>
+            </div>
+          </div>
         </section>
 
-        <section className="sec">
-          <p className="sec-label">Step one</p>
-          <h2 className="sec-title">
-            Mint a <em>sync key</em>
-          </h2>
-          <p className="sec-intro">
-            The endpoint refuses anything without this key, so health data cannot be posted or read
-            by anyone else. Rotating it invalidates the old one immediately.
-          </p>
-          <article className="plaque">
-            {key ? (
-              <>
-                <p className="field-label">Key</p>
-                <pre>{key}</pre>
-              </>
-            ) : (
-              <p className="plaque-note">No key yet.</p>
-            )}
-            <form action={rotateIngestToken} className="btn-row">
-              <button className="btn" type="submit">
+        {/* Manual entry sits first: it is what you actually reach for at 7am. */}
+        <section className="block">
+          <div className="block__head">
+            <h2 className="block__title">Log this morning</h2>
+            <span className="label">By hand</span>
+          </div>
+          <div className="card">
+            <form action={saveHealthEntry} className="stack">
+              <input type="hidden" name="date" value={todayISO()} />
+              <div className="grid3">
+                <label className="field">
+                  <span className="field__label">Slept hr</span>
+                  <input
+                    name="sleepHours"
+                    type="number"
+                    step="any"
+                    min="0"
+                    max="16"
+                    inputMode="decimal"
+                  />
+                </label>
+                <label className="field">
+                  <span className="field__label">Rest HR</span>
+                  <input name="restingHr" type="number" min="30" max="120" inputMode="numeric" />
+                </label>
+                <label className="field">
+                  <span className="field__label">HRV ms</span>
+                  <input name="hrvMs" type="number" min="5" max="250" inputMode="numeric" />
+                </label>
+              </div>
+              <button className="btn btn--primary btn--block" type="submit">
+                Save
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <section className="block">
+          <div className="block__head">
+            <h2 className="block__title">Step 1 · Sync key</h2>
+          </div>
+          <div className="card stack">
+            {key ? <pre>{key}</pre> : <p className="small muted">No key yet.</p>}
+            <form action={rotateIngestToken}>
+              <button className="btn btn--ghost btn--sm" type="submit">
                 {stored ? "Rotate key" : "Generate key"}
               </button>
             </form>
             {envKey ? (
-              <p className="plaque-tip">
+              <p className="small muted">
                 A key is also set through <code>HEALTH_INGEST_SECRET</code>. Both work.
               </p>
             ) : null}
-          </article>
+          </div>
         </section>
 
-        <section className="sec">
-          <p className="sec-label">Step two</p>
-          <h2 className="sec-title">
-            Build the <em>Shortcut</em>
-          </h2>
-          <p className="sec-intro">
-            On your iPhone, open Shortcuts and make a new one. Six actions, once, forever.
-          </p>
-          <article className="plaque">
-            <ol className="recipe-lines">
-              <li>
-                <strong>Find Sleep Samples</strong> — where Start Date is today, sort by Start Date.
-                Then <strong>Calculate Statistics</strong> → Sum of Duration.
-              </li>
-              <li>
-                <strong>Find Resting Heart Rate Samples</strong> — today, limit 1, and the same for{" "}
-                <strong>Heart Rate Variability</strong>, <strong>Steps</strong>, and{" "}
-                <strong>Body Mass</strong>.
-              </li>
-              <li>
-                <strong>Find Workouts</strong> — where Start Date is today.
-              </li>
-              <li>
-                <strong>Text</strong> — paste the body below, dragging each magic variable into
-                place.
-              </li>
-              <li>
-                <strong>Get Contents of URL</strong> — POST to the endpoint, Request Body: File, and
-                the Text action as the file. Add a header <code>Authorization</code> with value{" "}
-                <code>Bearer YOUR-KEY</code>.
-              </li>
-              <li>
-                <strong>Automation</strong> tab → new Personal Automation → Time of Day, 7:00 AM,
-                Run Immediately. Point it at this Shortcut.
-              </li>
-            </ol>
-
-            <p className="field-label" style={{ marginTop: "1.2rem" }}>
-              Endpoint
+        <section className="block">
+          <div className="block__head">
+            <h2 className="block__title">Step 2 · The Shortcut</h2>
+            <span className="label">Six actions</span>
+          </div>
+          <div className="card">
+            <p className="small sub">
+              Apple Health has no web API, so an iPhone Shortcut carries the data across. No Xcode,
+              no seven-day expiry.
             </p>
+
+            <hr className="card__divide" />
+
+            <div className="rows">
+              {SHORTCUT_STEPS.map((step, index) => (
+                <div className="row" key={step}>
+                  <span className="row__lead">
+                    <span className="strong">{index + 1}</span>
+                  </span>
+                  <span className="row__body">
+                    <span className="row__sub row__sub--wrap" style={{ color: "var(--ink)" }}>
+                      {step}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <hr className="card__divide" />
+
+            <p className="field__label">Endpoint</p>
             <pre>{endpoint}</pre>
 
-            <p className="field-label" style={{ marginTop: "1rem" }}>
-              Request body
-            </p>
-            <pre>{sample}</pre>
-
-            <p className="plaque-tip">
-              Every field is optional except the date — send what Health gives you and leave the
-              rest out. Imperial or metric both work: <code>weightLb</code> or{" "}
-              <code>weightKg</code>, <code>waistIn</code> or <code>waistCm</code>. Posting the same
-              day twice just updates it.
-            </p>
-          </article>
-        </section>
-
-        <section className="sec">
-          <p className="sec-label">Test it</p>
-          <article className="plaque plaque--flat">
-            <p className="plaque-note">
-              From this Mac, with the app running, a single line proves the whole path works:
-            </p>
-            <pre>{`curl -X POST ${endpoint} \\
+            <details className="fold" style={{ marginTop: "0.75rem" }}>
+              <summary>Request body and test command</summary>
+              <div className="fold__body">
+                <pre>{sample}</pre>
+                <p className="small muted" style={{ marginTop: "0.5rem" }}>
+                  Every field is optional except the date. <code>weightLb</code> or{" "}
+                  <code>weightKg</code>, <code>waistIn</code> or <code>waistCm</code> — both work.
+                  Posting the same day twice updates it.
+                </p>
+                <pre style={{ marginTop: "0.5rem" }}>{`curl -X POST ${endpoint} \\
   -H "Authorization: Bearer YOUR-KEY" \\
   -H "content-type: application/json" \\
   -d '{"date":"${todayISO()}","asleepMin":430,"restingHr":54}'`}</pre>
-            <p className="plaque-tip">
-              A <code>200</code> with <code>daysWritten</code> means Today already knows. Then check{" "}
-              <Link href="/">the Today screen</Link>.
-            </p>
-          </article>
-        </section>
-
-        <section className="sec">
-          <p className="sec-label">By hand</p>
-          <h2 className="sec-title">
-            When the sync did not <em>run</em>
-          </h2>
-          <article className="plaque">
-            <form action={saveHealthEntry}>
-              <input type="hidden" name="date" value={todayISO()} />
-              <div className="field-row">
-                <label className="field">
-                  <span className="field-label">Slept (hours)</span>
-                  <input name="sleepHours" type="number" step="any" min="0" max="16" inputMode="decimal" />
-                </label>
-                <label className="field">
-                  <span className="field-label">Resting HR</span>
-                  <input name="restingHr" type="number" min="30" max="120" inputMode="numeric" />
-                </label>
-                <label className="field">
-                  <span className="field-label">HRV (ms)</span>
-                  <input name="hrvMs" type="number" min="5" max="250" inputMode="numeric" />
-                </label>
               </div>
-              <button className="btn" type="submit">
-                Save this morning
-              </button>
-            </form>
-          </article>
+            </details>
+          </div>
         </section>
 
-        <p className="disclaimer">
-          Health data stays in your own database and is sent nowhere except, if you enable the coach,
-          to OpenAI as a summary of the last fourteen days. You can turn that off in{" "}
-          <Link href="/settings">Settings</Link> and the guardrails keep working.
+        <p className="fineprint">
+          Health data stays in your own database. It is sent nowhere except, if you enable the coach,
+          to OpenAI as a fourteen-day summary — <Link href="/settings">switch that off</Link> and the
+          guardrails keep working.
         </p>
       </Shell>
       <Nav pending={pending} />

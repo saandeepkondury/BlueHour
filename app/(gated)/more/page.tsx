@@ -1,46 +1,99 @@
 import Link from "next/link";
+import { AppBar } from "@/components/AppBar";
+import { BrandMark } from "@/components/Brand";
+import { Icon, type IconName } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
-import { formatLong } from "@/lib/date";
+import { daysBetween, formatShort, todayISO } from "@/lib/date";
 import { pendingCount } from "@/lib/coach/store";
 import { getProfile } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
-const LINKS = [
-  { href: "/progress", title: "Progress", note: "Mileage, consistency, longest run, how the fuelling is tracking." },
-  { href: "/core", title: "Core & abs", note: "Body-fat math, the tape measure, and the core progression." },
-  { href: "/fuel/grocery", title: "Grocery list", note: "This week's meals, aggregated by aisle." },
-  { href: "/fuel/supplements", title: "Supplements", note: "Only the ones that earn their place." },
-  { href: "/fuel/race", title: "Race-day playbook", note: "Breakfast, gels, corral timing on Congress." },
-  { href: "/settings/watch", title: "Apple Health sync", note: "The Shortcut that brings the Watch in." },
-  { href: "/settings", title: "Settings", note: "Race, body stats, goals, reminders, coach key." },
+const GROUPS: { title: string; links: { href: string; label: string; icon: IconName }[] }[] = [
+  {
+    title: "Training",
+    links: [
+      { href: "/progress", label: "Progress", icon: "chart" },
+      { href: "/core", label: "Body & core", icon: "body" },
+    ],
+  },
+  {
+    title: "Fuel",
+    links: [
+      { href: "/fuel/grocery", label: "Grocery list", icon: "cart" },
+      { href: "/fuel/supplements", label: "Supplements", icon: "pill" },
+      { href: "/fuel/race", label: "Race-day playbook", icon: "flag" },
+    ],
+  },
+  {
+    title: "App",
+    links: [
+      { href: "/settings/watch", label: "Apple Health sync", icon: "watch" },
+      { href: "/settings", label: "Settings", icon: "settings" },
+    ],
+  },
 ];
 
 export default async function MorePage() {
   const [current, pending] = await Promise.all([getProfile(), pendingCount()]);
+  const days = daysBetween(todayISO(), current.raceDate);
 
   return (
     <>
       <Shell>
-        <section className="sec">
-          <p className="sec-label">Everything else</p>
-          <h1 className="sec-title">
-            The rest of the <em>block</em>
-          </h1>
-          <p className="sec-intro">
-            {current.raceName} · {formatLong(current.raceDate)}
-          </p>
-
-          {LINKS.map((link) => (
-            <Link className="day" key={link.href} href={link.href}>
-              <span className="day-name">
-                {link.title}
-                <span className="block-cue">{link.note}</span>
-              </span>
+        <AppBar
+          title="More"
+          back="/"
+          action={
+            <Link className="iconbtn" href="/settings" aria-label="Settings">
+              <Icon name="settings" size={21} />
             </Link>
-          ))}
+          }
+        />
+
+        <section className="block block--tight">
+          <div className="card">
+            <div className="row">
+              <span style={{ flex: "0 0 auto", display: "grid", placeItems: "center" }}>
+                <BrandMark size={34} />
+              </span>
+              <div className="row__body">
+                <span className="row__title">{current.raceName}</span>
+                <span className="row__sub">
+                  {formatShort(current.raceDate)}
+                  {days > 0 ? ` · ${days} days out` : ""}
+                </span>
+              </div>
+              <Link className="btn btn--ghost btn--sm" href="/settings">
+                Edit
+              </Link>
+            </div>
+          </div>
         </section>
+
+        {GROUPS.map((group) => (
+          <section className="block" key={group.title}>
+            <div className="block__head">
+              <h2 className="block__title">{group.title}</h2>
+            </div>
+            <div className="card" style={{ paddingTop: 0, paddingBottom: 0 }}>
+              <div className="rows">
+                {group.links.map((link) => (
+                  <Link className="row" href={link.href} key={link.href}>
+                    <span className="row__lead">
+                      <Icon name={link.icon} size={17} />
+                    </span>
+                    <span className="row__body">
+                      <span className="row__title">{link.label}</span>
+                    </span>
+                    <Icon name="chevron" size={16} />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </section>
+        ))}
       </Shell>
       <Nav pending={pending} />
     </>

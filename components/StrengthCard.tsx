@@ -4,7 +4,9 @@ import {
   skipStrengthSession,
   toggleStrengthExercise,
 } from "@/app/actions";
-import { CheckButton } from "@/components/CheckButton";
+import { Check } from "@/components/Check";
+import { Icon } from "@/components/Icon";
+import { Ring } from "@/components/Ring";
 import { parseBlocks } from "@/lib/strength/exercises";
 import type { StrengthLog, StrengthSession } from "@/drizzle/schema";
 
@@ -29,120 +31,150 @@ export function StrengthCard({
     (sum, block) => sum + block.exercises.filter((exercise) => done.has(exercise.id)).length,
     0,
   );
+  const pct = total > 0 ? (ticked / total) * 100 : 0;
+  const open = session.status === "planned";
 
   return (
-    <article className="plaque">
-      <p className="plaque-kicker">
-        {FOCUS_LABEL[session.focus] ?? "Strength"} · {session.minutes} min
-        {session.status === "done" ? " · done" : session.status === "skipped" ? " · skipped" : ""}
-      </p>
-      <h3 className="plaque-title">{session.title}</h3>
-      <p className="plaque-note">{session.purpose}</p>
+    <div className="card card--pad-lg">
+      <div className="card__head">
+        <div style={{ minWidth: 0 }}>
+          <div className="btnrow" style={{ gap: "0.35rem" }}>
+            <span className="pill pill--accent">{FOCUS_LABEL[session.focus] ?? "Strength"}</span>
+            <span className="pill">{session.minutes} min</span>
+            {session.status === "done" ? <span className="pill pill--good">Done</span> : null}
+            {session.status === "skipped" ? <span className="pill pill--warn">Skipped</span> : null}
+          </div>
+          <h3 className="card__title" style={{ marginTop: "0.5rem" }}>
+            {session.title}
+          </h3>
+        </div>
+        {open && total > 0 ? (
+          <Ring
+            pct={pct}
+            tone={pct >= 100 ? "good" : "accent"}
+            size={60}
+            thickness={6}
+            value={`${ticked}/${total}`}
+            label={`${ticked} of ${total} exercises done`}
+          />
+        ) : (
+          <span className="row__lead row__lead--good">
+            <Icon name="strength" size={19} />
+          </span>
+        )}
+      </div>
 
-      {session.status === "planned" ? (
+      {open ? (
         <>
+          <hr className="card__divide" />
           {blocks.map((block) => (
-            <div className="block" key={block.name}>
-              <p className="plaque-kicker">{block.name}</p>
-              <ul className="check-list">
+            <div key={block.name} style={{ marginBottom: "0.5rem" }}>
+              <p className="label" style={{ marginBottom: "0.15rem" }}>
+                {block.name}
+              </p>
+              <div className="rows">
                 {block.exercises.map((exercise) => {
                   const checked = done.has(exercise.id);
                   return (
-                    <li
-                      className={checked ? "check-item check-item--done" : "check-item"}
-                      key={exercise.id}
-                    >
-                      <CheckButton
+                    <div className={checked ? "row row--done" : "row"} key={exercise.id}>
+                      <Check
                         action={toggleStrengthExercise}
-                        checked={checked}
+                        on={checked}
+                        flag="done"
                         label={exercise.name}
-                        fields={{
-                          date: session.date,
-                          exerciseId: exercise.id,
-                          done: checked ? "0" : "1",
-                        }}
+                        fields={{ date: session.date, exerciseId: exercise.id }}
                       />
-                      <div className="check-body">
-                        <p className="block-prescription">{exercise.prescription}</p>
-                        <p className="block-name">{exercise.name}</p>
-                        <p className="block-cue">{exercise.cue}</p>
+                      <div className="row__body">
+                        <span className="row__title">{exercise.name}</span>
+                        <span className="row__sub">{exercise.cue}</span>
                       </div>
-                    </li>
+                      <span className="row__meta">{exercise.prescription}</span>
+                    </div>
                   );
                 })}
-              </ul>
+              </div>
             </div>
           ))}
 
-          <form action={finishStrength} style={{ marginTop: "1.3rem" }}>
-            <input type="hidden" name="date" value={session.date} />
-            <div className="field-row">
-              <label className="field">
-                <span className="field-label">Minutes</span>
-                <input name="minutes" type="number" min="0" inputMode="numeric" placeholder={String(session.minutes)} />
-              </label>
-              <label className="field">
-                <span className="field-label">Effort 1–10</span>
-                <input name="rpe" type="number" min="1" max="10" inputMode="numeric" />
-              </label>
-            </div>
-            <label className="field">
-              <span className="field-label">Loads and notes</span>
-              <textarea name="notes" placeholder="Weights used, what felt strong, what to bump next time." />
-            </label>
-            <button className="btn btn--full" type="submit">
-              {ticked > 0 ? `Log session — ${ticked} of ${total} ticked` : "Log session"}
-            </button>
-          </form>
-
-          <details style={{ marginTop: "1rem" }}>
-            <summary className="plaque-kicker" style={{ cursor: "pointer" }}>
-              Not today
+          <hr className="card__divide" />
+          <details className="fold fold--cta">
+            <summary>
+              <Icon name="check" size={17} strokeWidth={2.2} />
+              {ticked > 0 ? `Finish — ${ticked} of ${total} ticked` : "Finish session"}
             </summary>
-            <form action={skipStrengthSession} style={{ marginTop: "0.8rem" }}>
-              <input type="hidden" name="date" value={session.date} />
-              <label className="field">
-                <span className="field-label">Why</span>
-                <input name="reason" placeholder="Legs cooked, no time, travelling" />
-              </label>
-              <button className="btn btn--ghost btn--small" type="submit">
-                Skip the lift, keep the run
-              </button>
-            </form>
+            <div className="fold__body">
+              <form action={finishStrength} className="stack">
+                <input type="hidden" name="date" value={session.date} />
+                <div className="grid2">
+                  <label className="field">
+                    <span className="field__label">Minutes</span>
+                    <input
+                      name="minutes"
+                      type="number"
+                      min="0"
+                      inputMode="numeric"
+                      placeholder={String(session.minutes)}
+                    />
+                  </label>
+                  <label className="field">
+                    <span className="field__label">Effort 1–10</span>
+                    <input name="rpe" type="number" min="1" max="10" inputMode="numeric" />
+                  </label>
+                </div>
+                <label className="field">
+                  <span className="field__label">Loads and notes</span>
+                  <input name="notes" placeholder="Weights, what to bump next time" />
+                </label>
+                <button className="btn btn--primary btn--block" type="submit">
+                  Save session
+                </button>
+              </form>
+
+              <form action={skipStrengthSession} style={{ marginTop: "0.75rem" }}>
+                <input type="hidden" name="date" value={session.date} />
+                <div className="inline-field">
+                  <input name="reason" placeholder="Or skip — legs cooked, no time" />
+                  <button className="btn btn--quiet btn--sm nowrap" type="submit">
+                    Skip
+                  </button>
+                </div>
+              </form>
+            </div>
           </details>
         </>
       ) : (
         <>
-          {log ? (
-            <div className="metric-row">
-              {log.minutes ? (
-                <div className="metric">
-                  <p className="metric-value">{log.minutes}</p>
-                  <p className="metric-label">Minutes</p>
-                </div>
-              ) : null}
-              {log.rpe ? (
-                <div className="metric">
-                  <p className="metric-value">{log.rpe}</p>
-                  <p className="metric-label">Effort</p>
-                </div>
-              ) : null}
-            </div>
+          {log && (log.minutes || log.rpe) ? (
+            <>
+              <hr className="card__divide" />
+              <div className="stats">
+                {log.minutes ? (
+                  <div>
+                    <p className="stat__value">{log.minutes}</p>
+                    <p className="stat__label">Minutes</p>
+                  </div>
+                ) : null}
+                {log.rpe ? (
+                  <div>
+                    <p className="stat__value">{log.rpe}</p>
+                    <p className="stat__label">Effort</p>
+                  </div>
+                ) : null}
+              </div>
+            </>
           ) : null}
-          {log?.notes ? <p className="plaque-tip">{log.notes}</p> : null}
-          {session.status === "skipped" ? (
-            <p className="plaque-note">
-              Skipped{session.skipReason ? ` — ${session.skipReason}` : ""}. Nothing carries over.
-            </p>
+          {log?.notes ? <p className="card__sub">{log.notes}</p> : null}
+          {session.status === "skipped" && session.skipReason ? (
+            <p className="card__sub">Reason: {session.skipReason}</p>
           ) : null}
-          <form action={reopenStrengthSession} className="btn-row">
+          <form action={reopenStrengthSession} style={{ marginTop: "0.875rem" }}>
             <input type="hidden" name="date" value={session.date} />
-            <button className="btn btn--ghost btn--small" type="submit">
+            <button className="btn btn--quiet btn--sm" type="submit">
               Reopen
             </button>
           </form>
         </>
       )}
-    </article>
+    </div>
   );
 }

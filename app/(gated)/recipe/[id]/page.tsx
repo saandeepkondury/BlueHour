@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AppBar } from "@/components/AppBar";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { formatQty } from "@/lib/nutrition/grocery";
@@ -11,68 +11,90 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
   if (!recipe) notFound();
 
   return (
-    <Shell>
-      <section className="sec">
-        <p className="sec-label">{SLOT_LABEL[recipe.slot]}</p>
-        <h2 className="sec-title">{recipe.name}</h2>
-        <p className="sec-intro">{recipe.note}</p>
-      </section>
+    <>
+      <Shell>
+        <AppBar title={recipe.name} subtitle={SLOT_LABEL[recipe.slot]} back="/fuel" />
 
-      <article className="plaque">
-        <div className="metric-row">
-          <div className="metric">
-            <p className="metric-value">{recipe.calories}</p>
-            <p className="metric-label">kcal</p>
-          </div>
-          <div className="metric">
-            <p className="metric-value">{recipe.protein}</p>
-            <p className="metric-label">protein</p>
-          </div>
-          <div className="metric">
-            <p className="metric-value">{recipe.carbs}</p>
-            <p className="metric-label">carbs</p>
-          </div>
-          <div className="metric">
-            <p className="metric-value">{recipe.fat}</p>
-            <p className="metric-label">fat</p>
-          </div>
-          <div className="metric">
-            <p className="metric-value">{recipe.minutes}</p>
-            <p className="metric-label">minutes</p>
-          </div>
-        </div>
-      </article>
+        <section className="block block--tight">
+          <div className="stack">
+            <div className="card">
+              <div className="stats">
+                <div>
+                  <p className="stat__value">{recipe.calories}</p>
+                  <p className="stat__label">kcal</p>
+                </div>
+                <div>
+                  <p className="stat__value">{recipe.protein}</p>
+                  <p className="stat__label">Protein</p>
+                </div>
+                <div>
+                  <p className="stat__value">{recipe.carbs}</p>
+                  <p className="stat__label">Carbs</p>
+                </div>
+                <div>
+                  <p className="stat__value">{recipe.fat}</p>
+                  <p className="stat__label">Fat</p>
+                </div>
+                <div>
+                  <p className="stat__value">{recipe.minutes}</p>
+                  <p className="stat__label">Min</p>
+                </div>
+              </div>
+              {recipe.note ? (
+                <>
+                  <hr className="card__divide" />
+                  <p className="small sub">{recipe.note}</p>
+                </>
+              ) : null}
+            </div>
 
-      <article className="plaque">
-        <p className="plaque-kicker">Ingredients</p>
-        <ul className="recipe-lines">
-          {recipe.ingredients.map((ingredient) => (
-            <li key={ingredient.item}>
-              {ingredient.item} — {formatQty({ ...ingredient, key: ingredient.item })}
-            </li>
-          ))}
-        </ul>
-      </article>
+            <div className="card">
+              <p className="label" style={{ marginBottom: "0.15rem" }}>
+                Ingredients
+              </p>
+              <div className="rows">
+                {recipe.ingredients.map((ingredient) => (
+                  <div className="row" key={ingredient.item}>
+                    <span className="row__body">
+                      <span className="row__title">{ingredient.item}</span>
+                    </span>
+                    <span className="row__meta">
+                      {formatQty({ ...ingredient, key: ingredient.item })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-      <article className="plaque">
-        <p className="plaque-kicker">Method</p>
-        <ul className="recipe-lines">
-          {recipe.steps.map((step) => (
-            <li key={step}>{step}</li>
-          ))}
-        </ul>
-        {recipe.allergens.length > 0 ? (
-          <p className="plaque-tip">Contains: {recipe.allergens.join(", ")}.</p>
-        ) : null}
-      </article>
-
-      <div className="btn-row">
-        <Link className="btn btn--ghost btn--small" href="/fuel">
-          Back to the week
-        </Link>
-      </div>
-
+            <div className="card">
+              <p className="label" style={{ marginBottom: "0.15rem" }}>
+                Method
+              </p>
+              <div className="rows">
+                {recipe.steps.map((step, index) => (
+                  <div className="row" key={step}>
+                    <span className="row__lead">
+                      <span className="strong">{index + 1}</span>
+                    </span>
+                    <span className="row__body">
+                      <span className="row__sub row__sub--wrap" style={{ color: "var(--ink)" }}>
+                        {step}
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {recipe.allergens.length > 0 ? (
+                <>
+                  <hr className="card__divide" />
+                  <p className="small muted">Contains {recipe.allergens.join(", ")}.</p>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      </Shell>
       <Nav />
-    </Shell>
+    </>
   );
 }

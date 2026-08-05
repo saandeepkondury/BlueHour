@@ -1,4 +1,5 @@
-import { daysBetween, formatLong, todayISO } from "@/lib/date";
+import { Icon } from "@/components/Icon";
+import { daysBetween, formatShort, todayISO } from "@/lib/date";
 import { RACE_PLAYBOOK } from "@/lib/nutrition/supplements";
 import { getProfile } from "@/lib/store";
 
@@ -10,33 +11,50 @@ export default async function RaceNutritionPage() {
 
   return (
     <>
-      <section className="sec" style={{ paddingTop: 0 }}>
-        <p className="sec-intro">
-          {days > 0
-            ? `${days} days out. Read this now, practice it on your long runs, and it will feel automatic on ${formatLong(profile.raceDate)}.`
-            : `Race day: ${formatLong(profile.raceDate)}.`}
-        </p>
+      <section className="block block--tight">
+        <div className="card">
+          <div className="row-between">
+            <div>
+              <p className="label">
+                <Icon name="flag" size={13} />
+                Race day
+              </p>
+              <p className="tile__value" style={{ marginTop: "0.3rem" }}>
+                {days > 0 ? days : 0}
+                <small>{days === 1 ? "day out" : "days out"}</small>
+              </p>
+            </div>
+            <span className="pill pill--accent">{formatShort(profile.raceDate)}</span>
+          </div>
+          <p className="card__sub" style={{ marginTop: "0.5rem" }}>
+            Nothing new on race day. Practice every step of this on a long run first.
+          </p>
+        </div>
       </section>
 
-      {RACE_PLAYBOOK.map((step, index) => (
-        <article className="plaque plaque--tilt" key={step.title}>
-          <p className="plaque-kicker">
-            {String(index + 1).padStart(2, "0")} · {step.when}
-          </p>
-          <h3 className="plaque-title" style={{ fontSize: "1.35rem" }}>
-            {step.title}
-          </h3>
-          <p className="plaque-note">{step.detail}</p>
-        </article>
-      ))}
-
-      <article className="plaque plaque--quiet" style={{ marginTop: "2rem" }}>
-        <p className="plaque-kicker">The one rule</p>
-        <p className="plaque-note">
-          Nothing new on race day. Not the shoes, not the breakfast, not the gel flavor, not the
-          caffeine. Everything gets tested on a long run first.
-        </p>
-      </article>
+      <section className="block block--tight">
+        <div className="stack">
+          {RACE_PLAYBOOK.map((step, index) => (
+            <div className="card" key={step.title}>
+              <div className="row">
+                <span className="row__lead row__lead--accent">
+                  <span className="strong">{index + 1}</span>
+                </span>
+                <div className="row__body">
+                  <span className="row__title">{step.title}</span>
+                  <span className="row__sub">{step.when}</span>
+                </div>
+              </div>
+              <details className="fold">
+                <summary>How</summary>
+                <div className="fold__body">
+                  <p className="small sub">{step.detail}</p>
+                </div>
+              </details>
+            </div>
+          ))}
+        </div>
+      </section>
     </>
   );
 }

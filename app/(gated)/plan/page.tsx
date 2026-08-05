@@ -1,22 +1,29 @@
 import Link from "next/link";
+import { AppBar } from "@/components/AppBar";
+import { Icon, type IconName } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
+import { Ring } from "@/components/Ring";
 import { Shell } from "@/components/Shell";
 import { formatRange, formatShort, startOfWeek, todayISO, weekdayShort } from "@/lib/date";
 import { formatMiles } from "@/lib/format";
-import { PHASE_BLURB, PHASE_LABEL, type Phase } from "@/lib/plan/types";
-import { getAllWorkouts, getAllWorkoutLogs, getProfile } from "@/lib/store";
+import { pendingCount } from "@/lib/coach/store";
+import { PHASE_LABEL, TYPE_LABEL, type Phase, type WorkoutType } from "@/lib/plan/types";
+import { getAllWorkoutLogs, getAllWorkouts } from "@/lib/store";
 import { strengthBetween } from "@/lib/strength/plan";
 import type { StrengthSession, Workout } from "@/drizzle/schema";
 
 export const dynamic = "force-dynamic";
 
-function dayLabel(day: Workout, strength?: StrengthSession): string {
-  if (day.type !== "rest") return day.title;
-  if (!strength) return "Rest";
-  if (strength.focus === "core") return strength.title;
-  if (strength.focus === "mobility") return strength.title;
-  return strength.title;
-}
+const TYPE_ICON: Record<WorkoutType, IconName> = {
+  rest: "rest",
+  walk_run: "run",
+  easy: "run",
+  quality: "pulse",
+  long: "run",
+  cross: "cross",
+  shakeout: "run",
+  race: "flag",
+};
 
 interface WeekGroup {
   weekStart: string;
@@ -24,128 +31,246 @@ interface WeekGroup {
   phase: Phase;
   days: Workout[];
   plannedMi: number;
+  loggedMi: number;
 }
 
-export default async function PlanPage() {
-  const profile = await getProfile();
-  const workouts = await getAllWorkouts();
-  const logs = await getAllWorkoutLogs();
-  const loggedByDate = new Map(logs.map((log) => [log.date, log]));
-  const strengthRows =
-    workouts.length > 0
-      ? await strengthBetween(workouts[0].date, workouts[workouts.length - 1].date)
-      : [];
-  const strengthByDate = new Map(strengthRows.map((session) => [session.date, session]));
+function dayTitle(day: Workout, strength?: StrengthSession): string {
+  if (day.type !== "rest") return day.title;
+  return strength ? strength.title : "Rest";
+}
+
+export default async function PlanPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ w?: string }>;
+}) {
+  const { w } = await searchParams;
   const today = todayISO();
   const thisWeek = startOfWeek(today);
 
+  const [workouts, logs, pending] = await Promise.all([
+    getAllWorkouts(),
+    getAllWorkoutLogs(),
+    pendingCount(),
+  ]);
+  const loggedByDate = new Map(logs.map((log) => [log.date, log]));
+
   const groups = new Map<string, WeekGroup>();
   for (const workout of workouts) {
-    const weekStart = startOfWeek(workout.date);
-    const group = groups.get(weekStart) ?? {
-      weekStart,
+    const key = startOfWeek(workout.date);
+    const group = groups.get(key) ?? {
+      weekStart: key,
       week: workout.week,
       phase: workout.phase as Phase,
       days: [],
       plannedMi: 0,
+      loggedMi: 0,
     };
     group.days.push(workout);
     group.plannedMi += workout.distanceMi;
+    group.loggedMi += loggedByDate.get(workout.date)?.distanceMi ?? 0;
     group.phase = workout.phase as Phase;
-    groups.set(weekStart, group);
+    groups.set(key, group);
   }
 
   const weeks = [...groups.values()].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
-  const past = weeks.filter((week) => week.weekStart < thisWeek);
-  const upcoming = weeks.filter((week) => week.weekStart >= thisWeek);
 
-  const renderWeek = (week: WeekGroup, index: number, list: WeekGroup[]) => {
-    const showPhase = index === 0 || list[index - 1].phase !== week.phase;
-
+  if (weeks.length === 0) {
     return (
-      <div className="week" key={week.weekStart}>
-        {showPhase ? (
-          <>
-            <p className="sec-label" style={{ marginTop: "1.5rem" }}>
-              {PHASE_LABEL[week.phase]}
-            </p>
-            <p className="sec-intro small">{PHASE_BLURB[week.phase]}</p>
-          </>
-        ) : null}
-
-        <div className="week-head">
-          <h3 className="week-title">
-            Week <em>{week.week}</em>
-            {week.weekStart === thisWeek ? " · now" : ""}
-          </h3>
-          <p className="week-meta">
-            {formatRange(week.weekStart, week.days[week.days.length - 1].date)} ·{" "}
-            {formatMiles(Math.round(week.plannedMi * 10) / 10)} mi
-          </p>
-        </div>
-
-        {week.days.map((day) => {
-          const logged = loggedByDate.get(day.date);
-          const strength = strengthByDate.get(day.date);
-          const classes = ["day"];
-          if (day.date === today) classes.push("day--today");
-          if (day.type === "rest" && !strength) classes.push("day--rest");
-          if (day.type === "quality") classes.push("day--quality");
-
-          return (
-            <Link className={classes.join(" ")} href={`/day/${day.date}`} key={day.date}>
-              <span className="day-date">
-                {weekdayShort(day.date)} {formatShort(day.date).split(" ")[1]}
-              </span>
-              <span className="day-name">{dayLabel(day, strength)}</span>
-              <span className="day-dist">
-                {day.type === "rest"
-                  ? strength
-                    ? `${strength.minutes} min`
-                    : ""
-                  : logged
-                    ? `${formatMiles(logged.distanceMi)} mi`
-                    : `${formatMiles(day.distanceMi)} mi`}
-              </span>
-              <span className="day-flag">
-                {day.status === "done" || strength?.status === "done"
-                  ? "✓"
-                  : day.status === "skipped"
-                    ? "skipped"
-                    : ""}
-              </span>
-            </Link>
-          );
-        })}
-      </div>
+      <>
+        <Shell>
+          <AppBar title="Plan" pending={pending} />
+          <section className="block">
+            <div className="card">
+              <div className="empty">
+                <span className="empty__icon">
+                  <Icon name="calendar" size={20} />
+                </span>
+                <p className="card__title">No plan yet</p>
+                <p className="small sub">Set a race date and the block builds itself.</p>
+                <Link className="btn btn--primary btn--sm" href="/settings">
+                  Open settings
+                </Link>
+              </div>
+            </div>
+          </section>
+        </Shell>
+        <Nav pending={pending} />
+      </>
     );
-  };
+  }
+
+  const peak = weeks.reduce((max, week) => Math.max(max, week.plannedMi), 1);
+  const requested = w && /^\d{4}-\d{2}-\d{2}$/.test(w) ? startOfWeek(w) : thisWeek;
+  const found = weeks.findIndex((week) => week.weekStart === requested);
+  const index = found >= 0 ? found : 0;
+  const active = weeks[index];
+
+  const strengthRows = await strengthBetween(
+    active.days[0].date,
+    active.days[active.days.length - 1].date,
+  );
+  const strengthByDate = new Map(strengthRows.map((session) => [session.date, session]));
+
+  const previous = weeks[index - 1];
+  const next = weeks[index + 1];
+  const donePct = active.plannedMi > 0 ? (active.loggedMi / active.plannedMi) * 100 : 0;
+  const lastWeek = weeks[weeks.length - 1];
 
   return (
-    <Shell wide>
-      <section className="sec">
-        <p className="sec-label">II · The plan</p>
-        <h2 className="sec-title">
-          Twenty-eight weeks to <em>Congress Avenue</em>
-        </h2>
-        <p className="sec-intro">
-          {weeks.length} weeks: base, build, specific, peak, taper. Runs, strength, and abs on a
-          fixed weekly grid, built backward from {profile.raceName}. Tap any day to log it.
-        </p>
-      </section>
+    <>
+      <Shell>
+        <AppBar title="Plan" subtitle={`${weeks.length} weeks to race day`} pending={pending} />
 
-      {past.length > 0 ? (
-        <details style={{ marginBottom: "2rem" }}>
-          <summary className="sec-label" style={{ cursor: "pointer" }}>
-            {past.length} {past.length === 1 ? "week" : "weeks"} behind you
-          </summary>
-          <div style={{ marginTop: "1rem" }}>{past.map(renderWeek)}</div>
-        </details>
-      ) : null}
+        <div className="chiprow" style={{ marginTop: "0.25rem" }}>
+          {weeks.map((week) => {
+            const isActive = week.weekStart === active.weekStart;
+            const isNow = week.weekStart === thisWeek;
+            return (
+              <Link
+                key={week.weekStart}
+                className={`chip${isActive ? " chip--accent" : isNow ? " chip--on" : ""}`}
+                href={`/plan?w=${week.weekStart}`}
+                aria-current={isActive ? "page" : undefined}
+              >
+                W{week.week}
+              </Link>
+            );
+          })}
+        </div>
 
-      {upcoming.map(renderWeek)}
+        <section className="block block--tight">
+          <div className="card card--pad-lg">
+            <div className="card__head">
+              <div>
+                <div className="btnrow" style={{ gap: "0.35rem" }}>
+                  <span className="pill pill--accent">{PHASE_LABEL[active.phase]}</span>
+                  {active.weekStart === thisWeek ? (
+                    <span className="pill pill--good">This week</span>
+                  ) : null}
+                </div>
+                <h2 className="card__title" style={{ marginTop: "0.5rem" }}>
+                  Week {active.week}
+                </h2>
+                <p className="card__sub">
+                  {formatRange(active.weekStart, active.days[active.days.length - 1].date)}
+                </p>
+              </div>
+              <Ring
+                pct={donePct}
+                tone={donePct >= 92 ? "good" : "accent"}
+                size={72}
+                thickness={7}
+                value={formatMiles(Math.round(active.plannedMi * 10) / 10)}
+                caption="miles"
+                label={`${formatMiles(active.loggedMi)} of ${formatMiles(active.plannedMi)} miles logged`}
+              />
+            </div>
 
-      <Nav />
-    </Shell>
+            <hr className="card__divide" />
+
+            <div className="rows">
+              {active.days.map((day) => {
+                const logged = loggedByDate.get(day.date);
+                const strength = strengthByDate.get(day.date);
+                const type = day.type as WorkoutType;
+                const isDone = day.status === "done" || strength?.status === "done";
+                const isToday = day.date === today;
+
+                return (
+                  <Link
+                    className={`row${isToday ? " row--now" : ""}`}
+                    href={`/day/${day.date}`}
+                    key={day.date}
+                  >
+                    <span className="row__date">{weekdayShort(day.date)}</span>
+                    <span
+                      className={`row__lead${isDone ? " row__lead--good" : isToday ? " row__lead--accent" : ""}`}
+                    >
+                      <Icon
+                        name={day.type === "rest" && strength ? "strength" : TYPE_ICON[type]}
+                        size={17}
+                      />
+                    </span>
+                    <span className="row__body">
+                      <span className="row__title">{dayTitle(day, strength)}</span>
+                      <span className="row__sub">
+                        {TYPE_LABEL[type]}
+                        {day.status === "skipped" ? " · skipped" : ""}
+                      </span>
+                    </span>
+                    <span className="row__meta">
+                      {day.type === "rest"
+                        ? strength
+                          ? `${strength.minutes}m`
+                          : "—"
+                        : logged
+                          ? `${formatMiles(logged.distanceMi)} mi`
+                          : `${formatMiles(day.distanceMi)} mi`}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+
+            <hr className="card__divide" />
+
+            <div className="btnrow btnrow--split">
+              {previous ? (
+                <Link className="btn btn--ghost btn--sm" href={`/plan?w=${previous.weekStart}`}>
+                  <Icon name="back" size={15} />
+                  Week {previous.week}
+                </Link>
+              ) : (
+                <span />
+              )}
+              {next ? (
+                <Link className="btn btn--ghost btn--sm" href={`/plan?w=${next.weekStart}`}>
+                  Week {next.week}
+                  <Icon name="chevron" size={15} />
+                </Link>
+              ) : (
+                <span />
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="block">
+          <div className="block__head">
+            <h2 className="block__title">The whole block</h2>
+            <span className="label">Planned miles</span>
+          </div>
+          <div className="card">
+            <div className="cols">
+              {weeks.map((week) => {
+                const height = Math.max(4, Math.round((week.plannedMi / peak) * 100));
+                const isNow = week.weekStart === thisWeek;
+                const future = week.weekStart > thisWeek;
+                return (
+                  <Link
+                    className="col"
+                    key={week.weekStart}
+                    href={`/plan?w=${week.weekStart}`}
+                    title={`Week ${week.week} · ${formatMiles(week.plannedMi)} mi · ${PHASE_LABEL[week.phase]}`}
+                  >
+                    <span
+                      className={`col__bar${isNow ? " col__bar--now" : future ? " col__bar--future" : ""}`}
+                      style={{ height: `${height}%` }}
+                    />
+                    <span className="col__tick">{week.week}</span>
+                  </Link>
+                );
+              })}
+            </div>
+            <p className="card__sub" style={{ marginTop: "0.5rem" }}>
+              Peak {formatMiles(Math.round(peak * 10) / 10)} mi · race{" "}
+              {formatShort(lastWeek.days[lastWeek.days.length - 1].date)}
+            </p>
+          </div>
+        </section>
+      </Shell>
+      <Nav pending={pending} />
+    </>
   );
 }

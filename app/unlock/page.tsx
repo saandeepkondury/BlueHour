@@ -31,15 +31,21 @@ export default async function UnlockPage({
 
   return (
     <main className="unlock">
-      <BrandLockup size="lg" />
-      <p className="small unlock-copy">Thirteen point one miles down Congress Avenue. Let us in.</p>
+      <BrandLockup />
+      <p className="small muted">Thirteen point one miles down Congress Avenue.</p>
       <form action={unlock}>
-        {bad ? <p className="error">That is not the passcode.</p> : null}
+        {bad ? <p className="notice notice--bad">That is not the passcode.</p> : null}
         <label className="field">
-          <span className="field-label">Passcode</span>
-          <input name="code" type="password" autoFocus autoComplete="current-password" />
+          <span className="sr-only">Passcode</span>
+          <input
+            name="code"
+            type="password"
+            placeholder="Passcode"
+            autoFocus
+            autoComplete="current-password"
+          />
         </label>
-        <button className="btn btn--accent btn--full" type="submit">
+        <button className="btn btn--primary btn--block" type="submit">
           Enter
         </button>
       </form>

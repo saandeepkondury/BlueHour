@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AppBar } from "@/components/AppBar";
 import { DayView } from "@/components/DayView";
+import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
-import { addDays, formatLong, startOfWeek, todayISO } from "@/lib/date";
+import { addDays, formatShort, startOfWeek, todayISO, weekdayShort } from "@/lib/date";
 import { longRunOptions } from "@/lib/plan/adapt";
 import { getDayBundle } from "@/lib/store";
 
@@ -20,29 +22,35 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
   const options = await longRunOptions(startOfWeek(date));
 
   return (
-    <Shell>
-      <header className="sec">
-        <p className="sec-label">Plan · {formatLong(date)}</p>
-        <div className="btn-row" style={{ marginTop: 0 }}>
-          <Link className="btn btn--ghost btn--small" href={`/day/${addDays(date, -1)}`}>
-            ← Previous
-          </Link>
-          <Link className="btn btn--ghost btn--small" href="/plan">
-            Full plan
-          </Link>
-          <Link className="btn btn--ghost btn--small" href={`/day/${addDays(date, 1)}`}>
-            Next →
-          </Link>
-        </div>
-      </header>
+    <>
+      <Shell>
+        <AppBar
+          title={date === today ? "Today" : `${weekdayShort(date)}, ${formatShort(date)}`}
+          subtitle={date === today ? formatShort(date) : `Week of ${formatShort(startOfWeek(date))}`}
+          back="/plan"
+          action={
+            <span style={{ display: "flex" }}>
+              <Link
+                className="iconbtn"
+                href={`/day/${addDays(date, -1)}`}
+                aria-label="Previous day"
+              >
+                <Icon name="back" size={20} />
+              </Link>
+              <Link className="iconbtn" href={`/day/${addDays(date, 1)}`} aria-label="Next day">
+                <Icon name="chevron" size={20} />
+              </Link>
+            </span>
+          }
+        />
 
-      <DayView
-        bundle={bundle}
-        isToday={date === today}
-        longRunOptions={options.map((option) => ({ date: option.date, title: option.title }))}
-      />
-
+        <DayView
+          bundle={bundle}
+          isToday={date === today}
+          longRunOptions={options.map((option) => ({ date: option.date, title: option.title }))}
+        />
+      </Shell>
       <Nav />
-    </Shell>
+    </>
   );
 }

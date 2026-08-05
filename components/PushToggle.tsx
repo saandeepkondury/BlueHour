@@ -113,54 +113,57 @@ export function PushToggle({ vapidKey }: { vapidKey: string }) {
   if (!vapidKey) {
     return (
       <p className="small muted">
-        Web push needs VAPID keys. Run <code>npm run keys:vapid</code> and add them to your
-        environment, then reload this page.
+        Web push needs VAPID keys. Run <code>npm run keys:vapid</code>, add them to your environment,
+        and reload.
       </p>
     );
   }
 
+  const hint: Partial<Record<State, string>> = {
+    loading: "Checking this device…",
+    "needs-install": "On iPhone: Share → Add to Home Screen, then open it from there.",
+    unsupported: "This browser will not do web push.",
+    denied: "Blocked. Allow notifications in browser settings, then reload.",
+  };
+
   return (
-    <div>
-      {message ? <p className="ok">{message}</p> : null}
-
-      {state === "loading" ? <p className="small muted">Checking this device…</p> : null}
-
-      {state === "needs-install" ? (
-        <p className="small muted">
-          On iPhone, push only works once Blue Hour is installed: tap Share, then{" "}
-          <strong>Add to Home Screen</strong>, open it from there, and come back to this screen.
-        </p>
-      ) : null}
-
-      {state === "unsupported" ? (
-        <p className="small muted">
-          This browser will not do web push. Install Blue Hour on your phone for morning reminders.
-        </p>
-      ) : null}
-
-      {state === "denied" ? (
-        <p className="small muted">
-          Notifications are blocked for this site. Allow them in browser settings, then reload.
-        </p>
-      ) : null}
-
-      <div className="btn-row" style={{ marginTop: message ? "0.5rem" : 0 }}>
+    <div className="stack stack--sm">
+      <div className="row-between">
+        <div style={{ minWidth: 0 }}>
+          <p className="row__title">Push notifications</p>
+          <p className="row__sub row__sub--wrap">
+            {state === "on" ? "On for this device" : (hint[state] ?? "Off for this device")}
+          </p>
+        </div>
         {state === "off" ? (
-          <button className="btn" type="button" onClick={enable} disabled={busy}>
-            Turn on push
+          <button
+            className="btn btn--primary btn--sm nowrap"
+            type="button"
+            onClick={enable}
+            disabled={busy}
+          >
+            Turn on
           </button>
         ) : null}
         {state === "on" ? (
-          <>
-            <button className="btn btn--ghost btn--small" type="button" onClick={test} disabled={busy}>
-              Send a test
-            </button>
-            <button className="btn btn--ghost btn--small" type="button" onClick={disable} disabled={busy}>
-              Turn off push
-            </button>
-          </>
+          <button
+            className="btn btn--quiet btn--sm nowrap"
+            type="button"
+            onClick={disable}
+            disabled={busy}
+          >
+            Turn off
+          </button>
         ) : null}
       </div>
+
+      {message ? <p className="notice notice--good">{message}</p> : null}
+
+      {state === "on" ? (
+        <button className="btn btn--ghost btn--sm" type="button" onClick={test} disabled={busy}>
+          Send a test push
+        </button>
+      ) : null}
     </div>
   );
 }

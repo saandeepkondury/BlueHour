@@ -1,31 +1,34 @@
 import Link from "next/link";
 import {
   addCustomFood,
-  completeRestDay,
-  completeWorkout,
   holdCurrentWeek,
   logWater,
   moveLongRunTo,
   removeFood,
-  reopenDay,
-  skipDay,
   swapMeal,
   toggleFuelStage,
   toggleMeal,
   toggleSupplement,
 } from "@/app/actions";
-import { CheckButton } from "@/components/CheckButton";
+import { Check } from "@/components/Check";
+import { Icon } from "@/components/Icon";
 import { MacroBars } from "@/components/MacroBars";
 import { ReadinessCard } from "@/components/ReadinessCard";
+import { Ring } from "@/components/Ring";
+import { SessionCard } from "@/components/SessionCard";
 import { StrengthCard } from "@/components/StrengthCard";
-import { dayOfWeek, formatLong, startOfWeek, weekdayShort } from "@/lib/date";
-import { formatDuration, formatMiles, formatPace } from "@/lib/format";
-import { candidatesFor, parseAllergies, SLOT_LABEL, type Diet, type Slot } from "@/lib/nutrition/recipes";
-import { EVIDENCE_LABEL } from "@/lib/nutrition/supplements";
-import { PHASE_LABEL, TYPE_LABEL, isRun, type Phase, type WorkoutType } from "@/lib/plan/types";
+import { WaterCard } from "@/components/WaterCard";
+import { dayOfWeek, startOfWeek } from "@/lib/date";
+import {
+  candidatesFor,
+  parseAllergies,
+  SLOT_LABEL,
+  type Diet,
+  type Slot,
+} from "@/lib/nutrition/recipes";
+import { isRun, type Phase, type WorkoutType } from "@/lib/plan/types";
 import type { DayBundle } from "@/lib/store";
 
-const FEELINGS = ["strong", "steady", "flat", "rough"];
 const DOW_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export function DayView({
@@ -40,215 +43,64 @@ export function DayView({
   const { date, workout, workoutLog, targets, meals, extras, consumed, dayLog, profile } = bundle;
   const type = workout.type as WorkoutType;
   const phase = workout.phase as Phase;
-  const runDay = isRun(type);
   const allergies = parseAllergies(profile.allergies);
   const diet = profile.dietPref as Diet;
   const weekStart = startOfWeek(date);
+  const caloriePct = targets.calories > 0 ? (consumed.calories / targets.calories) * 100 : 0;
+  const mealsEaten = meals.filter((meal) => meal.eaten === 1).length;
 
   return (
     <>
-      <section className="sec">
-        <p className="sec-label">{isToday ? "Today" : weekdayShort(date)}</p>
+      <section className="block">
+        <div className="stack">
+          <ReadinessCard recovery={bundle.recovery} />
+          <SessionCard workout={workout} log={workoutLog} hasStrength={bundle.strength !== null} />
+        </div>
 
-        <ReadinessCard recovery={bundle.recovery} />
+        {isToday && (longRunOptions.length > 0 || isRun(type)) && phase !== "race" ? (
+          <details className="fold" style={{ marginTop: "0.75rem" }}>
+            <summary>Adjust this week</summary>
+            <div className="fold__body">
+              <div className="card card--sunk stack">
+                <form action={holdCurrentWeek}>
+                  <input type="hidden" name="weekStart" value={weekStart} />
+                  <button className="btn btn--ghost btn--sm btn--block" type="submit">
+                    Repeat this week&apos;s mileage
+                  </button>
+                </form>
 
-        <article className="plaque">
-          <p className="plaque-kicker">
-            {PHASE_LABEL[phase]} · {TYPE_LABEL[type]}
-            {workout.status === "done" ? " · done" : workout.status === "skipped" ? " · skipped" : ""}
-          </p>
-          <h2 className="plaque-title">
-            {type === "race" ? (
-              <>
-                Austin Half Marathon — <em>13.1 mi</em>
-              </>
-            ) : (
-              workout.title
-            )}
-          </h2>
-          {!isToday ? <p className="tiny muted">{formatLong(date)}</p> : null}
-          <p className="plaque-note">{workout.purpose}</p>
-          {workout.tip ? <p className="plaque-tip">{workout.tip}</p> : null}
-
-          {workout.status === "done" && workoutLog ? (
-            <div className="metric-row">
-              <div className="metric">
-                <p className="metric-value">{formatMiles(workoutLog.distanceMi)}</p>
-                <p className="metric-label">Miles</p>
+                {longRunOptions.length > 0 ? (
+                  <form action={moveLongRunTo}>
+                    <input type="hidden" name="weekStart" value={weekStart} />
+                    <p className="field__label">Move the long run to</p>
+                    <div className="inline-field">
+                      <select name="dow" defaultValue={String(dayOfWeek(longRunOptions[0].date))}>
+                        {longRunOptions.map((option) => (
+                          <option key={option.date} value={dayOfWeek(option.date)}>
+                            {DOW_NAMES[dayOfWeek(option.date)]}
+                          </option>
+                        ))}
+                      </select>
+                      <button className="btn btn--quiet btn--sm nowrap" type="submit">
+                        Move
+                      </button>
+                    </div>
+                  </form>
+                ) : null}
               </div>
-              <div className="metric">
-                <p className="metric-value">{formatDuration(workoutLog.durationSec)}</p>
-                <p className="metric-label">Time</p>
-              </div>
-              <div className="metric">
-                <p className="metric-value">{formatPace(workoutLog.durationSec, workoutLog.distanceMi)}</p>
-                <p className="metric-label">Pace</p>
-              </div>
-              {workoutLog.feel ? (
-                <div className="metric">
-                  <p className="metric-value" style={{ fontStyle: "italic" }}>
-                    {workoutLog.feel}
-                  </p>
-                  <p className="metric-label">Felt</p>
-                </div>
-              ) : null}
             </div>
-          ) : null}
-
-          {workoutLog?.notes ? <p className="plaque-tip">{workoutLog.notes}</p> : null}
-
-          {workout.status === "skipped" ? (
-            <p className="plaque-note">
-              Skipped{workout.skipReason ? ` — ${workout.skipReason}` : ""}. The plan does not stack
-              it onto next week.
-            </p>
-          ) : null}
-
-          {workout.status === "planned" && !runDay ? (
-            <form action={completeRestDay} className="btn-row">
-              <input type="hidden" name="date" value={date} />
-              <button className="btn" type="submit">
-                {bundle.strength ? "No run today — honor it" : "Rest honored"}
-              </button>
-            </form>
-          ) : null}
-
-          {workout.status !== "planned" ? (
-            <form action={reopenDay} className="btn-row">
-              <input type="hidden" name="date" value={date} />
-              <button className="btn btn--ghost btn--small" type="submit">
-                Reopen this day
-              </button>
-            </form>
-          ) : null}
-        </article>
-
-        {workout.status === "planned" && runDay ? (
-          <article className="plaque plaque--flat">
-            <p className="plaque-kicker">Log the run</p>
-            <form action={completeWorkout}>
-              <input type="hidden" name="date" value={date} />
-              <div className="field-row">
-                <label className="field">
-                  <span className="field-label">Miles</span>
-                  <input
-                    name="distanceMi"
-                    type="number"
-                    step="any"
-                    min="0"
-                    defaultValue={workout.distanceMi || ""}
-                    inputMode="decimal"
-                  />
-                </label>
-                <label className="field">
-                  <span className="field-label">Minutes</span>
-                  <input name="minutes" type="number" min="0" inputMode="numeric" placeholder={
-                    workout.durationMin ? String(workout.durationMin) : ""
-                  } />
-                </label>
-                <label className="field">
-                  <span className="field-label">Seconds</span>
-                  <input name="seconds" type="number" min="0" max="59" inputMode="numeric" />
-                </label>
-              </div>
-              <div className="field-row">
-                <label className="field">
-                  <span className="field-label">Felt</span>
-                  <select name="feel" defaultValue="steady">
-                    {FEELINGS.map((feel) => (
-                      <option key={feel} value={feel}>
-                        {feel}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span className="field-label">Effort 1–10</span>
-                  <input name="rpe" type="number" min="1" max="10" inputMode="numeric" />
-                </label>
-              </div>
-              <label className="field">
-                <span className="field-label">Notes</span>
-                <textarea name="notes" placeholder="Shoes, weather, where it hurt, what worked." />
-              </label>
-              <button className="btn btn--full" type="submit">
-                Mark complete
-              </button>
-            </form>
-
-            <details style={{ marginTop: "1.2rem" }}>
-              <summary className="plaque-kicker" style={{ cursor: "pointer" }}>
-                Could not run today
-              </summary>
-              <form action={skipDay} style={{ marginTop: "0.8rem" }}>
-                <input type="hidden" name="date" value={date} />
-                <label className="field">
-                  <span className="field-label">What got in the way</span>
-                  <input name="reason" placeholder="Travel, sore shin, work, heat" />
-                </label>
-                <button className="btn btn--ghost btn--small" type="submit">
-                  Skip without guilt
-                </button>
-              </form>
-            </details>
-          </article>
-        ) : null}
-
-        {isToday && (longRunOptions.length > 0 || phase !== "race") ? (
-          <article className="plaque plaque--quiet">
-            <p className="plaque-kicker">This week, if life happens</p>
-            <div className="btn-row">
-              <form action={holdCurrentWeek}>
-                <input type="hidden" name="weekStart" value={weekStart} />
-                <button className="btn btn--ghost btn--small" type="submit">
-                  Hold this week
-                </button>
-              </form>
-            </div>
-            <p className="tiny muted" style={{ marginTop: "0.5rem" }}>
-              Holding repeats this week&apos;s mileage instead of progressing. Nothing is lost.
-            </p>
-
-            {longRunOptions.length > 0 ? (
-              <form action={moveLongRunTo} style={{ marginTop: "1rem" }}>
-                <input type="hidden" name="weekStart" value={weekStart} />
-                <label className="field">
-                  <span className="field-label">Move the long run to</span>
-                  <select name="dow" defaultValue={String(dayOfWeek(longRunOptions[0].date))}>
-                    {longRunOptions.map((option) => (
-                      <option key={option.date} value={dayOfWeek(option.date)}>
-                        {DOW_NAMES[dayOfWeek(option.date)]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button className="btn btn--ghost btn--small" type="submit">
-                  Swap days
-                </button>
-              </form>
-            ) : null}
-          </article>
+          </details>
         ) : null}
       </section>
 
       {bundle.strength ? (
-        <section className="sec">
-          <p className="sec-label">Strength &amp; core</p>
-          <h2 className="sec-title">
-            {bundle.strength.focus === "core" ? (
-              <>
-                Ten minutes for the <em>abs</em>
-              </>
-            ) : bundle.strength.focus === "mobility" ? (
-              <>
-                Keep it <em>loose</em>
-              </>
-            ) : (
-              <>
-                Lift so the miles <em>hold</em>
-              </>
-            )}
-          </h2>
+        <section className="block">
+          <div className="block__head">
+            <h2 className="block__title">Strength &amp; core</h2>
+            <Link className="block__link" href="/core">
+              Progression
+            </Link>
+          </div>
           <StrengthCard
             session={bundle.strength}
             done={bundle.strengthDone}
@@ -258,249 +110,247 @@ export function DayView({
       ) : null}
 
       {bundle.fuel.length > 0 ? (
-        <section className="sec">
-          <p className="sec-label">Long-run fuel</p>
-          <h2 className="sec-title">
-            Fuel the <em>distance</em>
-          </h2>
-          <article className="plaque">
-            <ul className="check-list">
+        <section className="block">
+          <div className="block__head">
+            <h2 className="block__title">Long-run fuel</h2>
+            <span className="pill">
+              {bundle.fuelDone.size}/{bundle.fuel.length}
+            </span>
+          </div>
+          <div className="card">
+            <div className="rows">
               {bundle.fuel.map((stage) => {
-                const done = bundle.fuelDone.has(stage.stage);
+                const stageDone = bundle.fuelDone.has(stage.stage);
                 return (
-                  <li
-                    className={done ? "check-item check-item--done" : "check-item"}
-                    key={stage.stage}
-                  >
-                    <CheckButton
+                  <div className={stageDone ? "row row--done" : "row"} key={stage.stage}>
+                    <Check
                       action={toggleFuelStage}
-                      checked={done}
+                      on={stageDone}
+                      flag="checked"
                       label={stage.label}
-                      fields={{ date, stage: stage.stage, checked: done ? "0" : "1" }}
+                      fields={{ date, stage: stage.stage }}
                     />
-                    <div className="check-body">
-                      <p className="check-slot">{stage.timing}</p>
-                      <p className="check-name">{stage.label}</p>
-                      <p className="check-macros">{stage.detail}</p>
+                    <div className="row__body">
+                      <span className="row__title">{stage.label}</span>
+                      <span className="row__sub">{stage.timing}</span>
                     </div>
-                  </li>
+                  </div>
                 );
               })}
-            </ul>
-          </article>
+            </div>
+          </div>
         </section>
       ) : null}
 
-      <section className="sec">
-        <p className="sec-label">Fuel</p>
-        <h2 className="sec-title">
-          Eat for <em>{TYPE_LABEL[type].toLowerCase()}</em>
-        </h2>
-        <p className="sec-intro">{targets.headline}</p>
+      <section className="block">
+        <div className="block__head">
+          <h2 className="block__title">Fuel</h2>
+          <Link className="block__link" href="/fuel">
+            Week
+          </Link>
+        </div>
 
-        <article className="plaque">
-          <p className="plaque-kicker">Today&apos;s targets</p>
-          {profile.absGoal === 1 ? <p className="tiny muted">{bundle.fuelNote}</p> : null}
-          <MacroBars
-            rows={[
-              { label: "Calories", value: consumed.calories, target: targets.calories, unit: "kcal" },
-              { label: "Protein", value: consumed.protein, target: targets.protein, unit: "g" },
-              { label: "Carbs", value: consumed.carbs, target: targets.carbs, unit: "g" },
-              { label: "Fat", value: consumed.fat, target: targets.fat, unit: "g" },
-            ]}
-          />
-          {targets.estimated ? (
-            <p className="plaque-tip">
-              These numbers assume an average build. <Link href="/settings">Add your stats</Link> to
-              make them yours.
-            </p>
-          ) : null}
-        </article>
+        <div className="stack">
+          <div className="card">
+            <div className="row-between">
+              <div>
+                <p className="tile__label">
+                  <Icon name="flame" size={13} />
+                  Calories
+                </p>
+                <p className="tile__value" style={{ marginTop: "0.3rem" }}>
+                  {Math.round(consumed.calories)}
+                  <small>/ {targets.calories}</small>
+                </p>
+              </div>
+              <Ring
+                pct={caloriePct}
+                tone={caloriePct > 108 ? "warn" : "accent"}
+                size={64}
+                thickness={6}
+                value={`${Math.min(999, Math.round(caloriePct))}%`}
+                label={`${Math.round(consumed.calories)} of ${targets.calories} calories`}
+              />
+            </div>
+            <hr className="card__divide" />
+            <MacroBars
+              rows={[
+                { label: "Protein", value: consumed.protein, target: targets.protein, unit: "g" },
+                { label: "Carbs", value: consumed.carbs, target: targets.carbs, unit: "g" },
+                { label: "Fat", value: consumed.fat, target: targets.fat, unit: "g" },
+              ]}
+            />
+            {targets.estimated ? (
+              <p className="card__sub" style={{ marginTop: "0.75rem" }}>
+                Estimated from an average build. <Link href="/settings">Add your stats</Link>.
+              </p>
+            ) : null}
+          </div>
 
-        <article className="plaque">
-          <p className="plaque-kicker">Meals</p>
-          <ul className="check-list">
-            {meals.map((meal) => {
-              const eaten = meal.eaten === 1;
-              const options = candidatesFor(meal.slot as Slot, diet, allergies);
-              return (
-                <li className={eaten ? "check-item check-item--done" : "check-item"} key={meal.id}>
-                  <CheckButton
-                    action={toggleMeal}
-                    checked={eaten}
-                    label={meal.name}
-                    fields={{ date, slot: meal.slot, eaten: eaten ? "0" : "1" }}
-                  />
-                  <div className="check-body">
-                    <p className="check-slot">{SLOT_LABEL[meal.slot as Slot]}</p>
-                    <p className="check-name">
-                      {meal.recipeId ? (
-                        <Link href={`/recipe/${meal.recipeId}`}>{meal.name}</Link>
-                      ) : (
-                        meal.name
-                      )}
-                    </p>
-                    <p className="check-macros">
-                      {meal.calories} kcal · {meal.protein}p / {meal.carbs}c / {meal.fat}f
-                    </p>
-                    {options.length > 1 ? (
-                      <details style={{ marginTop: "0.4rem" }}>
-                        <summary className="tiny muted" style={{ cursor: "pointer" }}>
-                          Swap
-                        </summary>
-                        <form action={swapMeal} style={{ marginTop: "0.5rem" }}>
-                          <input type="hidden" name="date" value={date} />
-                          <input type="hidden" name="slot" value={meal.slot} />
-                          <select name="recipeId" defaultValue={meal.recipeId ?? options[0].id}>
-                            {options.map((option) => (
-                              <option key={option.id} value={option.id}>
-                                {option.name} · {option.calories} kcal
-                              </option>
-                            ))}
-                          </select>
-                          <button className="btn btn--ghost btn--small" type="submit" style={{ marginTop: "0.5rem" }}>
-                            Use this instead
-                          </button>
-                        </form>
-                      </details>
-                    ) : null}
+          <div className="card">
+            <div className="row-between" style={{ marginBottom: "0.25rem" }}>
+              <p className="label">Meals</p>
+              <span className="pill">
+                {mealsEaten}/{meals.length}
+              </span>
+            </div>
+            <div className="rows">
+              {meals.map((meal) => {
+                const eaten = meal.eaten === 1;
+                const options = candidatesFor(meal.slot as Slot, diet, allergies);
+                return (
+                  <div className={eaten ? "row row--done" : "row"} key={meal.id}>
+                    <Check
+                      action={toggleMeal}
+                      on={eaten}
+                      flag="eaten"
+                      label={meal.name}
+                      fields={{ date, slot: meal.slot }}
+                    />
+                    <div className="row__body">
+                      <span className="row__title">
+                        {meal.recipeId ? (
+                          <Link href={`/recipe/${meal.recipeId}`} style={{ color: "inherit" }}>
+                            {meal.name}
+                          </Link>
+                        ) : (
+                          meal.name
+                        )}
+                      </span>
+                      <span className="row__sub">
+                        {SLOT_LABEL[meal.slot as Slot]} · {meal.protein}p / {meal.carbs}c /{" "}
+                        {meal.fat}f
+                      </span>
+                      {options.length > 1 ? (
+                        <details className="fold">
+                          <summary style={{ minHeight: "1.75rem", fontSize: "0.75rem" }}>
+                            Swap
+                          </summary>
+                          <div className="fold__body">
+                            <form action={swapMeal}>
+                              <input type="hidden" name="date" value={date} />
+                              <input type="hidden" name="slot" value={meal.slot} />
+                              <div className="inline-field">
+                                <select name="recipeId" defaultValue={meal.recipeId ?? options[0].id}>
+                                  {options.map((option) => (
+                                    <option key={option.id} value={option.id}>
+                                      {option.name} · {option.calories} kcal
+                                    </option>
+                                  ))}
+                                </select>
+                                <button className="btn btn--quiet btn--sm nowrap" type="submit">
+                                  Use
+                                </button>
+                              </div>
+                            </form>
+                          </div>
+                        </details>
+                      ) : null}
+                    </div>
+                    <span className="row__meta">{meal.calories}</span>
                   </div>
-                </li>
-              );
-            })}
-          </ul>
-        </article>
+                );
+              })}
 
-        {extras.length > 0 ? (
-          <article className="plaque plaque--flat">
-            <p className="plaque-kicker">Also eaten</p>
-            <ul className="check-list">
               {extras.map((extra) => (
-                <li className="check-item" key={extra.id}>
-                  <div className="check-body">
-                    <p className="check-name">{extra.name}</p>
-                    <p className="check-macros">
-                      {extra.calories} kcal · {extra.protein}p / {extra.carbs}c / {extra.fat}f
-                    </p>
+                <div className="row" key={extra.id}>
+                  <span className="check check--on" aria-hidden="true">
+                    <span className="check__box">
+                      <Icon name="check" size={14} strokeWidth={2.6} />
+                    </span>
+                  </span>
+                  <div className="row__body">
+                    <span className="row__title">{extra.name}</span>
+                    <span className="row__sub">
+                      Added · {extra.protein}p / {extra.carbs}c / {extra.fat}f
+                    </span>
                   </div>
+                  <span className="row__meta">{extra.calories}</span>
                   <form action={removeFood}>
                     <input type="hidden" name="id" value={extra.id} />
                     <input type="hidden" name="date" value={date} />
-                    <button className="btn btn--ghost btn--small" type="submit">
-                      Remove
+                    <button className="iconbtn" type="submit" aria-label={`Remove ${extra.name}`}>
+                      <Icon name="minus" size={17} />
                     </button>
                   </form>
-                </li>
+                </div>
               ))}
-            </ul>
-          </article>
-        ) : null}
-
-        <article className="plaque plaque--flat">
-          <p className="plaque-kicker">Quick add</p>
-          <form action={addCustomFood}>
-            <input type="hidden" name="date" value={date} />
-            <label className="field">
-              <span className="field-label">What you ate</span>
-              <input name="name" placeholder="Taco from Veracruz" required />
-            </label>
-            <div className="field-row">
-              <label className="field">
-                <span className="field-label">kcal</span>
-                <input name="calories" type="number" min="0" inputMode="numeric" />
-              </label>
-              <label className="field">
-                <span className="field-label">Protein</span>
-                <input name="protein" type="number" min="0" inputMode="numeric" />
-              </label>
-              <label className="field">
-                <span className="field-label">Carbs</span>
-                <input name="carbs" type="number" min="0" inputMode="numeric" />
-              </label>
-              <label className="field">
-                <span className="field-label">Fat</span>
-                <input name="fat" type="number" min="0" inputMode="numeric" />
-              </label>
             </div>
-            <button className="btn btn--ghost btn--small" type="submit">
-              Add to today
-            </button>
-          </form>
-        </article>
 
-        <article className="plaque">
-          <p className="plaque-kicker">Water</p>
-          <div className="split">
-            <p className="stepper-value">
-              {dayLog.waterOz}
-              <small>of {targets.waterOz} oz</small>
-            </p>
+            <hr className="card__divide" />
+            <details className="fold">
+              <summary>Add something you ate</summary>
+              <div className="fold__body">
+                <form action={addCustomFood} className="stack">
+                  <input type="hidden" name="date" value={date} />
+                  <input name="name" placeholder="Taco from Veracruz" required />
+                  <div className="grid4">
+                    <label className="field">
+                      <span className="field__label">kcal</span>
+                      <input name="calories" type="number" min="0" inputMode="numeric" />
+                    </label>
+                    <label className="field">
+                      <span className="field__label">P</span>
+                      <input name="protein" type="number" min="0" inputMode="numeric" />
+                    </label>
+                    <label className="field">
+                      <span className="field__label">C</span>
+                      <input name="carbs" type="number" min="0" inputMode="numeric" />
+                    </label>
+                    <label className="field">
+                      <span className="field__label">F</span>
+                      <input name="fat" type="number" min="0" inputMode="numeric" />
+                    </label>
+                  </div>
+                  <button className="btn btn--ghost btn--sm btn--block" type="submit">
+                    Add
+                  </button>
+                </form>
+              </div>
+            </details>
           </div>
-          <div className="btn-row">
-            {[8, 16, 24].map((oz) => (
-              <form action={logWater} key={oz}>
-                <input type="hidden" name="date" value={date} />
-                <input type="hidden" name="oz" value={oz} />
-                <button className="btn btn--ghost btn--small" type="submit">
-                  +{oz} oz
-                </button>
-              </form>
-            ))}
-            <form action={logWater}>
-              <input type="hidden" name="date" value={date} />
-              <input type="hidden" name="oz" value={-8} />
-              <button className="btn btn--ghost btn--small" type="submit">
-                −8 oz
-              </button>
-            </form>
-          </div>
-          {targets.sodiumMg ? (
-            <p className="plaque-tip">
-              Aim for roughly {targets.sodiumMg} mg sodium across the day — Austin humidity takes more
-              than you think.
-            </p>
-          ) : null}
-        </article>
+
+          <WaterCard
+            action={logWater}
+            date={date}
+            ounces={dayLog.waterOz}
+            target={targets.waterOz}
+          />
+        </div>
       </section>
 
       {bundle.supplements.length > 0 ? (
-        <section className="sec">
-          <p className="sec-label">Supplements</p>
-          <h2 className="sec-title">
-            Only what <em>earns</em> its place
-          </h2>
-          <article className="plaque">
-            <ul className="check-list">
+        <section className="block">
+          <div className="block__head">
+            <h2 className="block__title">Supplements</h2>
+            <Link className="block__link" href="/fuel/supplements">
+              Manage
+            </Link>
+          </div>
+          <div className="card">
+            <div className="rows">
               {bundle.supplements.map((supplement) => {
                 const taken = bundle.supplementsTaken.has(supplement.id);
                 return (
-                  <li
-                    className={taken ? "check-item check-item--done" : "check-item"}
-                    key={supplement.id}
-                  >
-                    <CheckButton
+                  <div className={taken ? "row row--done" : "row"} key={supplement.id}>
+                    <Check
                       action={toggleSupplement}
-                      checked={taken}
+                      on={taken}
+                      flag="taken"
                       label={supplement.name}
-                      fields={{ date, id: supplement.id, taken: taken ? "0" : "1" }}
+                      fields={{ date, id: supplement.id }}
                     />
-                    <div className="check-body">
-                      <p className="check-slot">{supplement.timing}</p>
-                      <p className="check-name">
-                        {supplement.name} <span className="pill">{supplement.dose}</span>
-                      </p>
-                      <p className="check-macros">{supplement.purpose}</p>
-                      <p className="tiny muted">{EVIDENCE_LABEL[supplement.evidence]}</p>
+                    <div className="row__body">
+                      <span className="row__title">{supplement.name}</span>
+                      <span className="row__sub">
+                        {supplement.dose} · {supplement.timing}
+                      </span>
                     </div>
-                  </li>
+                  </div>
                 );
               })}
-            </ul>
-            <p className="disclaimer">
-              General guidance for a healthy adult training for a half marathon — not medical advice.
-              Anything ongoing, ask a doctor or a sports dietitian.
-            </p>
-          </article>
+            </div>
+          </div>
         </section>
       ) : null}
     </>

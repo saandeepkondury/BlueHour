@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { saveCoachSettings, saveGoals, saveProfile, sendTestBrief } from "@/app/actions";
+import { AppBar } from "@/components/AppBar";
+import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
-import { Shell } from "@/components/Shell";
 import { PushToggle } from "@/components/PushToggle";
+import { Shell } from "@/components/Shell";
 import { pendingCount } from "@/lib/coach/store";
 import { todayISO } from "@/lib/date";
 import { cmToIn, hourLabel, kgToLb } from "@/lib/format";
@@ -19,7 +21,7 @@ const LONG_RUN_DAYS = [
 ];
 
 const GOALS = [
-  { value: "finish", label: "Finish strong and healthy" },
+  { value: "finish", label: "Finish strong" },
   { value: "sub2", label: "Sub 2:00" },
   { value: "sub145", label: "Sub 1:45" },
   { value: "sub130", label: "Sub 1:30" },
@@ -42,344 +44,353 @@ export default async function SettingsPage() {
   const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 
   return (
-    <Shell>
-      <section className="sec">
-        <p className="sec-label">Settings</p>
-        <h2 className="sec-title">
-          Make it <em>yours</em>
-        </h2>
-        <p className="sec-intro">
-          Body stats drive your calorie and protein targets. Changing the race date or long-run day
-          rebuilds the plan from today forward, keeping everything you have already logged.
-        </p>
-      </section>
+    <>
+      <Shell>
+        <AppBar title="Settings" back="/more" pending={pending} />
 
-      <form action={saveProfile}>
-        <fieldset>
-          <legend>The race</legend>
-          <label className="field">
-            <span className="field-label">Race</span>
-            <input name="raceName" defaultValue={profile.raceName} />
-          </label>
-          <div className="field-row">
-            <label className="field">
-              <span className="field-label">Race date</span>
-              <input name="raceDate" type="date" defaultValue={profile.raceDate} />
-            </label>
-            <label className="field">
-              <span className="field-label">Training started</span>
-              <input name="startDate" type="date" defaultValue={profile.startDate} />
-            </label>
-          </div>
-          <div className="field-row">
-            <label className="field">
-              <span className="field-label">Long run day</span>
-              <select name="longRunDay" defaultValue={String(profile.longRunDay)}>
-                {LONG_RUN_DAYS.map((day) => (
-                  <option key={day.value} value={day.value}>
-                    {day.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span className="field-label">Goal</span>
-              <select name="goal" defaultValue={profile.goal}>
-                {GOALS.map((goal) => (
-                  <option key={goal.value} value={goal.value}>
-                    {goal.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <p className="field-hint">
-            The plan stays effort-based until you have a real base. Pick a time goal later and the
-            sessions can sharpen.
-          </p>
-        </fieldset>
-
-        <fieldset>
-          <legend>You</legend>
-          <div className="field-row">
-            <label className="field">
-              <span className="field-label">Height (in)</span>
-              <input
-                name="heightIn"
-                type="number"
-                min="40"
-                max="90"
-                inputMode="numeric"
-                defaultValue={cmToIn(profile.heightCm) ?? ""}
-                placeholder="70"
-              />
-            </label>
-            <label className="field">
-              <span className="field-label">Weight (lb)</span>
-              <input
-                name="weightLb"
-                type="number"
-                min="70"
-                max="500"
-                inputMode="numeric"
-                defaultValue={kgToLb(profile.weightKg) ?? ""}
-                placeholder="170"
-              />
-            </label>
-            <label className="field">
-              <span className="field-label">Age</span>
-              <input
-                name="age"
-                type="number"
-                min="14"
-                max="99"
-                inputMode="numeric"
-                defaultValue={profile.age ?? ""}
-                placeholder="32"
-              />
-            </label>
-            <label className="field">
-              <span className="field-label">Sex</span>
-              <select name="sex" defaultValue={profile.sex ?? "unspecified"}>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="unspecified">Rather not say</option>
-              </select>
-            </label>
-          </div>
-          <p className="field-hint">
-            Used only to estimate energy needs. Rough numbers are fine — you can refine them anytime.
-          </p>
-        </fieldset>
-
-        <fieldset>
-          <legend>Eating</legend>
-          <label className="field">
-            <span className="field-label">Diet</span>
-            <select name="dietPref" defaultValue={profile.dietPref}>
-              {DIETS.map((diet) => (
-                <option key={diet.value} value={diet.value}>
-                  {diet.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span className="field-label">Avoid</span>
-            <input
-              name="allergies"
-              defaultValue={profile.allergies}
-              placeholder="dairy, nuts, shellfish"
-            />
-          </label>
-          <p className="field-hint">
-            Recognized: dairy, gluten, nuts, egg, soy, fish, shellfish. Anything listed is filtered
-            out of meal plans.
-          </p>
-        </fieldset>
-
-        <fieldset>
-          <legend>Daily notification</legend>
-          <label className="field">
-            <span className="field-label">Hour (Austin time)</span>
-            <select name="reminderHour" defaultValue={String(profile.reminderHour)}>
-              {Array.from({ length: 24 }, (_, hour) => (
-                <option key={hour} value={hour}>
-                  {hourLabel(hour)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span className="field-label">Send reminders</span>
-            <select name="remindersEnabled" defaultValue={profile.remindersEnabled ? "1" : "0"}>
-              <option value="1">Yes, every morning</option>
-              <option value="0">Pause them</option>
-            </select>
-          </label>
-          <p className="field-hint">
-            A push notification on this device — not email. Turn push on below, and on iPhone add
-            Blue Hour to the home screen first.
-          </p>
-        </fieldset>
-
-        <button className="btn btn--full" type="submit">
-          Save
-        </button>
-      </form>
-
-      <section className="sec">
-        <p className="sec-label">Second goal</p>
-        <h2 className="sec-title">
-          Strength and <em>visible abs</em>
-        </h2>
-        <p className="sec-intro">
-          Turning this on periodizes a calorie deficit around your training — real in base and build
-          weeks, almost nothing at peak, none in the taper — and raises the protein floor so what you
-          lose is fat. The <Link href="/core">Core screen</Link> shows the math.
-        </p>
-        <form action={saveGoals}>
-          <fieldset>
-            <legend>Abs &amp; lifting</legend>
-            <label className="field">
-              <span className="field-label">Chase visible abs</span>
-              <select name="absGoal" defaultValue={profile.absGoal ? "1" : "0"}>
-                <option value="1">Yes, alongside the race</option>
-                <option value="0">No, eat for performance only</option>
-              </select>
-            </label>
-            <div className="field-row">
+        <form action={saveProfile}>
+          <section className="block block--tight">
+            <div className="block__head">
+              <h2 className="block__title">The race</h2>
+            </div>
+            <div className="card stack">
               <label className="field">
-                <span className="field-label">Body-fat target %</span>
-                <input
-                  name="targetBodyFatPct"
-                  type="number"
-                  step="any"
-                  min="8"
-                  max="30"
-                  inputMode="decimal"
-                  defaultValue={profile.targetBodyFatPct ?? ""}
-                  placeholder={String(targetBodyFatFor(profile))}
-                />
+                <span className="field__label">Race</span>
+                <input name="raceName" defaultValue={profile.raceName} />
               </label>
+              <div className="grid2">
+                <label className="field">
+                  <span className="field__label">Race date</span>
+                  <input name="raceDate" type="date" defaultValue={profile.raceDate} />
+                </label>
+                <label className="field">
+                  <span className="field__label">Started</span>
+                  <input name="startDate" type="date" defaultValue={profile.startDate} />
+                </label>
+              </div>
+              <div className="grid2">
+                <label className="field">
+                  <span className="field__label">Long run day</span>
+                  <select name="longRunDay" defaultValue={String(profile.longRunDay)}>
+                    {LONG_RUN_DAYS.map((day) => (
+                      <option key={day.value} value={day.value}>
+                        {day.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span className="field__label">Goal</span>
+                  <select name="goal" defaultValue={profile.goal}>
+                    {GOALS.map((goal) => (
+                      <option key={goal.value} value={goal.value}>
+                        {goal.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <p className="small muted">
+                Changing the date or long-run day rebuilds the plan from today forward. Anything
+                already logged stays.
+              </p>
+            </div>
+          </section>
+
+          <section className="block">
+            <div className="block__head">
+              <h2 className="block__title">You</h2>
+              <span className="label">Drives calorie targets</span>
+            </div>
+            <div className="card stack">
+              <div className="grid2">
+                <label className="field">
+                  <span className="field__label">Height in</span>
+                  <input
+                    name="heightIn"
+                    type="number"
+                    min="40"
+                    max="90"
+                    inputMode="numeric"
+                    defaultValue={cmToIn(profile.heightCm) ?? ""}
+                    placeholder="70"
+                  />
+                </label>
+                <label className="field">
+                  <span className="field__label">Weight lb</span>
+                  <input
+                    name="weightLb"
+                    type="number"
+                    min="70"
+                    max="500"
+                    inputMode="numeric"
+                    defaultValue={kgToLb(profile.weightKg) ?? ""}
+                    placeholder="170"
+                  />
+                </label>
+              </div>
+              <div className="grid2">
+                <label className="field">
+                  <span className="field__label">Age</span>
+                  <input
+                    name="age"
+                    type="number"
+                    min="14"
+                    max="99"
+                    inputMode="numeric"
+                    defaultValue={profile.age ?? ""}
+                    placeholder="32"
+                  />
+                </label>
+                <label className="field">
+                  <span className="field__label">Sex</span>
+                  <select name="sex" defaultValue={profile.sex ?? "unspecified"}>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="unspecified">Rather not say</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section className="block">
+            <div className="block__head">
+              <h2 className="block__title">Eating</h2>
+            </div>
+            <div className="card stack">
               <label className="field">
-                <span className="field-label">Lifting days a week</span>
-                <select name="strengthDays" defaultValue={String(profile.strengthDays)}>
-                  <option value="0">None</option>
-                  <option value="1">One</option>
-                  <option value="2">Two</option>
-                  <option value="3">Three</option>
+                <span className="field__label">Diet</span>
+                <select name="dietPref" defaultValue={profile.dietPref}>
+                  {DIETS.map((diet) => (
+                    <option key={diet.value} value={diet.value}>
+                      {diet.label}
+                    </option>
+                  ))}
                 </select>
               </label>
-            </div>
-            <p className="field-hint">
-              Core circuits stay on the calendar regardless. Lifting is scheduled two clear days
-              after the long run, never the day before it. Changing this rebuilds the strength
-              schedule from today forward.
-            </p>
-          </fieldset>
-
-          <fieldset>
-            <legend>Coach</legend>
-            <label className="field">
-              <span className="field-label">Let the model read my data</span>
-              <select name="aiEnabled" defaultValue={profile.aiEnabled ? "1" : "0"}>
-                <option value="1">Yes, when I ask</option>
-                <option value="0">No, guardrails only</option>
-              </select>
-            </label>
-            <p className="field-hint">
-              With this off, the built-in rules still watch sleep, resting heart rate, missed runs,
-              and protein — nothing leaves your database.
-            </p>
-          </fieldset>
-
-          <button className="btn btn--full" type="submit">
-            Save goals
-          </button>
-        </form>
-      </section>
-
-      <section className="sec">
-        <p className="sec-label">OpenAI</p>
-        <form action={saveCoachSettings}>
-          <fieldset>
-            <legend>API key</legend>
-            <label className="field">
-              <span className="field-label">Key</span>
-              <input
-                name="openaiKey"
-                type="password"
-                autoComplete="off"
-                placeholder={
-                  coach.fromEnv
-                    ? "Set in the environment — leave blank"
-                    : coach.key
-                      ? "Stored. Paste a new one to replace it."
-                      : "sk-..."
-                }
-              />
-            </label>
-            <label className="field">
-              <span className="field-label">Model</span>
-              <input name="openaiModel" defaultValue={coach.model} placeholder="gpt-4.1-mini" />
-            </label>
-            <p className="field-hint">
-              A summary of the last fourteen days is sent when you ask for advice: planned versus
-              actual running, sleep, heart rate, nutrition totals, strength, and the body-fat trend.
-              No names, no email. Clearing the field below removes the stored key.
-            </p>
-            <label className="field">
-              <span className="field-label">Remove the stored key</span>
-              <select name="clearKey" defaultValue="0">
-                <option value="0">Keep it</option>
-                <option value="1">Delete it</option>
-              </select>
-            </label>
-          </fieldset>
-          <button className="btn btn--full" type="submit">
-            Save coach settings
-          </button>
-        </form>
-      </section>
-
-      <section className="sec">
-        <p className="sec-label">Apple Watch</p>
-        <article className="plaque plaque--flat">
-          <p className="plaque-note">
-            Sleep, heart rate, HRV, and workouts come in through one iPhone Shortcut — free, and
-            without Xcode.
-          </p>
-          <div className="btn-row">
-            <Link className="btn btn--ghost btn--small" href="/settings/watch">
-              Set up the sync
-            </Link>
-          </div>
-        </article>
-      </section>
-
-      <section className="sec">
-        <p className="sec-label">The morning brief</p>
-        <article className="plaque plaque--flat">
-          {brief ? (
-            <>
-              <p className="plaque-kicker">{brief.subject}</p>
-              <p className="plaque-note" style={{ whiteSpace: "pre-line" }}>
-                {brief.text}
+              <label className="field">
+                <span className="field__label">Avoid</span>
+                <input
+                  name="allergies"
+                  defaultValue={profile.allergies}
+                  placeholder="dairy, nuts, shellfish"
+                />
+              </label>
+              <p className="small muted">
+                Recognized: dairy, gluten, nuts, egg, soy, fish, shellfish.
               </p>
-            </>
-          ) : (
-            <p className="plaque-note">Nothing is scheduled today, so there is no brief to preview.</p>
-          )}
-          <form action={sendTestBrief}>
-            <button className="btn btn--ghost btn--small" type="submit">
-              Send a test notification
+            </div>
+          </section>
+
+          <section className="block">
+            <div className="block__head">
+              <h2 className="block__title">Morning reminder</h2>
+            </div>
+            <div className="card">
+              <div className="grid2">
+                <label className="field">
+                  <span className="field__label">Hour</span>
+                  <select name="reminderHour" defaultValue={String(profile.reminderHour)}>
+                    {Array.from({ length: 24 }, (_, hour) => (
+                      <option key={hour} value={hour}>
+                        {hourLabel(hour)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span className="field__label">Send</span>
+                  <select
+                    name="remindersEnabled"
+                    defaultValue={profile.remindersEnabled ? "1" : "0"}
+                  >
+                    <option value="1">Every morning</option>
+                    <option value="0">Paused</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <div style={{ paddingTop: "1rem" }}>
+            <button className="btn btn--primary btn--block" type="submit">
+              Save
             </button>
-          </form>
-          <p className="tiny muted">Sends today&apos;s brief as a push on devices that have opted in.</p>
-        </article>
-      </section>
-
-      <section className="sec">
-        <p className="sec-label">Push notifications</p>
-        <article className="plaque">
-          <p className="plaque-note">
-            This is how the daily reminder arrives. Enable it on each phone or laptop you want to
-            hear from in the morning.
-          </p>
-          <div style={{ marginTop: "1rem" }}>
-            <PushToggle vapidKey={vapidKey} />
           </div>
-        </article>
-      </section>
+        </form>
 
-      <p className="disclaimer">
-        Training and fueling guidance here is general information for a healthy adult, not medical
-        advice. Sharp pain, dizziness, or anything that lingers is a doctor conversation, not a
-        push-through.
-      </p>
+        <form action={saveGoals}>
+          <section className="block">
+            <div className="block__head">
+              <h2 className="block__title">Abs &amp; lifting</h2>
+              <Link className="block__link" href="/core">
+                See the math
+              </Link>
+            </div>
+            <div className="card stack">
+              <label className="field">
+                <span className="field__label">Chase visible abs</span>
+                <select name="absGoal" defaultValue={profile.absGoal ? "1" : "0"}>
+                  <option value="1">Yes, alongside the race</option>
+                  <option value="0">No, performance only</option>
+                </select>
+              </label>
+              <div className="grid2">
+                <label className="field">
+                  <span className="field__label">Body-fat target %</span>
+                  <input
+                    name="targetBodyFatPct"
+                    type="number"
+                    step="any"
+                    min="8"
+                    max="30"
+                    inputMode="decimal"
+                    defaultValue={profile.targetBodyFatPct ?? ""}
+                    placeholder={String(targetBodyFatFor(profile))}
+                  />
+                </label>
+                <label className="field">
+                  <span className="field__label">Lifting days</span>
+                  <select name="strengthDays" defaultValue={String(profile.strengthDays)}>
+                    <option value="0">None</option>
+                    <option value="1">One</option>
+                    <option value="2">Two</option>
+                    <option value="3">Three</option>
+                  </select>
+                </label>
+              </div>
+              <label className="field">
+                <span className="field__label">Let the model read my data</span>
+                <select name="aiEnabled" defaultValue={profile.aiEnabled ? "1" : "0"}>
+                  <option value="1">Yes, when I ask</option>
+                  <option value="0">No, guardrails only</option>
+                </select>
+              </label>
+              <details className="fold">
+                <summary>How this works</summary>
+                <div className="fold__body">
+                  <p className="small sub">
+                    A deficit is periodized around training — real in base and build, almost nothing
+                    at peak, none in the taper — and the protein floor rises so what you lose is fat.
+                    Core circuits stay on the calendar either way. With the model off, built-in rules
+                    still watch sleep, resting heart rate, missed runs and protein, and nothing
+                    leaves your database.
+                  </p>
+                </div>
+              </details>
+              <button className="btn btn--primary btn--block" type="submit">
+                Save goals
+              </button>
+            </div>
+          </section>
+        </form>
 
+        <section className="block">
+          <div className="block__head">
+            <h2 className="block__title">Notifications</h2>
+          </div>
+          <div className="card stack">
+            <PushToggle vapidKey={vapidKey} />
+            <hr className="card__divide" />
+            {brief ? (
+              <details className="fold">
+                <summary>Preview the morning brief</summary>
+                <div className="fold__body">
+                  <p className="row__title">{brief.subject}</p>
+                  <p className="small sub" style={{ whiteSpace: "pre-line", marginTop: "0.35rem" }}>
+                    {brief.text}
+                  </p>
+                </div>
+              </details>
+            ) : (
+              <p className="small muted">
+                Nothing scheduled today, so there is no brief to preview.
+              </p>
+            )}
+            <form action={sendTestBrief}>
+              <button className="btn btn--quiet btn--sm" type="submit">
+                <Icon name="bell" size={15} />
+                Send a test
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <section className="block">
+          <div className="block__head">
+            <h2 className="block__title">Connections</h2>
+          </div>
+          <div className="card" style={{ paddingTop: 0, paddingBottom: 0 }}>
+            <div className="rows">
+              <Link className="row" href="/settings/watch">
+                <span className="row__lead">
+                  <Icon name="watch" size={17} />
+                </span>
+                <span className="row__body">
+                  <span className="row__title">Apple Health sync</span>
+                  <span className="row__sub">Sleep, HRV, heart rate, runs</span>
+                </span>
+                <Icon name="chevron" size={16} />
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        <form action={saveCoachSettings}>
+          <section className="block">
+            <div className="block__head">
+              <h2 className="block__title">OpenAI key</h2>
+              <span className="label">
+                {coach.fromEnv ? "From env" : coach.key ? "Stored" : "None"}
+              </span>
+            </div>
+            <div className="card stack">
+              <label className="field">
+                <span className="field__label">Key</span>
+                <input
+                  name="openaiKey"
+                  type="password"
+                  autoComplete="off"
+                  placeholder={
+                    coach.fromEnv
+                      ? "Set in the environment — leave blank"
+                      : coach.key
+                        ? "Stored. Paste a new one to replace it."
+                        : "sk-..."
+                  }
+                />
+              </label>
+              <div className="grid2">
+                <label className="field">
+                  <span className="field__label">Model</span>
+                  <input name="openaiModel" defaultValue={coach.model} placeholder="gpt-4.1-mini" />
+                </label>
+                <label className="field">
+                  <span className="field__label">Stored key</span>
+                  <select name="clearKey" defaultValue="0">
+                    <option value="0">Keep it</option>
+                    <option value="1">Delete it</option>
+                  </select>
+                </label>
+              </div>
+              <p className="small muted">
+                Only a fourteen-day summary is sent when you ask: planned versus actual running,
+                sleep, heart rate, nutrition, strength, body-fat trend. No names, no email.
+              </p>
+              <button className="btn btn--ghost btn--block" type="submit">
+                Save coach settings
+              </button>
+            </div>
+          </section>
+        </form>
+
+        <p className="fineprint">
+          General information for a healthy adult, not medical advice. Sharp pain, dizziness, or
+          anything that lingers is a doctor conversation.
+        </p>
+      </Shell>
       <Nav pending={pending} />
-    </Shell>
+    </>
   );
 }

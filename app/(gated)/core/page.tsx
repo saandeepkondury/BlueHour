@@ -1,46 +1,38 @@
 import Link from "next/link";
 import { saveHealthEntry } from "@/app/actions";
+import { AppBar } from "@/components/AppBar";
+import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
+import { Ring } from "@/components/Ring";
 import { Shell } from "@/components/Shell";
-import { addDays, formatLong, formatShort, todayISO, weekdayShort } from "@/lib/date";
-import { getWorkout } from "@/lib/store";
-import { getProfile } from "@/lib/store";
+import { addDays, formatShort, todayISO, weekdayShort } from "@/lib/date";
+import { getProfile, getWorkout } from "@/lib/store";
 import { absStatus, latestMeasurement } from "@/lib/strength/abs";
 import { strengthAdherence } from "@/lib/strength/log";
 import { strengthBetween } from "@/lib/strength/plan";
 import { pendingCount } from "@/lib/coach/store";
-import { parseBlocks } from "@/lib/strength/exercises";
 import type { Phase, WorkoutType } from "@/lib/plan/types";
 
 export const dynamic = "force-dynamic";
 
-const VERDICT_PILL: Record<string, string> = {
-  "on-track": "pill pill--oak",
-  tight: "pill pill--accent",
-  "after-race": "pill pill--clay",
-  reached: "pill pill--oak",
-  "no-data": "pill",
-  off: "pill",
-};
-
-const VERDICT_LABEL: Record<string, string> = {
-  "on-track": "On track",
-  tight: "Tight",
-  "after-race": "After the race",
-  reached: "There",
-  "no-data": "Needs numbers",
-  off: "Off",
+const VERDICT: Record<string, { pill: string; label: string }> = {
+  "on-track": { pill: "pill pill--good", label: "On track" },
+  tight: { pill: "pill pill--warn", label: "Tight" },
+  "after-race": { pill: "pill pill--accent", label: "After the race" },
+  reached: { pill: "pill pill--good", label: "There" },
+  "no-data": { pill: "pill", label: "Needs numbers" },
+  off: { pill: "pill", label: "Off" },
 };
 
 function lb(kg: number | null): string {
-  return kg === null ? "—" : `${Math.round(kg * 2.20462 * 10) / 10} lb`;
+  return kg === null ? "—" : String(Math.round(kg * 2.20462 * 10) / 10);
 }
 
 function inches(cm: number | null): string {
-  return cm === null ? "—" : `${Math.round((cm / 2.54) * 10) / 10} in`;
+  return cm === null ? "—" : String(Math.round((cm / 2.54) * 10) / 10);
 }
 
-export default async function CorePage() {
+export default async function BodyPage() {
   const today = todayISO();
   const current = await getProfile();
   const workout = await getWorkout(today);
@@ -57,199 +49,239 @@ export default async function CorePage() {
   ]);
 
   const nextCore = upcoming.find((session) => session.focus === "core");
-  const coreLevel = nextCore?.level ?? null;
+  const verdict = VERDICT[status.verdict] ?? VERDICT["no-data"];
+
+  // How close the current reading sits to the target, not raw body fat.
+  const fatPct =
+    status.bodyFatPct !== null && status.bodyFatPct > 0
+      ? Math.max(0, Math.min(100, (status.targetPct / status.bodyFatPct) * 100))
+      : 0;
 
   return (
     <>
       <Shell>
-        <section className="sec">
-          <p className="sec-label">Second goal</p>
-          <h1 className="sec-title">
-            Visible <em>abs</em>, without losing the race
-          </h1>
-          <p className="sec-intro">
-            Abs are two problems wearing one name: the muscle, which the core circuits build, and
-            the body fat over it, which only the kitchen moves. This page keeps both honest against
-            a half marathon that needs feeding.
-          </p>
+        <AppBar title="Body" subtitle="Composition and core" pending={pending} />
 
-          <article className="plaque">
-            <p className="plaque-kicker">
-              Where you are{" "}
-              <span className={VERDICT_PILL[status.verdict] ?? "pill"}>
-                {VERDICT_LABEL[status.verdict] ?? status.verdict}
-              </span>
-            </p>
-            <div className="metric-row">
-              <div className="metric">
-                <p className="metric-value metric-value--accent">
-                  {status.bodyFatPct === null ? "—" : `${status.bodyFatPct}%`}
+        <section className="block block--tight">
+          <div className="stack">
+            <div className="card card--pad-lg">
+              <div className="card__head">
+                <div>
+                  <span className={verdict.pill}>{verdict.label}</span>
+                  <p className="hero__num" style={{ fontSize: "2.25rem" }}>
+                    {status.bodyFatPct === null ? "—" : status.bodyFatPct}
+                    <span>% body fat</span>
+                  </p>
+                  <p className="card__sub">
+                    Target {status.targetPct}%
+                    {status.measuredAt ? ` · measured ${formatShort(status.measuredAt)}` : ""}
+                  </p>
+                </div>
+                <Ring
+                  pct={fatPct}
+                  tone={status.verdict === "tight" ? "warn" : "accent"}
+                  size={72}
+                  thickness={7}
+                  value={status.targetPct}
+                  caption="goal"
+                  label={`Target ${status.targetPct} percent body fat`}
+                />
+              </div>
+
+              <hr className="card__divide" />
+
+              <div className="stats">
+                <div>
+                  <p className="stat__value">{lb(status.weightKg)}</p>
+                  <p className="stat__label">Weight lb</p>
+                </div>
+                <div>
+                  <p className="stat__value">{inches(latest?.waistCm ?? null)}</p>
+                  <p className="stat__label">Waist in</p>
+                </div>
+                <div>
+                  <p className="stat__value">
+                    {status.kgToLose === null ? "—" : lb(status.kgToLose)}
+                  </p>
+                  <p className="stat__label">To go lb</p>
+                </div>
+                <div>
+                  <p className="stat__value">{status.weeksNeeded ?? "—"}</p>
+                  <p className="stat__label">Weeks</p>
+                </div>
+              </div>
+
+              {status.headline ? (
+                <details className="fold" style={{ marginTop: "0.5rem" }}>
+                  <summary>What that means</summary>
+                  <div className="fold__body">
+                    <p className="small sub">{status.headline}</p>
+                    {status.bodyFatSource === "waist" ? (
+                      <p className="small muted" style={{ marginTop: "0.5rem" }}>
+                        Estimated from waist and height. A scale reading replaces it.
+                      </p>
+                    ) : null}
+                  </div>
+                </details>
+              ) : null}
+            </div>
+
+            <div className="bento">
+              <div className="tile">
+                <p className="tile__label">
+                  <Icon name="flame" size={13} />
+                  Today
                 </p>
-                <p className="metric-label">Body fat</p>
+                <p className="tile__value tile__value--accent">
+                  {status.deficitKcal === 0 ? "Maint." : `−${status.deficitKcal}`}
+                  {status.deficitKcal === 0 ? null : <small>kcal</small>}
+                </p>
+                <p className="tile__foot">below maintenance</p>
               </div>
-              <div className="metric">
-                <p className="metric-value">{status.targetPct}%</p>
-                <p className="metric-label">Target</p>
-              </div>
-              <div className="metric">
-                <p className="metric-value">{lb(status.weightKg)}</p>
-                <p className="metric-label">Weight</p>
-              </div>
-              <div className="metric">
-                <p className="metric-value">{inches(latest?.waistCm ?? null)}</p>
-                <p className="metric-label">Waist</p>
+              <div className="tile">
+                <p className="tile__label">Protein floor</p>
+                <p className="tile__value">
+                  {status.proteinPerKg}
+                  <small>g/kg</small>
+                </p>
+                <p className="tile__foot">
+                  <Link href="/fuel">See the meals</Link>
+                </p>
               </div>
             </div>
-            <p className="plaque-note">{status.headline}</p>
-            {status.bodyFatSource === "waist" ? (
-              <p className="tiny muted">
-                Estimated from your waist and height. A scale reading, if you have one, replaces it.
-              </p>
-            ) : null}
-            {status.measuredAt ? (
-              <p className="plaque-tip">Last measured {formatShort(status.measuredAt)}.</p>
-            ) : null}
-          </article>
 
-          <article className="plaque plaque--flat">
-            <p className="plaque-kicker">Today&apos;s calorie stance</p>
-            <p className="plaque-title" style={{ fontSize: "1.4rem" }}>
-              {status.deficitKcal === 0
-                ? "Maintenance"
-                : `${status.deficitKcal} kcal below maintenance`}
-            </p>
-            <p className="plaque-note">{status.deficitNote}</p>
-            <p className="plaque-tip">
-              Protein target is {status.proteinPerKg} g per kg today — the one number that decides
-              whether a deficit costs fat or muscle. <Link href="/fuel">See the meals</Link>.
-            </p>
-          </article>
-
-          {status.trend.weightKg !== null || status.trend.waistCm !== null ? (
-            <article className="plaque plaque--flat">
-              <p className="plaque-kicker">Last four weeks</p>
-              <div className="metric-row">
-                {status.trend.weightKg !== null ? (
-                  <div className="metric">
-                    <p className="metric-value">
-                      {status.trend.weightKg > 0 ? "+" : ""}
-                      {Math.round(status.trend.weightKg * 2.20462 * 10) / 10}
+            {status.trend.weightKg !== null ||
+            status.trend.waistCm !== null ||
+            status.trend.bodyFatPct !== null ? (
+              <div className="card">
+                <p className="label" style={{ marginBottom: "0.5rem" }}>
+                  Last four weeks
+                </p>
+                <div className="stats">
+                  <div>
+                    <p className="stat__value">
+                      {status.trend.weightKg === null
+                        ? "—"
+                        : `${status.trend.weightKg > 0 ? "+" : ""}${Math.round(status.trend.weightKg * 2.20462 * 10) / 10}`}
                     </p>
-                    <p className="metric-label">lb</p>
+                    <p className="stat__label">lb</p>
                   </div>
-                ) : null}
-                {status.trend.waistCm !== null ? (
-                  <div className="metric">
-                    <p className="metric-value">
-                      {status.trend.waistCm > 0 ? "+" : ""}
-                      {Math.round((status.trend.waistCm / 2.54) * 10) / 10}
+                  <div>
+                    <p className="stat__value">
+                      {status.trend.waistCm === null
+                        ? "—"
+                        : `${status.trend.waistCm > 0 ? "+" : ""}${Math.round((status.trend.waistCm / 2.54) * 10) / 10}`}
                     </p>
-                    <p className="metric-label">in waist</p>
+                    <p className="stat__label">in waist</p>
                   </div>
-                ) : null}
-                {status.trend.bodyFatPct !== null ? (
-                  <div className="metric">
-                    <p className="metric-value">
-                      {status.trend.bodyFatPct > 0 ? "+" : ""}
-                      {status.trend.bodyFatPct}
+                  <div>
+                    <p className="stat__value">
+                      {status.trend.bodyFatPct === null
+                        ? "—"
+                        : `${status.trend.bodyFatPct > 0 ? "+" : ""}${status.trend.bodyFatPct}`}
                     </p>
-                    <p className="metric-label">% fat</p>
+                    <p className="stat__label">% fat</p>
                   </div>
-                ) : null}
+                </div>
               </div>
-            </article>
-          ) : null}
+            ) : null}
+          </div>
         </section>
 
-        <section className="sec">
-          <p className="sec-label">Measure</p>
-          <h2 className="sec-title">
-            One tape, once a <em>week</em>
-          </h2>
-          <p className="sec-intro">
-            Waist at the navel, first thing in the morning, before you eat. Weight the same way. Two
-            numbers a week beat daily numbers you start ignoring.
-          </p>
-          <article className="plaque">
-            <form action={saveHealthEntry}>
+        <section className="block">
+          <div className="block__head">
+            <h2 className="block__title">Log a measurement</h2>
+            <span className="label">Weekly is enough</span>
+          </div>
+          <div className="card">
+            <form action={saveHealthEntry} className="stack">
               <input type="hidden" name="date" value={today} />
-              <div className="field-row">
-                {/* step="any": a tape reads 34.75, and a rounded step silently
-                    refuses to submit rather than saying why. */}
+              {/* step="any": a tape reads 34.75, and a rounded step silently refuses. */}
+              <div className="grid3">
                 <label className="field">
-                  <span className="field-label">Weight (lb)</span>
+                  <span className="field__label">Weight lb</span>
                   <input name="weightLb" type="number" step="any" min="0" inputMode="decimal" />
                 </label>
                 <label className="field">
-                  <span className="field-label">Waist (in)</span>
+                  <span className="field__label">Waist in</span>
                   <input name="waistIn" type="number" step="any" min="0" inputMode="decimal" />
                 </label>
                 <label className="field">
-                  <span className="field-label">Body fat %</span>
-                  <input name="bodyFatPct" type="number" step="any" min="3" max="60" inputMode="decimal" />
+                  <span className="field__label">Fat %</span>
+                  <input
+                    name="bodyFatPct"
+                    type="number"
+                    step="any"
+                    min="3"
+                    max="60"
+                    inputMode="decimal"
+                  />
                 </label>
               </div>
-              <button className="btn" type="submit">
-                Save today&apos;s numbers
+              <button className="btn btn--primary btn--block" type="submit">
+                Save
               </button>
             </form>
             {current.heightCm === null ? (
-              <p className="plaque-tip">
-                Add your height in <Link href="/settings">Settings</Link> and a waist measurement
-                becomes a body-fat estimate.
+              <p className="card__sub" style={{ marginTop: "0.75rem" }}>
+                <Link href="/settings">Add your height</Link> and a waist reading becomes a body-fat
+                estimate.
               </p>
             ) : null}
-          </article>
+          </div>
         </section>
 
-        <section className="sec">
-          <p className="sec-label">Core work</p>
-          <h2 className="sec-title">
-            Level {coreLevel ?? 1} <em>progression</em>
-          </h2>
-          <p className="sec-intro">
-            {adherence.planned > 0
-              ? `${adherence.done} of ${adherence.planned} sessions done in the last four weeks.`
-              : "Sessions appear here as the block gets going."}{" "}
-            The circuits climb through four levels — planks and dead bugs first, hanging leg raises
-            and loaded crunches by the end.
-          </p>
+        <section className="block">
+          <div className="block__head">
+            <h2 className="block__title">Core &amp; strength</h2>
+            <span className="pill pill--accent">Level {nextCore?.level ?? 1}</span>
+          </div>
 
-          {upcoming.length === 0 ? (
-            <article className="plaque plaque--quiet">
-              <p className="plaque-note">
-                No strength sessions scheduled in the next two weeks. Check the number of lifting
-                days in <Link href="/settings">Settings</Link>.
-              </p>
-            </article>
-          ) : (
-            upcoming.map((session) => {
-              const blocks = parseBlocks(session.blocks);
-              const core = blocks.find((block) => block.name.startsWith("Core"));
-              return (
-                <Link className="day" key={session.id} href={`/day/${session.date}`}>
-                  <span className="day-date">{weekdayShort(session.date)}</span>
-                  <span className="day-name">
-                    {session.title}
-                    {core ? (
-                      <span className="block-cue">
-                        {core.exercises.map((exercise) => exercise.name).join(" · ")}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="day-dist">{session.minutes} min</span>
-                  {session.status !== "planned" ? (
-                    <span className="day-flag">{session.status}</span>
-                  ) : null}
+          <div className="card">
+            <div className="row-between">
+              <p className="label">Last four weeks</p>
+              <span className="pill">
+                {adherence.done}/{adherence.planned} done
+              </span>
+            </div>
+
+            {upcoming.length === 0 ? (
+              <div className="empty">
+                <span className="empty__icon">
+                  <Icon name="strength" size={20} />
+                </span>
+                <p className="small sub">Nothing scheduled in the next two weeks.</p>
+                <Link className="btn btn--ghost btn--sm" href="/settings">
+                  Set lifting days
                 </Link>
-              );
-            })
-          )}
+              </div>
+            ) : (
+              <>
+                <hr className="card__divide" />
+                <div className="rows">
+                  {upcoming.map((session) => (
+                    <Link className="row" key={session.id} href={`/day/${session.date}`}>
+                      <span className="row__date">{weekdayShort(session.date)}</span>
+                      <span
+                        className={`row__lead${session.status === "done" ? " row__lead--good" : ""}`}
+                      >
+                        <Icon name={session.focus === "mobility" ? "body" : "strength"} size={17} />
+                      </span>
+                      <span className="row__body">
+                        <span className="row__title">{session.title}</span>
+                        <span className="row__sub">{formatShort(session.date)}</span>
+                      </span>
+                      <span className="row__meta">{session.minutes}m</span>
+                    </Link>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </section>
 
-        <p className="disclaimer">
-          Body-fat estimates from a tape measure carry a few points of error either way — use the
-          direction of travel, not the decimal. Race day is {formatLong(current.raceDate)}.
+        <p className="fineprint">
+          Tape-measure body fat carries a few points of error. Use the direction, not the decimal.
         </p>
       </Shell>
       <Nav pending={pending} />

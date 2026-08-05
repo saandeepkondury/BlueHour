@@ -17,7 +17,7 @@ export function BrandMark({
 
   return (
     <svg
-      className="brand-mark"
+      className="brandmark"
       width={size}
       height={size}
       viewBox="0 0 64 64"
@@ -40,37 +40,30 @@ export function Wordmark({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   );
 }
 
-export function BrandBar() {
-  return (
-    <Link href="/" className="brand-bar" aria-label="Blue Hour home">
-      <BrandMark size={28} />
-      <Wordmark size="sm" />
-    </Link>
-  );
-}
-
-export function BrandLockup({
-  size = "md",
-  href,
-}: {
-  size?: "md" | "lg";
-  href?: string;
-}) {
-  const mark = size === "lg" ? 72 : 40;
+export function BrandRow({ href }: { href?: string }) {
   const inner = (
     <>
-      <BrandMark size={mark} />
-      <Wordmark size={size === "lg" ? "lg" : "md"} />
+      <BrandMark size={24} />
+      <Wordmark size="sm" />
     </>
   );
 
   if (href) {
     return (
-      <Link href={href} className={`brand-lockup brand-lockup--${size}`} aria-label="Blue Hour home">
+      <Link href={href} className="brandrow" aria-label="Blue Hour home">
         {inner}
       </Link>
     );
   }
 
-  return <div className={`brand-lockup brand-lockup--${size}`}>{inner}</div>;
+  return <span className="brandrow">{inner}</span>;
+}
+
+export function BrandLockup() {
+  return (
+    <div className="brandrow brandrow--stack">
+      <BrandMark size={64} />
+      <Wordmark size="lg" />
+    </div>
+  );
 }

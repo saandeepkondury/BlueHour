@@ -2,27 +2,49 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Icon, type IconName } from "@/components/Icon";
 
-const LINKS = [
-  { href: "/", label: "Today" },
-  { href: "/plan", label: "Plan" },
-  { href: "/fuel", label: "Fuel" },
-  { href: "/core", label: "Core" },
-  { href: "/coach", label: "Coach" },
-  { href: "/more", label: "More" },
+/**
+ * Five tabs, the iPhone maximum. Everything secondary lives behind the header
+ * gear so the bar never grows a "More" catch-all.
+ */
+const TABS: { href: string; label: string; icon: IconName }[] = [
+  { href: "/", label: "Today", icon: "today" },
+  { href: "/plan", label: "Plan", icon: "calendar" },
+  { href: "/fuel", label: "Fuel", icon: "fuel" },
+  { href: "/core", label: "Body", icon: "body" },
+  { href: "/coach", label: "Coach", icon: "coach" },
 ];
 
 export function Nav({ pending = 0 }: { pending?: number }) {
   const pathname = usePathname();
 
   return (
-    <nav className="nav">
-      {LINKS.map((link) => {
-        const active = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
-        const badge = link.href === "/coach" && pending > 0;
+    <nav className="tabbar" aria-label="Main">
+      {TABS.map((tab) => {
+        const active =
+          tab.href === "/"
+            ? pathname === "/" || pathname.startsWith("/day/")
+            : pathname.startsWith(tab.href);
+        const badge = tab.href === "/coach" && pending > 0;
+
         return (
-          <Link key={link.href} href={link.href} aria-current={active ? "page" : undefined}>
-            {badge ? `${link.label} ${pending}` : link.label}
+          <Link
+            key={tab.href}
+            className="tab"
+            href={tab.href}
+            // Without an explicit name the badge digit runs into the label and
+            // screen readers announce "Coach3".
+            aria-label={badge ? `${tab.label}, ${pending} waiting` : tab.label}
+            aria-current={active ? "page" : undefined}
+          >
+            <Icon name={tab.icon} size={23} strokeWidth={active ? 2 : 1.7} />
+            <span className="tab__label">{tab.label}</span>
+            {badge ? (
+              <span className="tab__dot" aria-hidden="true">
+                {pending}
+              </span>
+            ) : null}
           </Link>
         );
       })}

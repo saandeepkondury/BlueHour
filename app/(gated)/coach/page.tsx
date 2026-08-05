@@ -1,8 +1,15 @@
 import Link from "next/link";
-import { applySuggestionAction, askCoach, clearFuelOverrides, dismissSuggestionAction } from "@/app/actions";
+import {
+  applySuggestionAction,
+  askCoach,
+  clearFuelOverrides,
+  dismissSuggestionAction,
+} from "@/app/actions";
+import { AppBar } from "@/components/AppBar";
+import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
-import { formatShort, todayISO } from "@/lib/date";
+import { formatShort } from "@/lib/date";
 import { changesOf, decidedSuggestions, pendingSuggestions } from "@/lib/coach/store";
 import { describeChange } from "@/lib/coach/types";
 import { fuelOverrides, openaiConfig } from "@/lib/settings";
@@ -16,61 +23,74 @@ const ORIGIN_LABEL: Record<string, string> = {
   openai: "Coach",
 };
 
-function Suggestion({ row, pending }: { row: CoachSuggestion; pending: boolean }) {
+function Suggestion({ row, open }: { row: CoachSuggestion; open: boolean }) {
   const changes = changesOf(row);
-  const className = pending
-    ? "plaque suggestion"
-    : row.status === "applied"
-      ? "plaque plaque--flat suggestion suggestion--applied"
-      : "plaque plaque--flat suggestion suggestion--dismissed";
 
   return (
-    <article className={className}>
-      <p className="plaque-kicker">
-        {ORIGIN_LABEL[row.origin] ?? "Coach"} · {formatShort(row.date)} · {row.confidence} confidence
-        {pending ? "" : ` · ${row.status}`}
-      </p>
-      <h3 className="plaque-title" style={{ fontSize: "1.35rem" }}>
-        {row.title}
-      </h3>
-      <p className="plaque-note">{row.rationale}</p>
+    <div className={open ? "card card--pad-lg" : "card card--sunk"}>
+      <div className="card__head">
+        <div>
+          <div className="btnrow" style={{ gap: "0.35rem" }}>
+            <span className={open ? "pill pill--accent" : "pill"}>
+              {ORIGIN_LABEL[row.origin] ?? "Coach"}
+            </span>
+            <span className="pill">{formatShort(row.date)}</span>
+            {!open ? <span className="pill">{row.status}</span> : null}
+          </div>
+          <h3 className="card__title" style={{ marginTop: "0.5rem" }}>
+            {row.title}
+          </h3>
+        </div>
+        {open ? (
+          <span className="row__lead row__lead--accent">
+            <Icon name="coach" size={18} />
+          </span>
+        ) : null}
+      </div>
 
       {changes.length > 0 ? (
         <>
-          <p className="plaque-kicker" style={{ marginTop: "1rem" }}>
-            {pending ? "If you apply this" : "What it changed"}
-          </p>
-          <ul className="change-list">
+          <hr className="card__divide" />
+          <div className="rows">
             {changes.map((change, index) => (
-              <li key={`${change.op}-${index}`}>{describeChange(change)}</li>
+              <div className="row" key={`${change.op}-${index}`} style={{ minHeight: "2.25rem" }}>
+                <span className="row__body">
+                  <span className="row__sub row__sub--wrap" style={{ color: "var(--ink)" }}>
+                    {describeChange(change)}
+                  </span>
+                </span>
+              </div>
             ))}
-          </ul>
+          </div>
         </>
-      ) : (
-        <p className="tiny muted" style={{ marginTop: "0.8rem" }}>
-          Advice only — nothing to change in the plan.
-        </p>
-      )}
+      ) : null}
 
-      {pending ? (
-        <div className="btn-row">
+      <details className="fold" style={{ marginTop: "0.5rem" }}>
+        <summary>Why</summary>
+        <div className="fold__body">
+          <p className="small sub">{row.rationale}</p>
+        </div>
+      </details>
+
+      {open ? (
+        <div className="btnrow btnrow--split" style={{ marginTop: "0.75rem" }}>
           {changes.length > 0 ? (
-            <form action={applySuggestionAction}>
+            <form action={applySuggestionAction} style={{ flex: 1 }}>
               <input type="hidden" name="id" value={row.id} />
-              <button className="btn btn--accent btn--small" type="submit">
+              <button className="btn btn--primary btn--sm btn--block" type="submit">
                 Apply
               </button>
             </form>
           ) : null}
-          <form action={dismissSuggestionAction}>
+          <form action={dismissSuggestionAction} style={{ flex: 1 }}>
             <input type="hidden" name="id" value={row.id} />
-            <button className="btn btn--ghost btn--small" type="submit">
+            <button className="btn btn--quiet btn--sm btn--block" type="submit">
               {changes.length > 0 ? "No thanks" : "Got it"}
             </button>
           </form>
         </div>
       ) : null}
-    </article>
+    </div>
   );
 }
 
@@ -85,102 +105,119 @@ export default async function CoachPage() {
 
   const decided = history.filter((row) => row.status !== "pending");
   const hasOverrides = overrides.calorieDelta !== 0 || overrides.proteinFloor !== null;
+  const modelReady = Boolean(config.key) && current.aiEnabled === 1;
 
   return (
     <>
       <Shell>
-        <section className="sec">
-          <p className="sec-label">Coach</p>
-          <h1 className="sec-title">
-            Reads everything, decides <em>nothing</em>
-          </h1>
-          <p className="sec-intro">
-            Sleep, resting heart rate, HRV, every run, every logged meal, the strength sessions, and
-            the body-fat trend go in. What comes back are proposals with the reasoning attached.
-            Nothing touches your plan until you press Apply.
-          </p>
+        <AppBar title="Coach" subtitle="Proposes, never decides" pending={pending.length} />
 
-          <form action={askCoach} className="btn-row">
-            <button className="btn" type="submit" disabled={!config.key || current.aiEnabled !== 1}>
-              Ask the coach now
-            </button>
-          </form>
+        <section className="block block--tight">
+          <div className="card">
+            <div className="row-between">
+              <div>
+                <p className="label">Waiting on you</p>
+                <p className="tile__value" style={{ marginTop: "0.3rem" }}>
+                  {pending.length}
+                  <small>{pending.length === 1 ? "suggestion" : "suggestions"}</small>
+                </p>
+              </div>
+              <form action={askCoach}>
+                <button className="btn btn--primary btn--sm" type="submit" disabled={!modelReady}>
+                  <Icon name="coach" size={16} />
+                  Ask now
+                </button>
+              </form>
+            </div>
 
-          {!config.key ? (
-            <p className="plaque plaque--quiet" style={{ marginTop: "1rem" }}>
-              <span className="plaque-note">
-                No OpenAI key yet, so only the built-in guardrails are running — those work without
-                one. <Link href="/settings">Add a key in Settings</Link> to get the reading layer on
-                top.
-              </span>
-            </p>
-          ) : current.aiEnabled !== 1 ? (
-            <p className="tiny muted" style={{ marginTop: "0.8rem" }}>
-              The model is switched off in Settings. Guardrails still run.
-            </p>
-          ) : (
-            <p className="tiny muted" style={{ marginTop: "0.8rem" }}>
-              Using {config.model}
-              {config.fromEnv ? ", key from the environment" : ", key stored in this app"}. Runs when
-              you ask and after each Watch sync.
-            </p>
-          )}
+            {!config.key ? (
+              <p className="card__sub" style={{ marginTop: "0.75rem" }}>
+                Guardrails are running. <Link href="/settings">Add an OpenAI key</Link> for the
+                reading layer on top.
+              </p>
+            ) : current.aiEnabled !== 1 ? (
+              <p className="card__sub" style={{ marginTop: "0.75rem" }}>
+                Model is off in <Link href="/settings">Settings</Link>. Guardrails still run.
+              </p>
+            ) : (
+              <p className="card__sub" style={{ marginTop: "0.75rem" }}>
+                Using {config.model}.
+              </p>
+            )}
+          </div>
         </section>
 
         {hasOverrides ? (
-          <section className="sec">
-            <p className="sec-label">Active adjustments</p>
-            <article className="plaque plaque--flat">
-              <ul className="change-list">
+          <section className="block">
+            <div className="block__head">
+              <h2 className="block__title">Active adjustments</h2>
+            </div>
+            <div className="card card--accent">
+              <div className="rows">
                 {overrides.calorieDelta !== 0 ? (
-                  <li>
-                    {overrides.calorieDelta > 0 ? "+" : ""}
-                    {overrides.calorieDelta} kcal on the daily target
-                  </li>
+                  <div className="row" style={{ minHeight: "2.25rem" }}>
+                    <span className="row__body">
+                      <span className="row__title">
+                        {overrides.calorieDelta > 0 ? "+" : ""}
+                        {overrides.calorieDelta} kcal daily
+                      </span>
+                    </span>
+                  </div>
                 ) : null}
                 {overrides.proteinFloor !== null ? (
-                  <li>Protein floor at {overrides.proteinFloor} g per kg</li>
+                  <div className="row" style={{ minHeight: "2.25rem" }}>
+                    <span className="row__body">
+                      <span className="row__title">
+                        Protein floor {overrides.proteinFloor} g/kg
+                      </span>
+                    </span>
+                  </div>
                 ) : null}
-              </ul>
-              <form action={clearFuelOverrides} className="btn-row">
-                <button className="btn btn--ghost btn--small" type="submit">
-                  Clear adjustments
+              </div>
+              <form action={clearFuelOverrides} style={{ marginTop: "0.75rem" }}>
+                <button className="btn btn--quiet btn--sm" type="submit">
+                  Clear
                 </button>
               </form>
-            </article>
+            </div>
           </section>
         ) : null}
 
-        <section className="sec">
-          <p className="sec-label">Waiting on you</p>
-          {pending.length === 0 ? (
-            <article className="plaque plaque--quiet">
-              <p className="plaque-note">
-                Nothing to decide. The guardrails are quiet, which is the good outcome — keep
-                logging and they will speak up when something drifts.
-              </p>
-            </article>
-          ) : (
-            pending.map((row) => <Suggestion key={row.id} row={row} pending />)
-          )}
+        <section className="block">
+          <div className="stack">
+            {pending.length === 0 ? (
+              <div className="card">
+                <div className="empty">
+                  <span className="empty__icon">
+                    <Icon name="check" size={20} />
+                  </span>
+                  <p className="card__title">Nothing to decide</p>
+                  <p className="small sub">Quiet guardrails are the good outcome. Keep logging.</p>
+                </div>
+              </div>
+            ) : (
+              pending.map((row) => <Suggestion key={row.id} row={row} open />)
+            )}
+          </div>
         </section>
 
         {decided.length > 0 ? (
-          <section className="sec">
-            <p className="sec-label">Already decided</p>
-            <h2 className="sec-title">
-              What you <em>chose</em>
-            </h2>
-            {decided.map((row) => (
-              <Suggestion key={row.id} row={row} pending={false} />
-            ))}
+          <section className="block">
+            <div className="block__head">
+              <h2 className="block__title">Already decided</h2>
+              <span className="label">{decided.length}</span>
+            </div>
+            <div className="stack">
+              {decided.map((row) => (
+                <Suggestion key={row.id} row={row} open={false} />
+              ))}
+            </div>
           </section>
         ) : null}
 
-        <p className="disclaimer">
-          Training and nutrition guidance for a healthy adult, generated from the data you supply.
-          Not medical advice. Pain that changes how you run, or anything that persists, is a
-          conversation for a doctor or a physio — not for this app. Data as of {formatShort(todayISO())}.
+        <p className="fineprint">
+          Guidance generated from the data you supply, for a healthy adult. Not medical advice. Pain
+          that changes how you run is a conversation for a doctor.
         </p>
       </Shell>
       <Nav pending={pending.length} />
