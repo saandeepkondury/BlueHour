@@ -1,12 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Blue Hour">
-  <rect width="512" height="512" fill="#eae4d8" />
-  <path d="M0 320 L120 292 L200 306 L290 252 L370 282 L450 254 L512 274 L512 512 L0 512 Z" fill="#ded5c2" />
-  <path
-    d="M0 320 L120 292 L200 306 L290 252 L370 282 L450 254 L512 274"
-    fill="none"
-    stroke="#3c5140"
-    stroke-width="12"
-    stroke-linejoin="round"
-  />
-  <circle cx="330" cy="176" r="46" fill="#3f7196" />
+  <rect width="512" height="512" fill="#3f7196"/>
+  <g transform="translate(56 56) scale(0.78125)">
+    <circle cx="256" cy="196" r="62" fill="#f3efe6"/>
+    <rect x="176" y="318" width="160" height="10" rx="5" fill="#d9d0c0"/>
+    <rect x="148" y="352" width="216" height="18" rx="9" fill="#f3efe6"/>
+  </g>
 </svg>

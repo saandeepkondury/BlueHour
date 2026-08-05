@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 200" role="img" aria-label="Blue Hour">
+  <rect width="720" height="200" fill="#eae4d8"/>
+  <g transform="translate(36 36) scale(2)">
+    <circle cx="32" cy="32" r="32" fill="#3f7196"/>
+    <circle cx="32" cy="25" r="8.2" fill="#f3efe6"/>
+    <rect x="22.5" y="39.6" width="19" height="1.5" rx="0.75" fill="#d9d0c0"/>
+    <rect x="19" y="44.4" width="26" height="2.6" rx="1.3" fill="#f3efe6"/>
+  </g>
+  <text
+    x="196"
+    y="118"
+    fill="#2b2f26"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="64"
+    font-weight="600"
+  >Blue <tspan font-style="italic" font-weight="500" fill="#3f7196">Hour</tspan></text>
+</svg>

@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { BrandLockup } from "@/components/Brand";
 import { AUTH_COOKIE, gateEnabled, isValidCode, tokenFor } from "@/lib/auth";
 
 export const metadata = { title: "Blue Hour" };
@@ -30,19 +31,15 @@ export default async function UnlockPage({
 
   return (
     <main className="unlock">
-      <p className="monogram">Blue Hour</p>
-      <p className="small" style={{ color: "rgba(249,241,221,0.8)", maxWidth: "22rem" }}>
-        Thirteen point one miles down Congress Avenue. Let us in.
-      </p>
+      <BrandLockup size="lg" />
+      <p className="small unlock-copy">Thirteen point one miles down Congress Avenue. Let us in.</p>
       <form action={unlock}>
         {bad ? <p className="error">That is not the passcode.</p> : null}
         <label className="field">
-          <span className="field-label" style={{ color: "rgba(249,241,221,0.75)" }}>
-            Passcode
-          </span>
+          <span className="field-label">Passcode</span>
           <input name="code" type="password" autoFocus autoComplete="current-password" />
         </label>
-        <button className="btn btn--gold btn--full" type="submit">
+        <button className="btn btn--accent btn--full" type="submit">
           Enter
         </button>
       </form>

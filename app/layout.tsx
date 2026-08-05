@@ -26,7 +26,21 @@ export const metadata: Metadata = {
   description:
     "A personal training, fueling, and strength companion for the Ascension Seton Austin Half Marathon.",
   manifest: "/manifest.webmanifest",
-  icons: { icon: "/icon.svg" },
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "https://blue-hour-psi.vercel.app"),
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/apple-icon",
+  },
+  openGraph: {
+    title: "Blue Hour — Austin Half trainer",
+    description:
+      "A personal training, fueling, and strength companion for the Ascension Seton Austin Half Marathon.",
+    siteName: "Blue Hour",
+    type: "website",
+  },
   appleWebApp: {
     capable: true,
     title: "Blue Hour",

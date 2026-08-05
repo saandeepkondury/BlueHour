@@ -85,6 +85,80 @@ a:hover {
   outline-offset: 2px;
 }
 
+/* ---- brand ---- */
+.brand-mark {
+  display: block;
+  flex-shrink: 0;
+}
+
+.wordmark {
+  font-family: var(--display);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.wordmark em {
+  font-style: italic;
+  font-weight: 500;
+  color: var(--blue-hour);
+}
+
+.wordmark--sm {
+  font-size: 1.05rem;
+}
+
+.wordmark--md {
+  font-size: 1.45rem;
+}
+
+.wordmark--lg {
+  font-size: 2.05rem;
+}
+
+.brand-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.62rem;
+  padding: 1.15rem 0 0.15rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.shell > .brand-bar + .sec,
+.shell > .brand-bar + header {
+  padding-top: 1.2rem;
+}
+
+.brand-bar:hover,
+.brand-lockup:hover {
+  color: inherit;
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.brand-lockup--lg {
+  flex-direction: column;
+  gap: 0.9rem;
+  text-align: center;
+}
+
+.ridge-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.62rem;
+  margin-bottom: 1.35rem;
+  text-decoration: none;
+  color: inherit;
+}
+
 /* ---- shell ---- */
 .shell {
   max-width: 46rem;
@@ -919,7 +993,7 @@ legend {
   justify-content: center;
   align-items: center;
   text-align: center;
-  gap: 1.1rem;
+  gap: 1.15rem;
   padding: 2rem;
   background: linear-gradient(180deg, var(--limestone-pale) 0%, var(--limestone) 55%, var(--limestone-deep) 100%);
 }
@@ -928,17 +1002,9 @@ legend {
   width: min(20rem, 100%);
 }
 
-.unlock .monogram {
-  font-family: var(--display);
-  font-weight: 600;
-  font-size: 1.7rem;
-  letter-spacing: -0.02em;
-}
-
-.unlock .monogram em {
-  font-style: italic;
-  font-weight: 500;
-  color: var(--blue-hour);
+.unlock .unlock-copy {
+  color: var(--ink-soft);
+  max-width: 22rem;
 }
 
 .error {

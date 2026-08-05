@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { BrandMark, Wordmark } from "@/components/Brand";
 import { daysBetween, formatLong } from "@/lib/date";
 import { PHASE_LABEL, type Phase } from "@/lib/plan/types";
 
@@ -43,6 +45,10 @@ export function RidgeHeader({
   return (
     <header className="ridge">
       <div className="ridge-inner">
+        <Link href="/" className="ridge-brand" aria-label="Blue Hour home">
+          <BrandMark size={28} />
+          <Wordmark size="sm" />
+        </Link>
         <p className="eyebrow">
           {past ? "You ran it" : isRaceDay ? "Today is the day" : "Days to Austin"}
         </p>

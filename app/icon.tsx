@@ -1,10 +1,10 @@
 import { ImageResponse } from "next/og";
 
-export const size = { width: 180, height: 180 };
+export const size = { width: 64, height: 64 };
 export const contentType = "image/png";
 
 /** Matches public/icon.svg — cream moon over paired horizons on blue-hour. */
-export default function AppleIcon() {
+export default function Icon() {
   return new ImageResponse(
     (
       <div
@@ -20,33 +20,33 @@ export default function AppleIcon() {
         <div
           style={{
             position: "absolute",
-            top: 48,
-            left: 58,
-            width: 64,
-            height: 64,
-            borderRadius: 64,
+            top: 17,
+            left: 21,
+            width: 22,
+            height: 22,
+            borderRadius: 22,
             background: "#f3efe6",
           }}
         />
         <div
           style={{
             position: "absolute",
-            left: 62,
-            right: 62,
-            bottom: 62,
-            height: 6,
-            borderRadius: 6,
+            left: 22,
+            right: 22,
+            bottom: 22,
+            height: 2,
+            borderRadius: 2,
             background: "#d9d0c0",
           }}
         />
         <div
           style={{
             position: "absolute",
-            left: 48,
-            right: 48,
-            bottom: 44,
-            height: 10,
-            borderRadius: 10,
+            left: 17,
+            right: 17,
+            bottom: 15,
+            height: 4,
+            borderRadius: 4,
             background: "#f3efe6",
           }}
         />
