@@ -1,6 +1,5 @@
 "use server";
 
-import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { startOfWeek, todayISO } from "@/lib/date";
 import { holdWeek, markDone, markPlanned, moveLongRun, skipWorkout } from "@/lib/plan/adapt";
@@ -397,8 +396,3 @@ export async function sendTestBrief(): Promise<void> {
   revalidatePath("/settings");
 }
 
-/** Mints the bearer token the iPhone Shortcut sends with every sync. */
-export async function rotateIngestToken(): Promise<void> {
-  await setSetting(KEYS.ingestToken, randomBytes(24).toString("base64url"));
-  revalidatePath("/settings/watch");
-}

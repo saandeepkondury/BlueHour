@@ -11,10 +11,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Where Apple Health data arrives — from the iPhone Shortcut, or from a native
- * shell if one is ever built. Health data is the most sensitive thing this app
- * stores, so this route refuses to run without a key rather than falling open
- * the way the passcode gate does.
+ * Where the iPhone app posts Apple Health samples. Health data is the most
+ * sensitive thing this app stores, so this route refuses to run without a key
+ * rather than falling open the way the passcode gate does.
  */
 
 async function secrets(): Promise<string[]> {
@@ -29,7 +28,7 @@ function matches(token: string, expected: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** Accepts a bearer header or a ?key= query, because Shortcuts makes headers fiddly. */
+/** Accepts a bearer header or a ?key= query. */
 function presented(request: Request): string {
   const header = request.headers.get("authorization") ?? "";
   if (header.startsWith("Bearer ")) return header.slice(7).trim();
@@ -40,7 +39,7 @@ async function guard(request: Request): Promise<NextResponse | null> {
   const allowed = await secrets();
   if (allowed.length === 0) {
     return NextResponse.json(
-      { error: "No sync key configured. Generate one on the Apple Health screen." },
+      { error: "No sync key configured. Set HEALTH_INGEST_SECRET." },
       { status: 503 },
     );
   }

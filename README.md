@@ -57,21 +57,11 @@ environment, which takes precedence.
 
 ## Apple Watch
 
-Free, no Xcode, no developer account: **Settings → Apple Health sync** mints a token and walks
-through an iPhone Shortcut that posts a flat daily payload to `/api/health/ingest`.
+The iPhone app in `ios/` reads HealthKit and posts to `/api/health/ingest` every time you open it.
+**Settings → Apple Health** has a Sync button for an on-demand pull. A posted run auto-completes
+the planned run for that day. There is a manual entry form for mornings the Watch has not landed yet.
 
-```bash
-curl -X POST "$APP_URL/api/health/ingest" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "content-type: application/json" \
-  -d '{"date":"2027-01-04","asleepMin":455,"restingHr":54,"hrvMs":61,"weightLb":178,"waistIn":35.25}'
-```
-
-The same endpoint accepts structured `sleep`, `vitals`, and `workouts` arrays from the native shell
-in `ios/`, which is optional. A posted run auto-completes the planned run for that day. A waist
-measurement plus your height becomes a body-fat estimate, so the abs goal gets a real date.
-
-There is a manual entry form for mornings the sync did not run.
+Set `HEALTH_INGEST_SECRET` (see `ios/README.md`) so the phone can authenticate.
 
 ## Deploying
 
@@ -86,7 +76,8 @@ There is a manual entry form for mornings the sync did not run.
    will use it for the morning job) and add the same value plus `APP_URL` as GitHub Actions secrets
    so `.github/workflows/water-reminder.yml` can hit `/api/cron/water` every hour. The route only
    notifies on even Austin hours from 8am to 10pm, and skips once the day's water target is met.
-5. **`NEXT_PUBLIC_APP_URL`** — the absolute URL, used in reminder links and the Shortcut setup.
+5. **`NEXT_PUBLIC_APP_URL`** — the absolute URL, used in reminder links.
+6. **`HEALTH_INGEST_SECRET`** — required for Apple Health sync from the iPhone app.
 
 Copy `.env.example` to `.env.local` for local overrides. Check the morning brief before you trust
 it: **Settings → The morning brief** previews today's notification and can send a test push.
