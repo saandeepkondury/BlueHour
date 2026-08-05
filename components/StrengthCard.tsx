@@ -86,7 +86,7 @@ export function StrengthCard({
                       />
                       <div className="row__body">
                         <span className="row__title">{exercise.name}</span>
-                        <span className="row__sub">{exercise.cue}</span>
+                        <span className="row__sub row__sub--wrap">{exercise.cue}</span>
                       </div>
                       <span className="row__meta">{exercise.prescription}</span>
                     </div>

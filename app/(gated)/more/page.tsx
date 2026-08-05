@@ -47,7 +47,7 @@ export default async function MorePage() {
           back="/"
           action={
             <Link className="iconbtn" href="/settings" aria-label="Settings">
-              <Icon name="settings" size={21} />
+              <Icon name="settings" size={20} />
             </Link>
           }
         />

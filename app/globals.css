@@ -37,7 +37,9 @@
   --bad-wash: #f9e9e6;
 
   /* brand */
-  --brand-blue: #3f7196;
+  --brand-blue: #2f6d99;
+  --brand-dusk: #16324a;
+  --dawn: #d4a86a;
 
   /* type */
   --ui: var(--font-ui), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -195,18 +197,13 @@ textarea {
 
 .iconbtn__dot {
   position: absolute;
-  top: 0.25rem;
-  right: 0.15rem;
-  min-width: 1.05rem;
-  height: 1.05rem;
-  padding: 0 0.22rem;
+  top: 0.28rem;
+  right: 0.28rem;
+  width: 0.45rem;
+  height: 0.45rem;
   border-radius: var(--r-chip);
   background: var(--accent);
-  color: #fff;
-  font-size: 0.625rem;
-  font-weight: 700;
-  line-height: 1.05rem;
-  text-align: center;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--canvas) 88%, transparent);
 }
 
 /* ============================================================ tab bar */
@@ -259,19 +256,14 @@ textarea {
 
 .tab__dot {
   position: absolute;
-  top: 0.55rem;
+  top: 0.5rem;
   left: 50%;
-  transform: translateX(0.45rem);
-  min-width: 1rem;
-  height: 1rem;
-  padding: 0 0.2rem;
+  transform: translateX(0.55rem);
+  width: 0.45rem;
+  height: 0.45rem;
   border-radius: var(--r-chip);
   background: var(--accent);
-  color: #fff;
-  font-size: 0.5625rem;
-  font-weight: 700;
-  line-height: 1rem;
-  text-align: center;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--canvas) 90%, transparent);
 }
 
 /* ============================================================ typography */
@@ -1016,6 +1008,8 @@ h4 {
 }
 
 .row__sub--wrap {
+  overflow: visible;
+  text-overflow: unset;
   white-space: normal;
 }
 
@@ -1390,16 +1384,18 @@ pre {
 
 .wordmark {
   font-family: var(--brand-face);
-  font-weight: 600;
-  letter-spacing: -0.025em;
+  font-weight: 560;
+  letter-spacing: -0.03em;
   line-height: 1;
   color: var(--ink);
+  font-variation-settings: "SOFT" 40, "WONK" 0.8;
 }
 
 .wordmark em {
   font-style: italic;
   font-weight: 500;
   color: var(--brand-blue);
+  font-variation-settings: "SOFT" 70, "WONK" 1;
 }
 
 .wordmark--sm {
@@ -1423,20 +1419,50 @@ pre {
 
 .brandrow--stack {
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.9rem;
 }
 
 /* ============================================================ unlock */
 
 .unlock {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  gap: 1.15rem;
   min-height: 100svh;
   padding: 2rem 1.25rem;
   text-align: center;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 70% 48% at 88% 72%, color-mix(in srgb, var(--dawn) 22%, transparent), transparent 62%),
+    radial-gradient(ellipse 60% 50% at 18% 22%, color-mix(in srgb, var(--brand-blue) 16%, transparent), transparent 58%),
+    var(--canvas);
+}
+
+.unlock::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 34%;
+  background:
+    linear-gradient(180deg, transparent, color-mix(in srgb, var(--brand-dusk) 6%, transparent));
+  pointer-events: none;
+}
+
+.unlock .brandmark {
+  filter: drop-shadow(0 18px 36px rgba(22, 50, 74, 0.22));
+  animation: brand-rise 0.7s var(--ease) both;
+}
+
+.unlock .wordmark {
+  animation: brand-rise 0.7s var(--ease) 0.08s both;
+}
+
+.unlock__lede {
+  max-width: 18rem;
+  animation: brand-rise 0.7s var(--ease) 0.14s both;
 }
 
 .unlock form {
@@ -1444,9 +1470,27 @@ pre {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  animation: brand-rise 0.7s var(--ease) 0.2s both;
+}
+
+@keyframes brand-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .unlock .brandmark,
+  .unlock .wordmark,
+  .unlock__lede,
+  .unlock form {
+    animation: none;
+  }
   *,
   *::before,
   *::after {

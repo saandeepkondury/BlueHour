@@ -1,9 +1,8 @@
-import Link from "next/link";
-import { Icon } from "@/components/Icon";
+import { BackButton, MoreLink } from "@/components/MoreNav";
 
 /**
- * Compact sticky header: optional back chevron, title, and a settings entry on
- * the right. Every screen gets one so the hub is always a single tap away.
+ * Compact sticky header: optional back chevron, title, and a hub entry on the
+ * right so every screen can reach the full page list in one tap.
  */
 export function AppBar({
   title,
@@ -22,21 +21,12 @@ export function AppBar({
 }) {
   return (
     <header className={edge ? "appbar appbar--edge" : "appbar"}>
-      {back ? (
-        <Link className="iconbtn" href={back} aria-label="Back">
-          <Icon name="back" size={22} />
-        </Link>
-      ) : null}
+      {back ? <BackButton href={back} /> : null}
       <h1 className="appbar__title">
         {title}
         {subtitle ? <span className="appbar__sub">{subtitle}</span> : null}
       </h1>
-      {action ?? (
-        <Link className="iconbtn" href="/more" aria-label="More and settings">
-          <Icon name="settings" size={21} />
-          {pending > 0 ? <span className="iconbtn__dot">{pending}</span> : null}
-        </Link>
-      )}
+      {action ?? <MoreLink pending={pending} />}
     </header>
   );
 }

@@ -6,7 +6,7 @@ import { Icon, type IconName } from "@/components/Icon";
 
 /**
  * Five tabs, the iPhone maximum. Everything secondary lives behind the header
- * gear so the bar never grows a "More" catch-all.
+ * grid so the bar never grows a "More" catch-all.
  */
 const TABS: { href: string; label: string; icon: IconName }[] = [
   { href: "/", label: "Today", icon: "today" },
@@ -33,18 +33,12 @@ export function Nav({ pending = 0 }: { pending?: number }) {
             key={tab.href}
             className="tab"
             href={tab.href}
-            // Without an explicit name the badge digit runs into the label and
-            // screen readers announce "Coach3".
             aria-label={badge ? `${tab.label}, ${pending} waiting` : tab.label}
             aria-current={active ? "page" : undefined}
           >
             <Icon name={tab.icon} size={23} strokeWidth={active ? 2 : 1.7} />
             <span className="tab__label">{tab.label}</span>
-            {badge ? (
-              <span className="tab__dot" aria-hidden="true">
-                {pending}
-              </span>
-            ) : null}
+            {badge ? <span className="tab__dot" aria-hidden="true" /> : null}
           </Link>
         );
       })}
