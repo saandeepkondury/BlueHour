@@ -1,0 +1,9 @@
+ios
+local.db
+local.db-*
+.playwright-mcp
+.env
+.env*.local
+*.pem
+DerivedData
+.git

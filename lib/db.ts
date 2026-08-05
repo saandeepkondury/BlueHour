@@ -219,8 +219,14 @@ const g = globalThis as Global;
 function client(): Client {
   if (!g.__bhClient) {
     g.__bhClient = createClient({
-      url: process.env.DATABASE_URL || "file:./local.db",
-      authToken: process.env.DATABASE_AUTH_TOKEN || undefined,
+      url:
+        process.env.DATABASE_URL ||
+        process.env.TURSO_DATABASE_URL ||
+        "file:./local.db",
+      authToken:
+        process.env.DATABASE_AUTH_TOKEN ||
+        process.env.TURSO_AUTH_TOKEN ||
+        undefined,
     });
   }
   return g.__bhClient;

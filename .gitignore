@@ -7,6 +7,7 @@ build
 npm-debug.log*
 .env
 .env*.local
+.env*.bak*
 .vercel
 *.tsbuildinfo
 next-env.d.ts
