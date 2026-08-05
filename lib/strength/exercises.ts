@@ -558,6 +558,25 @@ export function blocksFor(
   ];
 }
 
+export function allCatalogExercises(): Exercise[] {
+  const seen = new Map<string, Exercise>();
+  const add = (list: Exercise[]) => {
+    for (const exercise of list) seen.set(exercise.id, exercise);
+  };
+  add(WARMUP);
+  add(MOBILITY);
+  add(ABS_B_FINISHER);
+  for (const level of Object.values(STRENGTH_BY_LEVEL)) add(level);
+  for (const level of Object.values(CORE_BY_LEVEL)) add(level);
+  for (const level of Object.values(STRENGTH_A_BY_LEVEL)) add(level);
+  for (const level of Object.values(STRENGTH_B_BY_LEVEL)) add(level);
+  return [...seen.values()];
+}
+
+export function exerciseById(id: string): Exercise | undefined {
+  return allCatalogExercises().find((exercise) => exercise.id === id);
+}
+
 export function parseBlocks(json: string): Block[] {
   try {
     const parsed = JSON.parse(json);

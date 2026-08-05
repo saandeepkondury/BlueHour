@@ -1,4 +1,4 @@
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
 import { strengthChecks, strengthLogs, strengthSessions } from "@/drizzle/schema";
 
@@ -20,6 +20,46 @@ export async function toggleExercise(date: string, exerciseId: string, done: boo
       target: [strengthChecks.date, strengthChecks.exerciseId],
       set: { done: done ? 1 : 0 },
     });
+}
+
+export async function setExerciseLoad(date: string, exerciseId: string, load: string | null): Promise<void> {
+  await ready();
+  await db
+    .insert(strengthChecks)
+    .values({ date, exerciseId, done: 0, load })
+    .onConflictDoUpdate({
+      target: [strengthChecks.date, strengthChecks.exerciseId],
+      set: { load },
+    });
+}
+
+export async function checkFor(date: string, exerciseId: string) {
+  await ready();
+  const [row] = await db
+    .select()
+    .from(strengthChecks)
+    .where(and(eq(strengthChecks.date, date), eq(strengthChecks.exerciseId, exerciseId)));
+  return row ?? null;
+}
+
+export async function historyForExercise(exerciseId: string, limit = 24) {
+  await ready();
+  return db
+    .select({
+      date: strengthChecks.date,
+      done: strengthChecks.done,
+      load: strengthChecks.load,
+      status: strengthSessions.status,
+      title: strengthSessions.title,
+      notes: strengthLogs.notes,
+      rpe: strengthLogs.rpe,
+    })
+    .from(strengthChecks)
+    .leftJoin(strengthSessions, eq(strengthSessions.date, strengthChecks.date))
+    .leftJoin(strengthLogs, eq(strengthLogs.date, strengthChecks.date))
+    .where(eq(strengthChecks.exerciseId, exerciseId))
+    .orderBy(desc(strengthChecks.date))
+    .limit(limit);
 }
 
 export async function completeStrength(

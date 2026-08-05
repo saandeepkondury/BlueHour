@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   finishStrength,
   reopenStrengthSession,
@@ -85,7 +86,9 @@ export function StrengthCard({
                         fields={{ date: session.date, exerciseId: exercise.id }}
                       />
                       <div className="row__body">
-                        <span className="row__title">{exercise.name}</span>
+                        <Link className="row__title" href={`/exercise/${exercise.id}?date=${session.date}`}>
+                          {exercise.name}
+                        </Link>
                         <span className="row__sub row__sub--wrap">{exercise.cue}</span>
                       </div>
                       <span className="row__meta">{exercise.prescription}</span>
@@ -144,6 +147,28 @@ export function StrengthCard({
         </>
       ) : (
         <>
+          {blocks.length > 0 ? (
+            <>
+              <hr className="card__divide" />
+              <div className="rows">
+                {blocks.flatMap((block) =>
+                  block.exercises.map((exercise) => (
+                    <Link
+                      className={done.has(exercise.id) ? "row row--done" : "row"}
+                      href={`/exercise/${exercise.id}?date=${session.date}`}
+                      key={exercise.id}
+                    >
+                      <span className="row__body">
+                        <span className="row__title">{exercise.name}</span>
+                        <span className="row__sub">{exercise.prescription}</span>
+                      </span>
+                      <span className="row__meta">{done.has(exercise.id) ? "Done" : "Open"}</span>
+                    </Link>
+                  )),
+                )}
+              </div>
+            </>
+          ) : null}
           {log && (log.minutes || log.rpe) ? (
             <>
               <hr className="card__divide" />

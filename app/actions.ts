@@ -8,6 +8,7 @@ import { saveManualHealth } from "@/lib/health/manual";
 import {
   completeStrength,
   reopenStrength,
+  setExerciseLoad,
   skipStrength,
   toggleExercise,
 } from "@/lib/strength/log";
@@ -37,7 +38,7 @@ import {
   updateProfile,
 } from "@/lib/store";
 
-function refresh(date?: string) {
+function refresh(date?: string, exerciseId?: string) {
   revalidatePath("/");
   revalidatePath("/plan");
   revalidatePath("/fuel");
@@ -47,6 +48,7 @@ function refresh(date?: string) {
   revalidatePath("/core");
   revalidatePath("/coach");
   if (date) revalidatePath(`/day/${date}`);
+  if (exerciseId) revalidatePath(`/exercise/${exerciseId}`);
 }
 
 function num(value: FormDataEntryValue | null): number | null {
@@ -287,7 +289,16 @@ export async function toggleStrengthExercise(formData: FormData): Promise<void> 
   const done = str(formData.get("done")) === "1";
   if (!date || !exerciseId) return;
   await toggleExercise(date, exerciseId, done);
-  refresh(date);
+  refresh(date, exerciseId);
+}
+
+export async function saveExerciseLoad(formData: FormData): Promise<void> {
+  const date = str(formData.get("date"));
+  const exerciseId = str(formData.get("exerciseId"));
+  const load = str(formData.get("load")).trim() || null;
+  if (!date || !exerciseId) return;
+  await setExerciseLoad(date, exerciseId, load);
+  refresh(date, exerciseId);
 }
 
 export async function finishStrength(formData: FormData): Promise<void> {

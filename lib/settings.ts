@@ -16,6 +16,7 @@ export const KEYS = {
   lastCoachRun: "last_coach_run",
   waterPushSlot: "water_push_slot",
   bannedRecipes: "banned_recipes",
+  workoutxCache: "workoutx_cache",
 } as const;
 
 export type SettingKey = (typeof KEYS)[keyof typeof KEYS];
