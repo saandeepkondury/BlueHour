@@ -15,6 +15,7 @@ export const KEYS = {
   ingestToken: "health_ingest_token",
   lastCoachRun: "last_coach_run",
   waterPushSlot: "water_push_slot",
+  bannedRecipes: "banned_recipes",
 } as const;
 
 export type SettingKey = (typeof KEYS)[keyof typeof KEYS];
@@ -75,4 +76,16 @@ export async function openaiConfig(): Promise<{ key: string | null; model: strin
     model: rows.get(KEYS.openaiModel)?.trim() || process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini",
     fromEnv: envKey !== null,
   };
+}
+
+export async function bannedRecipeIds(): Promise<string[]> {
+  const raw = await getSetting(KEYS.bannedRecipes);
+  if (!raw) return [];
+  return [...new Set(raw.split(",").map((id) => id.trim()).filter(Boolean))];
+}
+
+export async function banRecipe(recipeId: string): Promise<string[]> {
+  const next = [...new Set([...(await bannedRecipeIds()), recipeId])];
+  await setSetting(KEYS.bannedRecipes, next.join(","));
+  return next;
 }

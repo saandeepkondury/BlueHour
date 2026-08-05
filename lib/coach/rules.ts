@@ -177,6 +177,57 @@ const absRunway: Rule = (snapshot) => {
   };
 };
 
+/** Planned meals sitting uneaten — the diet is not the one being lived. */
+const mealsIgnored: Rule = (snapshot) => {
+  const { mealsPlanned14, mealsEaten14 } = snapshot.totals;
+  if (mealsPlanned14 < 8) return null;
+  if (mealsEaten14 / mealsPlanned14 >= 0.4) return null;
+
+  return {
+    kind: "meals-ignored",
+    title: "The meal plan is not the diet you are actually eating",
+    rationale: `Only ${mealsEaten14} of ${mealsPlanned14} planned meals were marked eaten. A perfect plan you skip does not get you to February with abs or a race in the tank. Repicking this week's uneaten meals is the smallest honest fix — keep what you ate, replace what you ignored.`,
+    confidence: "high",
+    changes: [{ op: "reshuffle_meals", weekStart: startOfWeek(snapshot.today) }],
+    fingerprint: `meals-ignored:${startOfWeek(snapshot.today)}`,
+  };
+};
+
+/** A recipe offered repeatedly and never eaten is a preference, not a coincidence. */
+const recipeRejected: Rule = (snapshot) => {
+  const candidate = snapshot.preferences.ignoredRecipes[0];
+  if (!candidate || candidate.planned < 3) return null;
+  if (snapshot.preferences.bannedRecipes.includes(candidate.id)) return null;
+
+  return {
+    kind: "recipe-rejected",
+    title: `Stop planning ${candidate.name}`,
+    rationale: `${candidate.name} showed up ${candidate.planned} times in the last two weeks and was never marked eaten. That is a preference. Banning it keeps the grocery list honest and stops the plan from pretending you will cook something you will not.`,
+    confidence: "medium",
+    changes: [{ op: "ban_recipe", recipeId: candidate.id }],
+    fingerprint: `recipe-rejected:${candidate.id}`,
+  };
+};
+
+/** Rest days skipped or overwritten with miles — recovery is leaking. */
+const restIgnored: Rule = (snapshot) => {
+  const restDays = snapshot.days.filter((day) => day.type === "rest");
+  const broken = restDays.filter(
+    (day) => day.status === "skipped" || (day.actualMi !== null && day.actualMi > 0),
+  );
+  if (broken.length < 2) return null;
+
+  const nextRest = snapshot.ahead.find((day) => day.type === "rest");
+  return {
+    kind: "rest-ignored",
+    title: "Rest days keep getting skipped",
+    rationale: `${broken.length} of the last ${restDays.length} rest days were skipped or still had miles on them. Visible abs and a February half both depend on absorbing the work. Protect the next rest day instead of turning it into bonus volume.`,
+    confidence: "medium",
+    changes: nextRest ? [{ op: "convert_day", date: nextRest.date, to: "rest" }] : [],
+    fingerprint: `rest-ignored:${startOfWeek(snapshot.today)}`,
+  };
+};
+
 /** Long runs failing on their scheduled day is a calendar problem, not a fitness one. */
 const longRunDay: Rule = (snapshot) => {
   const longs = snapshot.days.filter((day) => day.type === "long");
@@ -199,8 +250,11 @@ const RULES: Rule[] = [
   missedRuns,
   bigJump,
   sleepDebt,
+  restIgnored,
   lowProtein,
   underFuelled,
+  mealsIgnored,
+  recipeRejected,
   strengthSlipping,
   longRunDay,
   absRunway,

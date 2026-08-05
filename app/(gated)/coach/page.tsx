@@ -1,8 +1,8 @@
 import Link from "next/link";
 import {
   applySuggestionAction,
-  askCoach,
   clearFuelOverrides,
+  deleteSuggestionAction,
   dismissSuggestionAction,
 } from "@/app/actions";
 import { AppBar } from "@/components/AppBar";
@@ -10,7 +10,13 @@ import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { formatShort } from "@/lib/date";
-import { changesOf, decidedSuggestions, pendingSuggestions } from "@/lib/coach/store";
+import {
+  changesOf,
+  decidedSuggestions,
+  expireOldSuggestions,
+  pendingSuggestions,
+  refreshCoach,
+} from "@/lib/coach/store";
 import { describeChange } from "@/lib/coach/types";
 import { fuelOverrides, openaiConfig } from "@/lib/settings";
 import { getProfile } from "@/lib/store";
@@ -20,7 +26,13 @@ export const dynamic = "force-dynamic";
 
 const ORIGIN_LABEL: Record<string, string> = {
   rules: "Guardrail",
-  openai: "Coach",
+  openai: "Daily review",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  applied: "Applied",
+  dismissed: "Passed",
+  expired: "Expired",
 };
 
 function Suggestion({ row, open }: { row: CoachSuggestion; open: boolean }) {
@@ -35,7 +47,7 @@ function Suggestion({ row, open }: { row: CoachSuggestion; open: boolean }) {
               {ORIGIN_LABEL[row.origin] ?? "Coach"}
             </span>
             <span className="pill">{formatShort(row.date)}</span>
-            {!open ? <span className="pill">{row.status}</span> : null}
+            {!open ? <span className="pill">{STATUS_LABEL[row.status] ?? row.status}</span> : null}
           </div>
           <h3 className="card__title" style={{ marginTop: "0.5rem" }}>
             {row.title}
@@ -73,77 +85,97 @@ function Suggestion({ row, open }: { row: CoachSuggestion; open: boolean }) {
       </details>
 
       {open ? (
-        <div className="btnrow btnrow--split" style={{ marginTop: "0.75rem" }}>
+        <div className="btnrow" style={{ marginTop: "0.75rem", flexWrap: "wrap" }}>
           {changes.length > 0 ? (
-            <form action={applySuggestionAction} style={{ flex: 1 }}>
+            <form action={applySuggestionAction} style={{ flex: "1 1 7rem" }}>
               <input type="hidden" name="id" value={row.id} />
               <button className="btn btn--primary btn--sm btn--block" type="submit">
                 Apply
               </button>
             </form>
           ) : null}
-          <form action={dismissSuggestionAction} style={{ flex: 1 }}>
+          <form action={dismissSuggestionAction} style={{ flex: "1 1 7rem" }}>
             <input type="hidden" name="id" value={row.id} />
             <button className="btn btn--quiet btn--sm btn--block" type="submit">
               {changes.length > 0 ? "No thanks" : "Got it"}
             </button>
           </form>
+          <form action={deleteSuggestionAction} style={{ flex: "1 1 7rem" }}>
+            <input type="hidden" name="id" value={row.id} />
+            <button className="btn btn--ghost btn--sm btn--block" type="submit">
+              Delete
+            </button>
+          </form>
         </div>
-      ) : null}
+      ) : (
+        <form action={deleteSuggestionAction} style={{ marginTop: "0.65rem" }}>
+          <input type="hidden" name="id" value={row.id} />
+          <button className="btn btn--ghost btn--sm" type="submit">
+            Delete
+          </button>
+        </form>
+      )}
     </div>
   );
 }
 
 export default async function CoachPage() {
   const current = await getProfile();
-  const [pending, history, config, overrides] = await Promise.all([
+  await expireOldSuggestions();
+  const run = await refreshCoach(current, { mode: "daily-if-due" });
+
+  const [pending, decided, config, overrides] = await Promise.all([
     pendingSuggestions(),
-    decidedSuggestions(12),
+    decidedSuggestions(24),
     openaiConfig(),
     fuelOverrides(),
   ]);
 
-  const decided = history.filter((row) => row.status !== "pending");
   const hasOverrides = overrides.calorieDelta !== 0 || overrides.proteinFloor !== null;
-  const modelReady = Boolean(config.key) && current.aiEnabled === 1;
+  const lastRunDay = run.lastRunAt ? formatShort(run.lastRunAt.slice(0, 10)) : null;
 
   return (
     <>
       <Shell>
-        <AppBar title="Coach" subtitle="Proposes, never decides" pending={pending.length} />
+        <AppBar title="Coach" subtitle="Daily review · proposes, never decides" pending={pending.length} />
 
         <section className="block block--tight">
           <div className="card">
-            <div className="row-between">
-              <div>
-                <p className="label">Waiting on you</p>
-                <p className="tile__value" style={{ marginTop: "0.3rem" }}>
-                  {pending.length}
-                  <small>{pending.length === 1 ? "suggestion" : "suggestions"}</small>
-                </p>
-              </div>
-              <form action={askCoach}>
-                <button className="btn btn--primary btn--sm" type="submit" disabled={!modelReady}>
-                  <Icon name="coach" size={16} />
-                  Ask now
-                </button>
-              </form>
+            <div>
+              <p className="label">Waiting on you</p>
+              <p className="tile__value" style={{ marginTop: "0.3rem" }}>
+                {pending.length}
+                <small>{pending.length === 1 ? "suggestion" : "suggestions"}</small>
+              </p>
             </div>
 
             {!config.key ? (
               <p className="card__sub" style={{ marginTop: "0.75rem" }}>
-                Guardrails are running. <Link href="/settings">Add an OpenAI key</Link> for the
-                reading layer on top.
+                Guardrails watch sleep, missed sessions, and fuel every day.{" "}
+                <Link href="/settings">Add an OpenAI key</Link> for a conservative daily synthesis on
+                top — meals, rest, lifting, grocery, and goals toward Feb 14.
               </p>
             ) : current.aiEnabled !== 1 ? (
               <p className="card__sub" style={{ marginTop: "0.75rem" }}>
-                Model is off in <Link href="/settings">Settings</Link>. Guardrails still run.
+                Daily model review is off in <Link href="/settings">Settings</Link>. Guardrails still
+                run.
               </p>
             ) : (
               <p className="card__sub" style={{ marginTop: "0.75rem" }}>
-                Using {config.model}.
+                {run.askedModel
+                  ? `Today’s review just ran on ${config.model}.`
+                  : lastRunDay
+                    ? `Last daily review ${lastRunDay} · ${config.model}.`
+                    : `Daily review is armed on ${config.model}. Open this screen or wait for the morning brief.`}{" "}
+                It learns from what you complete, skip, eat, and dismiss — not from ad-hoc prompts.
               </p>
             )}
+
+            {run.error ? (
+              <p className="card__sub" style={{ marginTop: "0.5rem", color: "var(--gold)" }}>
+                {run.error}
+              </p>
+            ) : null}
           </div>
         </section>
 
@@ -167,9 +199,7 @@ export default async function CoachPage() {
                 {overrides.proteinFloor !== null ? (
                   <div className="row" style={{ minHeight: "2.25rem" }}>
                     <span className="row__body">
-                      <span className="row__title">
-                        Protein floor {overrides.proteinFloor} g/kg
-                      </span>
+                      <span className="row__title">Protein floor {overrides.proteinFloor} g/kg</span>
                     </span>
                   </div>
                 ) : null}
@@ -192,7 +222,10 @@ export default async function CoachPage() {
                     <Icon name="check" size={20} />
                   </span>
                   <p className="card__title">Nothing to decide</p>
-                  <p className="small sub">Quiet guardrails are the good outcome. Keep logging.</p>
+                  <p className="small sub">
+                    Quiet is the good outcome. Keep logging — tomorrow’s review only speaks when the
+                    data does.
+                  </p>
                 </div>
               </div>
             ) : (

@@ -20,9 +20,8 @@ export default async function TodayPage() {
   const current = await getProfile();
   await closeOutMissedDays(today);
 
-  // Guardrail suggestions are cheap and deterministic, so they run on every open.
-  // The model is only asked when you press the button on the coach screen.
-  await refreshCoach(current, { useModel: false });
+  // Guardrails are cheap. The model runs at most once a day, from cron or Coach.
+  await refreshCoach(current, { mode: "rules" });
 
   const [bundle, pending] = await Promise.all([getDayBundle(today), pendingSuggestions()]);
   const all = await getAllWorkouts();

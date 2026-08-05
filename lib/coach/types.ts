@@ -1,3 +1,5 @@
+import { recipeById } from "@/lib/nutrition/recipes";
+
 /**
  * The coach can only ask for changes from this list. Both the rule engine and
  * the language model produce the same shapes, so anything arriving from OpenAI
@@ -9,12 +11,16 @@ export type Change =
   | { op: "hold_week"; weekStart: string }
   | { op: "scale_week"; weekStart: string; pct: number }
   | { op: "move_long_run"; weekStart: string; dow: number }
+  | { op: "set_long_run_day"; dow: number }
   | { op: "convert_day"; date: string; to: "rest" | "easy" | "cross" }
   | { op: "skip_strength"; date: string }
   | { op: "set_calorie_delta"; kcal: number }
   | { op: "set_protein_floor"; gPerKg: number }
   | { op: "set_strength_days"; days: number }
-  | { op: "set_target_body_fat"; pct: number };
+  | { op: "set_target_body_fat"; pct: number }
+  | { op: "set_diet_pref"; diet: "omnivore" | "vegetarian" | "vegan" }
+  | { op: "reshuffle_meals"; weekStart: string }
+  | { op: "ban_recipe"; recipeId: string };
 
 export type Confidence = "low" | "medium" | "high";
 
@@ -57,6 +63,10 @@ export function parseChange(raw: unknown): Change | null {
       if (!isISODate(value.weekStart) || dow === null) return null;
       return { op: "move_long_run", weekStart: value.weekStart, dow: clamp(Math.round(dow), 0, 6) };
     }
+    case "set_long_run_day": {
+      const dow = num("dow");
+      return dow === null ? null : { op: "set_long_run_day", dow: clamp(Math.round(dow), 0, 6) };
+    }
     case "convert_day": {
       const to = value.to;
       if (!isISODate(value.date)) return null;
@@ -85,6 +95,17 @@ export function parseChange(raw: unknown): Change | null {
         ? null
         : { op: "set_target_body_fat", pct: Math.round(clamp(pct, 8, 30) * 10) / 10 };
     }
+    case "set_diet_pref": {
+      const diet = value.diet;
+      if (diet !== "omnivore" && diet !== "vegetarian" && diet !== "vegan") return null;
+      return { op: "set_diet_pref", diet };
+    }
+    case "reshuffle_meals":
+      return isISODate(value.weekStart) ? { op: "reshuffle_meals", weekStart: value.weekStart } : null;
+    case "ban_recipe": {
+      const recipeId = typeof value.recipeId === "string" ? value.recipeId.trim() : "";
+      return recipeId ? { op: "ban_recipe", recipeId } : null;
+    }
     default:
       return null;
   }
@@ -104,6 +125,8 @@ export function describeChange(change: Change): string {
       return `Set the week of ${change.weekStart} to ${change.pct}% of its planned mileage`;
     case "move_long_run":
       return `Move that week's long run to ${DOW[change.dow]}`;
+    case "set_long_run_day":
+      return `Make ${DOW[change.dow]} the usual long-run day`;
     case "convert_day":
       return change.to === "rest"
         ? `Turn ${change.date} into a rest day`
@@ -124,5 +147,15 @@ export function describeChange(change: Change): string {
         : `Lift ${change.days} day${change.days === 1 ? "" : "s"} a week`;
     case "set_target_body_fat":
       return `Set the body-fat target to ${change.pct}%`;
+    case "set_diet_pref":
+      return `Switch the meal plan to ${change.diet}`;
+    case "reshuffle_meals":
+      return `Repick uneaten meals for the week of ${change.weekStart}`;
+    case "ban_recipe": {
+      const recipe = recipeById(change.recipeId);
+      return recipe
+        ? `Stop planning “${recipe.name}”`
+        : `Stop planning the recipe “${change.recipeId}”`;
+    }
   }
 }

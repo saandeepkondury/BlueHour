@@ -1,19 +1,26 @@
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, desc, eq, gte, ne } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
 import { coachSuggestions, profile, strengthSessions, type CoachSuggestion, type Profile } from "@/drizzle/schema";
-import { addDays, todayISO } from "@/lib/date";
+import { addDays, startOfWeek, todayISO } from "@/lib/date";
 import { convertDay, holdWeek, moveLongRun, scaleWeek } from "@/lib/plan/adapt";
 import { regenerateStrengthPlan } from "@/lib/strength/plan";
-import { KEYS, openaiConfig, setSetting } from "@/lib/settings";
+import { banRecipe, getSetting, KEYS, openaiConfig, setSetting } from "@/lib/settings";
+import {
+  clearMealPlan,
+  ensureWeekMeals,
+  resetGroceryChecks,
+  reshuffleWeekMeals,
+  updateProfile,
+} from "@/lib/store";
 import { askOpenAI, CoachError } from "./openai";
 import { runRules } from "./rules";
 import { buildSnapshot, type Snapshot } from "./snapshot";
 import { parseChanges, type Change, type SuggestionDraft } from "./types";
 
 /**
- * Suggestions are proposals, not decisions. They are written once, kept whether
- * taken or not, and only ever touch the plan through the small set of
- * operations in ./types — always after an explicit Apply.
+ * Suggestions are proposals, not decisions. The model is asked once a day from
+ * what was actually logged — never as a chatbot. Nothing touches the plan
+ * until Apply, and delete removes a card from history entirely.
  */
 
 export interface CoachRun {
@@ -21,7 +28,10 @@ export interface CoachRun {
   pending: number;
   askedModel: boolean;
   error: string | null;
+  lastRunAt: string | null;
 }
+
+export type CoachMode = "rules" | "daily" | "daily-if-due";
 
 async function persist(
   drafts: SuggestionDraft[],
@@ -57,23 +67,32 @@ async function persist(
   return created;
 }
 
+function ranToday(lastRunAt: string | null, today: string): boolean {
+  return Boolean(lastRunAt && lastRunAt.slice(0, 10) === today);
+}
+
 /**
- * Runs the guardrails, then the model if a key exists. Called after every health
- * sync and whenever the runner opens the coach, so advice tracks the data.
+ * Guardrails always run. The model runs at most once per Austin calendar day,
+ * from the cron or the first open of Coach after that day starts.
  */
 export async function refreshCoach(
   current: Profile,
-  options: { useModel?: boolean; question?: string } = {},
+  options: { mode?: CoachMode } = {},
 ): Promise<CoachRun> {
   await ready();
   const today = todayISO();
   const snapshot = await buildSnapshot(current, today);
+  const lastRunAt = await getSetting(KEYS.lastCoachRun);
 
   let created = await persist(runRules(snapshot), snapshot, "rules", null);
   let askedModel = false;
   let error: string | null = null;
 
-  const wantsModel = options.useModel !== false && current.aiEnabled === 1;
+  const mode = options.mode ?? "rules";
+  const due = !ranToday(lastRunAt, today);
+  const wantsModel =
+    current.aiEnabled === 1 && (mode === "daily" || (mode === "daily-if-due" && due));
+
   if (wantsModel) {
     const config = await openaiConfig();
     if (config.key) {
@@ -82,7 +101,6 @@ export async function refreshCoach(
         const drafts = await askOpenAI(snapshot, {
           key: config.key,
           model: config.model,
-          question: options.question,
         });
         created += await persist(drafts, snapshot, "openai", config.model);
         await setSetting(KEYS.lastCoachRun, new Date().toISOString());
@@ -92,8 +110,13 @@ export async function refreshCoach(
     }
   }
 
-  const pending = await pendingCount();
-  return { created, pending, askedModel, error };
+  return {
+    created,
+    pending: await pendingCount(),
+    askedModel,
+    error,
+    lastRunAt: (await getSetting(KEYS.lastCoachRun)) ?? lastRunAt,
+  };
 }
 
 export function changesOf(row: CoachSuggestion): Change[] {
@@ -117,13 +140,15 @@ export async function pendingCount(): Promise<number> {
   return (await pendingSuggestions()).length;
 }
 
-export async function decidedSuggestions(limit = 20): Promise<CoachSuggestion[]> {
+export async function decidedSuggestions(limit = 30): Promise<CoachSuggestion[]> {
   await ready();
   return db
     .select()
     .from(coachSuggestions)
-    .where(gte(coachSuggestions.date, addDays(todayISO(), -60)))
-    .orderBy(desc(coachSuggestions.createdAt))
+    .where(
+      and(ne(coachSuggestions.status, "pending"), gte(coachSuggestions.date, addDays(todayISO(), -60))),
+    )
+    .orderBy(desc(coachSuggestions.decidedAt), desc(coachSuggestions.createdAt))
     .limit(limit);
 }
 
@@ -156,6 +181,8 @@ async function applyChange(change: Change, current: Profile): Promise<Profile> {
     case "move_long_run":
       await moveLongRun(change.weekStart, change.dow);
       return current;
+    case "set_long_run_day":
+      return updateProfile({ longRunDay: change.dow });
     case "convert_day":
       await convertDay(change.date, change.to);
       return current;
@@ -189,6 +216,25 @@ async function applyChange(change: Change, current: Profile): Promise<Profile> {
         .returning();
       return updated ?? current;
     }
+    case "set_diet_pref": {
+      const next = await updateProfile({ dietPref: change.diet });
+      const from = todayISO();
+      await clearMealPlan(from, addDays(from, 13));
+      await ensureWeekMeals(startOfWeek(from));
+      await ensureWeekMeals(addDays(startOfWeek(from), 7));
+      return next;
+    }
+    case "reshuffle_meals":
+      await reshuffleWeekMeals(change.weekStart);
+      await resetGroceryChecks(change.weekStart);
+      return current;
+    case "ban_recipe": {
+      await banRecipe(change.recipeId);
+      const week = startOfWeek(todayISO());
+      await reshuffleWeekMeals(week);
+      await resetGroceryChecks(week);
+      return current;
+    }
   }
 }
 
@@ -214,4 +260,9 @@ export async function dismissSuggestion(id: number): Promise<void> {
     .update(coachSuggestions)
     .set({ status: "dismissed", decidedAt: new Date().toISOString() })
     .where(and(eq(coachSuggestions.id, id), eq(coachSuggestions.status, "pending")));
+}
+
+export async function deleteSuggestion(id: number): Promise<void> {
+  await ready();
+  await db.delete(coachSuggestions).where(eq(coachSuggestions.id, id));
 }

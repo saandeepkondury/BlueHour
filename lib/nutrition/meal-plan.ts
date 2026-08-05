@@ -52,6 +52,7 @@ interface BuildInput {
   workoutType: WorkoutType;
   diet: Diet;
   allergies: Allergen[];
+  excludeIds?: string[];
 }
 
 /**
@@ -65,20 +66,22 @@ export function buildDayPlan({
   workoutType,
   diet,
   allergies,
+  excludeIds = [],
 }: BuildInput): PlannedMeal[] {
   const meals: PlannedMeal[] = [];
+  const pool = (slot: Slot) => candidatesFor(slot, diet, allergies, excludeIds);
 
-  const breakfast = pick(candidatesFor("breakfast", diet, allergies), date, "breakfast");
-  const lunch = pick(candidatesFor("lunch", diet, allergies), date, "lunch");
-  const snack = pick(candidatesFor("snack", diet, allergies), date, "snack");
+  const breakfast = pick(pool("breakfast"), date, "breakfast");
+  const lunch = pick(pool("lunch"), date, "lunch");
+  const snack = pick(pool("snack"), date, "snack");
 
   meals.push(toMeal(breakfast), toMeal(lunch));
 
   const fuel: PlannedMeal[] = [];
   if (workoutType === "long" || workoutType === "race") {
-    fuel.push(toMeal(pick(candidatesFor("fuel_pre", diet, allergies), date, "pre")));
+    fuel.push(toMeal(pick(pool("fuel_pre"), date, "pre")));
     if (targets.needsDuringFuel) {
-      const during = pick(candidatesFor("fuel_during", diet, allergies), date, "during");
+      const during = pick(pool("fuel_during"), date, "during");
       const servings = Math.max(1, Math.round(Math.max(0, targets.runMinutes / 60 - 1) * 45 / 25));
       fuel.push({
         ...toMeal(during),
@@ -87,14 +90,14 @@ export function buildDayPlan({
         carbs: during.carbs * servings,
       });
     }
-    fuel.push(toMeal(pick(candidatesFor("fuel_post", diet, allergies), date, "post")));
+    fuel.push(toMeal(pick(pool("fuel_post"), date, "post")));
   }
 
   const committed = [...meals, ...fuel, toMeal(snack)];
   const usedCalories = committed.reduce((sum, meal) => sum + meal.calories, 0);
   const usedProtein = committed.reduce((sum, meal) => sum + meal.protein, 0);
 
-  const dinnerOptions = candidatesFor("dinner", diet, allergies);
+  const dinnerOptions = pool("dinner");
   const remainingCalories = targets.calories - usedCalories;
   const remainingProtein = targets.protein - usedProtein;
 

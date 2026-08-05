@@ -13,9 +13,8 @@ import {
 } from "@/lib/strength/log";
 import {
   applySuggestion,
+  deleteSuggestion,
   dismissSuggestion,
-  expireOldSuggestions,
-  refreshCoach,
 } from "@/lib/coach/store";
 import { KEYS, setSetting } from "@/lib/settings";
 import { buildBrief } from "@/lib/notify/brief";
@@ -340,14 +339,6 @@ export async function saveHealthEntry(formData: FormData): Promise<void> {
 
 // ---------- coach ----------
 
-/** Asks for advice now. Suggestions land as proposals; nothing changes yet. */
-export async function askCoach(): Promise<void> {
-  const current = await getProfile();
-  await expireOldSuggestions();
-  await refreshCoach(current, { useModel: true });
-  refresh();
-}
-
 export async function applySuggestionAction(formData: FormData): Promise<void> {
   const id = num(formData.get("id"));
   if (id === null) return;
@@ -360,6 +351,13 @@ export async function dismissSuggestionAction(formData: FormData): Promise<void>
   const id = num(formData.get("id"));
   if (id === null) return;
   await dismissSuggestion(id);
+  refresh();
+}
+
+export async function deleteSuggestionAction(formData: FormData): Promise<void> {
+  const id = num(formData.get("id"));
+  if (id === null) return;
+  await deleteSuggestion(id);
   refresh();
 }
 

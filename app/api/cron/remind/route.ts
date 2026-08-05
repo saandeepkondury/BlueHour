@@ -7,7 +7,7 @@ import { buildBrief } from "@/lib/notify/brief";
 import { cronAuthorized } from "@/lib/notify/cron-auth";
 import { sendPush } from "@/lib/notify/push";
 import { getProfile } from "@/lib/store";
-import { refreshCoach } from "@/lib/coach/store";
+import { expireOldSuggestions, refreshCoach } from "@/lib/coach/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,8 +51,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, skipped: "already sent today" });
   }
 
-  // Fresh guardrail advice before the brief quotes it.
-  await refreshCoach(current, { useModel: false });
+  // Once-a-day synthesis, then the brief can quote anything still waiting.
+  await expireOldSuggestions();
+  await refreshCoach(current, { mode: "daily" });
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || url.origin;
   const brief = await buildBrief(date, appUrl);

@@ -1,11 +1,15 @@
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, lte, ne } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
 import {
+  coachSuggestions,
   dayLogs,
   foodLogs,
+  fuelChecks,
+  groceryChecks,
   healthDays,
   mealPlans,
   strengthSessions,
+  supplementLogs,
   workoutLogs,
   workouts,
   type Profile,
@@ -14,7 +18,7 @@ import { addDays, daysBetween, startOfWeek } from "@/lib/date";
 import { computeTargets } from "@/lib/nutrition/targets";
 import type { Phase, WorkoutType } from "@/lib/plan/types";
 import { absStatus, type AbsStatus } from "@/lib/strength/abs";
-import { fuelOverrides } from "@/lib/settings";
+import { bannedRecipeIds, fuelOverrides } from "@/lib/settings";
 
 /**
  * One flat object describing the last two weeks and the next one. It is both
@@ -45,6 +49,8 @@ export interface SnapshotDay {
   proteinTarget: number;
   waterOz: number | null;
   strength: { focus: string; status: string } | null;
+  mealsPlanned: number;
+  mealsEaten: number;
 }
 
 export interface Snapshot {
@@ -84,7 +90,33 @@ export interface Snapshot {
     hrvRecent: number | null;
     kcalAdherencePct: number | null;
     proteinAdherencePct: number | null;
+    restPlanned14: number;
+    restHonored14: number;
+    coreDone14: number;
+    corePlanned14: number;
+    mealsPlanned14: number;
+    mealsEaten14: number;
+    groceryChecked: number;
+    groceryItems: number;
+    supplementsTaken14: number;
+    fuelChecksDone14: number;
+    fuelChecksPlanned14: number;
   };
+  intent: {
+    race: string;
+    physique: string;
+    diet: string;
+  };
+  preferences: {
+    dietPref: string;
+    allergies: string;
+    bannedRecipes: string[];
+    mealsBySlot: Record<string, { planned: number; eaten: number }>;
+    favoriteRecipes: { id: string; name: string; eaten: number }[];
+    ignoredRecipes: { id: string; name: string; planned: number; eaten: number }[];
+    extraFoods: { name: string; times: number }[];
+  };
+  decisions: { date: string; kind: string; title: string; status: string; origin: string }[];
   days: SnapshotDay[];
   /** Today plus the next seven days, so advice can name a real date. */
   ahead: { date: string; type: string; mi: number; strength: string | null }[];
@@ -115,7 +147,24 @@ export async function buildSnapshot(current: Profile, today: string): Promise<Sn
   const overrides = await fuelOverrides();
 
   const aheadEnd = addDays(today, 7);
-  const [plan, logs, health, meals, extras, water, strength, upcoming, aheadPlan, aheadStrength] = await Promise.all([
+  const weekStart = startOfWeek(today);
+  const [
+    plan,
+    logs,
+    health,
+    meals,
+    extras,
+    water,
+    strength,
+    upcoming,
+    aheadPlan,
+    aheadStrength,
+    grocery,
+    fuel,
+    supplements,
+    history,
+    banned,
+  ] = await Promise.all([
     db.select().from(workouts).where(and(gte(workouts.date, from), lte(workouts.date, today))).orderBy(workouts.date),
     db.select().from(workoutLogs).where(and(gte(workoutLogs.date, from), lte(workoutLogs.date, today))),
     db.select().from(healthDays).where(and(gte(healthDays.date, from), lte(healthDays.date, today))),
@@ -132,12 +181,35 @@ export async function buildSnapshot(current: Profile, today: string): Promise<Sn
       .select()
       .from(strengthSessions)
       .where(and(gte(strengthSessions.date, today), lte(strengthSessions.date, aheadEnd))),
+    db.select().from(groceryChecks).where(eq(groceryChecks.weekStart, weekStart)),
+    db.select().from(fuelChecks).where(and(gte(fuelChecks.date, from), lte(fuelChecks.date, today))),
+    db.select().from(supplementLogs).where(and(gte(supplementLogs.date, from), lte(supplementLogs.date, today))),
+    db
+      .select({
+        date: coachSuggestions.date,
+        kind: coachSuggestions.kind,
+        title: coachSuggestions.title,
+        status: coachSuggestions.status,
+        origin: coachSuggestions.origin,
+      })
+      .from(coachSuggestions)
+      .where(ne(coachSuggestions.status, "pending"))
+      .orderBy(desc(coachSuggestions.decidedAt))
+      .limit(20),
+    bannedRecipeIds(),
   ]);
 
   const logByDate = new Map(logs.map((row) => [row.date, row]));
   const healthByDate = new Map(health.map((row) => [row.date, row]));
   const waterByDate = new Map(water.map((row) => [row.date, row]));
   const strengthByDate = new Map(strength.map((row) => [row.date, row]));
+  const mealsByDate = new Map<string, { planned: number; eaten: number }>();
+  for (const meal of meals) {
+    const row = mealsByDate.get(meal.date) ?? { planned: 0, eaten: 0 };
+    row.planned += 1;
+    if (meal.eaten === 1) row.eaten += 1;
+    mealsByDate.set(meal.date, row);
+  }
 
   const intake = new Map<string, { kcal: number; protein: number }>();
   const add = (date: string, kcal: number, protein: number) => {
@@ -194,6 +266,8 @@ export async function buildSnapshot(current: Profile, today: string): Promise<Sn
       proteinTarget: targets.protein,
       waterOz: waterByDate.get(row.date)?.waterOz ?? null,
       strength: session ? { focus: session.focus, status: session.status } : null,
+      mealsPlanned: mealsByDate.get(row.date)?.planned ?? 0,
+      mealsEaten: mealsByDate.get(row.date)?.eaten ?? 0,
     };
   });
 
@@ -228,7 +302,45 @@ export async function buildSnapshot(current: Profile, today: string): Promise<Sn
       mean(proteinPairs.map((day) => (day.proteinIn! / Math.max(1, day.proteinTarget)) * 100)),
       0,
     ),
+    restPlanned14: days.filter((day) => day.type === "rest").length,
+    restHonored14: days.filter((day) => day.type === "rest" && day.status === "done").length,
+    coreDone14: days.filter((day) => day.strength?.focus === "core" && day.strength.status === "done").length,
+    corePlanned14: days.filter((day) => day.strength?.focus === "core").length,
+    mealsPlanned14: meals.length,
+    mealsEaten14: meals.filter((meal) => meal.eaten === 1).length,
+    groceryChecked: grocery.filter((row) => row.checked === 1).length,
+    groceryItems: grocery.length,
+    supplementsTaken14: supplements.filter((row) => row.taken === 1).length,
+    fuelChecksDone14: fuel.filter((row) => row.checked === 1).length,
+    fuelChecksPlanned14: fuel.length,
   };
+
+  const mealsBySlot: Record<string, { planned: number; eaten: number }> = {};
+  const recipeStats = new Map<string, { id: string; name: string; planned: number; eaten: number }>();
+  for (const meal of meals) {
+    const slot = mealsBySlot[meal.slot] ?? { planned: 0, eaten: 0 };
+    slot.planned += 1;
+    if (meal.eaten === 1) slot.eaten += 1;
+    mealsBySlot[meal.slot] = slot;
+
+    if (!meal.recipeId) continue;
+    const stat = recipeStats.get(meal.recipeId) ?? {
+      id: meal.recipeId,
+      name: meal.name,
+      planned: 0,
+      eaten: 0,
+    };
+    stat.planned += 1;
+    if (meal.eaten === 1) stat.eaten += 1;
+    recipeStats.set(meal.recipeId, stat);
+  }
+
+  const extrasCount = new Map<string, number>();
+  for (const extra of extras) {
+    const key = extra.name.trim().toLowerCase();
+    if (!key) continue;
+    extrasCount.set(key, (extrasCount.get(key) ?? 0) + 1);
+  }
 
   return {
     today,
@@ -252,7 +364,7 @@ export async function buildSnapshot(current: Profile, today: string): Promise<Sn
       ? {
           phase: todayRow.phase as Phase,
           week: todayRow.week,
-          weekStart: startOfWeek(today),
+          weekStart,
           type: todayRow.type as WorkoutType,
           title: todayRow.title,
         }
@@ -270,6 +382,31 @@ export async function buildSnapshot(current: Profile, today: string): Promise<Sn
       deficitKcal: abs.deficitKcal,
     },
     totals,
+    intent: {
+      race: `${current.raceName} on ${current.raceDate} — finish healthy`,
+      physique: "Visible abs by race day without starving the training",
+      diet: "A diet you actually eat, shop for, and can keep through February",
+    },
+    preferences: {
+      dietPref: current.dietPref,
+      allergies: current.allergies,
+      bannedRecipes: banned,
+      mealsBySlot,
+      favoriteRecipes: [...recipeStats.values()]
+        .filter((recipe) => recipe.eaten > 0)
+        .sort((a, b) => b.eaten - a.eaten)
+        .slice(0, 6)
+        .map(({ id, name, eaten }) => ({ id, name, eaten })),
+      ignoredRecipes: [...recipeStats.values()]
+        .filter((recipe) => recipe.planned >= 2 && recipe.eaten === 0)
+        .sort((a, b) => b.planned - a.planned)
+        .slice(0, 6),
+      extraFoods: [...extrasCount.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
+        .map(([name, times]) => ({ name, times })),
+    },
+    decisions: history,
     days,
     ahead: aheadPlan.map((row) => ({
       date: row.date,

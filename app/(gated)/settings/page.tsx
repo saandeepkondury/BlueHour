@@ -263,7 +263,7 @@ export default async function SettingsPage() {
               <label className="field">
                 <span className="field__label">Let the model read my data</span>
                 <select name="aiEnabled" defaultValue={profile.aiEnabled ? "1" : "0"}>
-                  <option value="1">Yes, when I ask</option>
+                  <option value="1">Yes, once a day from my logs</option>
                   <option value="0">No, guardrails only</option>
                 </select>
               </label>
@@ -273,8 +273,10 @@ export default async function SettingsPage() {
                   <p className="small sub">
                     A deficit is periodized around training — real in base and build, almost nothing
                     at peak, none in the taper — and the protein floor rises so what you lose is fat.
-                    Core circuits stay on the calendar either way. With the model off, built-in rules
-                    still watch sleep, resting heart rate, missed runs and protein, and nothing
+                    Core circuits stay on the calendar either way. The model reads your day once,
+                    conservatively: what you completed versus skipped, meals you actually eat,
+                    sleep, and past yes/no decisions. It never auto-applies. With it off, built-in
+                    rules still watch sleep, resting heart rate, missed runs and protein, and nothing
                     leaves your database.
                   </p>
                 </div>
@@ -293,8 +295,10 @@ export default async function SettingsPage() {
           <div className="card stack">
             <PushToggle vapidKey={vapidKey} />
             <p className="small muted">
-              With push on, a water reminder lands every two hours from 8am to 10pm Austin time.
-              Pause morning reminders in the section above to stop both.
+              On the iPhone app, morning briefs and water pings (every two hours, 8am–10pm Austin)
+              are native local notifications — turn them on when iOS asks, then use{" "}
+              <strong>Send a test notification</strong> in the app&apos;s gear sheet. Web push below
+              is only for the home-screen PWA. Pause morning reminders above to stop both.
             </p>
             <hr className="card__divide" />
             {brief ? (
@@ -379,8 +383,10 @@ export default async function SettingsPage() {
                 </label>
               </div>
               <p className="small muted">
-                Only a fourteen-day summary is sent when you ask: planned versus actual running,
-                sleep, heart rate, nutrition, strength, body-fat trend. No names, no email.
+                Once a day the model sees a fourteen-day summary: planned versus completed running,
+                rest, sleep, heart rate, meals eaten or ignored, grocery checks, strength, body-fat
+                trend, and which suggestions you already decided. No names, no email, no chat
+                prompt.
               </p>
               <button className="btn btn--ghost btn--block" type="submit">
                 Save coach settings

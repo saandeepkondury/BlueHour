@@ -1,11 +1,10 @@
-import { timingSafeEqual } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { after, NextResponse } from "next/server";
 import { ingestHealth, parsePayload, PayloadError } from "@/lib/health/ingest";
 import { lastSync } from "@/lib/health/read";
+import { guardIngest } from "@/lib/health/guard";
 import { refreshCoach } from "@/lib/coach/store";
 import { getProfile } from "@/lib/store";
-import { getSetting, KEYS } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,42 +15,8 @@ export const dynamic = "force-dynamic";
  * rather than falling open the way the passcode gate does.
  */
 
-async function secrets(): Promise<string[]> {
-  const fromEnv = process.env.HEALTH_INGEST_SECRET?.trim();
-  const stored = (await getSetting(KEYS.ingestToken))?.trim();
-  return [fromEnv, stored].filter((value): value is string => !!value && value.length > 0);
-}
-
-function matches(token: string, expected: string): boolean {
-  const a = Buffer.from(token);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
-/** Accepts a bearer header or a ?key= query. */
-function presented(request: Request): string {
-  const header = request.headers.get("authorization") ?? "";
-  if (header.startsWith("Bearer ")) return header.slice(7).trim();
-  return new URL(request.url).searchParams.get("key")?.trim() ?? "";
-}
-
-async function guard(request: Request): Promise<NextResponse | null> {
-  const allowed = await secrets();
-  if (allowed.length === 0) {
-    return NextResponse.json(
-      { error: "No sync key configured. Set HEALTH_INGEST_SECRET." },
-      { status: 503 },
-    );
-  }
-  const token = presented(request);
-  if (!token || !allowed.some((expected) => matches(token, expected))) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-  return null;
-}
-
 export async function POST(request: Request) {
-  const denied = await guard(request);
+  const denied = await guardIngest(request);
   if (denied) return denied;
 
   let body: unknown;
@@ -73,7 +38,7 @@ export async function POST(request: Request) {
     after(async () => {
       try {
         const current = await getProfile();
-        await refreshCoach(current, { useModel: false });
+        await refreshCoach(current, { mode: "rules" });
         revalidatePath("/coach");
       } catch (error) {
         console.error("post-ingest coach refresh failed", error);
@@ -92,7 +57,7 @@ export async function POST(request: Request) {
 
 /** Lets the phone confirm the URL and key before it asks for Health access. */
 export async function GET(request: Request) {
-  const denied = await guard(request);
+  const denied = await guardIngest(request);
   if (denied) return denied;
 
   return NextResponse.json({ ok: true, lastSync: await lastSync() });

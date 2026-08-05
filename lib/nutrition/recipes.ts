@@ -891,14 +891,29 @@ export function parseAllergies(input: string): Allergen[] {
   return hits;
 }
 
-export function candidatesFor(slot: Slot, diet: Diet, allergies: Allergen[]): Recipe[] {
+export function candidatesFor(
+  slot: Slot,
+  diet: Diet,
+  allergies: Allergen[],
+  excludeIds: string[] = [],
+): Recipe[] {
+  const banned = new Set(excludeIds);
   const limit = DIET_RANK[diet];
   const filtered = RECIPES.filter(
     (recipe) =>
       recipe.slot === slot &&
       DIET_RANK[recipe.diet] <= limit &&
+      !recipe.allergens.some((allergen) => allergies.includes(allergen)) &&
+      !banned.has(recipe.id),
+  );
+  if (filtered.length > 0) return filtered;
+  const withoutBan = RECIPES.filter(
+    (recipe) =>
+      recipe.slot === slot &&
+      DIET_RANK[recipe.diet] <= limit &&
       !recipe.allergens.some((allergen) => allergies.includes(allergen)),
   );
+  if (withoutBan.length > 0) return withoutBan;
   // Never leave a slot empty just because the filters were strict.
-  return filtered.length > 0 ? filtered : RECIPES.filter((recipe) => recipe.slot === slot);
+  return RECIPES.filter((recipe) => recipe.slot === slot);
 }

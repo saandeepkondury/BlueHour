@@ -35,7 +35,7 @@ import { deficitFor, proteinPerKgFor } from "@/lib/strength/abs";
 import { ensureStrengthPlan, regenerateStrengthPlan, strengthFor } from "@/lib/strength/plan";
 import { checkedExercises, strengthLogFor } from "@/lib/strength/log";
 import { recoveryFor, type Recovery } from "@/lib/health/read";
-import { fuelOverrides } from "@/lib/settings";
+import { bannedRecipeIds, fuelOverrides } from "@/lib/settings";
 import type { Phase } from "@/lib/plan/types";
 import type { StrengthLog, StrengthSession } from "@/drizzle/schema";
 
@@ -225,6 +225,7 @@ export async function ensureMealPlan(
     workoutType: workout.type as WorkoutType,
     diet: current.dietPref as Diet,
     allergies: parseAllergies(current.allergies),
+    excludeIds: await bannedRecipeIds(),
   });
 
   // Insert-ignore keeps any meal the runner already swapped or ate.
@@ -244,6 +245,7 @@ export async function reshuffleWeekMeals(weekStart: string): Promise<void> {
   const current = await getProfile();
   const allergies = parseAllergies(current.allergies);
   const diet = current.dietPref as Diet;
+  const excludeIds = await bannedRecipeIds();
 
   const rows = await db
     .select()
@@ -257,7 +259,7 @@ export async function reshuffleWeekMeals(weekStart: string): Promise<void> {
     );
 
   for (const row of rows) {
-    const options = candidatesFor(row.slot as Slot, diet, allergies).filter(
+    const options = candidatesFor(row.slot as Slot, diet, allergies, excludeIds).filter(
       (option) => option.id !== row.recipeId,
     );
     if (options.length === 0) continue;
