@@ -1,0 +1,25 @@
+{
+  "name": "Blue Hour — Austin Half trainer",
+  "short_name": "Blue Hour",
+  "description": "Personal training, fueling, and strength companion for the Austin Half Marathon.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eae4d8",
+  "theme_color": "#eae4d8",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "maskable"
+    }
+  ]
+}

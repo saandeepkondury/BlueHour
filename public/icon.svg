@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Blue Hour">
+  <rect width="512" height="512" fill="#eae4d8" />
+  <path d="M0 300 L110 268 L190 286 L280 224 L360 258 L440 226 L512 250 L512 512 L0 512 Z" fill="#ded5c2" />
+  <path
+    d="M0 300 L110 268 L190 286 L280 224 L360 258 L440 226 L512 250"
+    fill="none"
+    stroke="#3c5140"
+    stroke-width="10"
+    stroke-linejoin="round"
+  />
+  <circle cx="366" cy="132" r="42" fill="#3f7196" />
+  <text
+    x="256"
+    y="430"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-weight="bold"
+    font-size="120"
+    fill="#2b2f26"
+    text-anchor="middle"
+  >13.1</text>
+</svg>

@@ -1,0 +1,287 @@
+import { and, eq, gte, lte } from "drizzle-orm";
+import { db, ready } from "@/lib/db";
+import {
+  dayLogs,
+  foodLogs,
+  healthDays,
+  mealPlans,
+  strengthSessions,
+  workoutLogs,
+  workouts,
+  type Profile,
+} from "@/drizzle/schema";
+import { addDays, daysBetween, startOfWeek } from "@/lib/date";
+import { computeTargets } from "@/lib/nutrition/targets";
+import type { Phase, WorkoutType } from "@/lib/plan/types";
+import { absStatus, type AbsStatus } from "@/lib/strength/abs";
+import { fuelOverrides } from "@/lib/settings";
+
+/**
+ * One flat object describing the last two weeks and the next one. It is both
+ * what the rule engine reads and, serialized, what gets sent to OpenAI — so
+ * what the model sees is exactly what the app saw.
+ */
+
+export interface SnapshotDay {
+  date: string;
+  phase: Phase;
+  type: WorkoutType;
+  plannedMi: number;
+  status: string;
+  skipReason: string | null;
+  actualMi: number | null;
+  actualMin: number | null;
+  avgHr: number | null;
+  feel: string | null;
+  rpe: number | null;
+  source: string | null;
+  asleepMin: number | null;
+  restingHr: number | null;
+  hrvMs: number | null;
+  steps: number | null;
+  kcalIn: number | null;
+  kcalTarget: number;
+  proteinIn: number | null;
+  proteinTarget: number;
+  waterOz: number | null;
+  strength: { focus: string; status: string } | null;
+}
+
+export interface Snapshot {
+  today: string;
+  race: { name: string; date: string; daysAway: number };
+  runner: {
+    experience: string;
+    goal: string;
+    longRunDay: number;
+    strengthDays: number;
+    absGoal: boolean;
+    weightKg: number | null;
+    heightCm: number | null;
+    age: number | null;
+    sex: string | null;
+  };
+  current: { phase: Phase; week: number; weekStart: string; type: WorkoutType; title: string } | null;
+  overrides: { calorieDelta: number; proteinFloor: number | null };
+  abs: Pick<
+    AbsStatus,
+    "enabled" | "bodyFatPct" | "bodyFatSource" | "targetPct" | "kgToLose" | "verdict" | "projectedDate" | "trend" | "deficitKcal"
+  >;
+  totals: {
+    plannedMi14: number;
+    doneMi14: number;
+    plannedMi7: number;
+    doneMi7: number;
+    runsDone14: number;
+    runsPlanned14: number;
+    skipped14: number;
+    strengthDone14: number;
+    strengthPlanned14: number;
+    avgSleepMin: number | null;
+    restingHrBaseline: number | null;
+    restingHrRecent: number | null;
+    hrvBaseline: number | null;
+    hrvRecent: number | null;
+    kcalAdherencePct: number | null;
+    proteinAdherencePct: number | null;
+  };
+  days: SnapshotDay[];
+  /** Today plus the next seven days, so advice can name a real date. */
+  ahead: { date: string; type: string; mi: number; strength: string | null }[];
+  nextWeek: { weekStart: string; longRunMi: number; totalMi: number; days: { date: string; type: string; mi: number }[] };
+}
+
+function mean(values: number[]): number | null {
+  if (values.length === 0) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+const round = (value: number | null, digits = 1): number | null =>
+  value === null ? null : Math.round(value * 10 ** digits) / 10 ** digits;
+
+export async function buildSnapshot(current: Profile, today: string): Promise<Snapshot> {
+  await ready();
+
+  const from = addDays(today, -13);
+  const nextStart = addDays(startOfWeek(today), 7);
+  const nextEnd = addDays(nextStart, 6);
+  const overrides = await fuelOverrides();
+
+  const aheadEnd = addDays(today, 7);
+  const [plan, logs, health, meals, extras, water, strength, upcoming, aheadPlan, aheadStrength] = await Promise.all([
+    db.select().from(workouts).where(and(gte(workouts.date, from), lte(workouts.date, today))).orderBy(workouts.date),
+    db.select().from(workoutLogs).where(and(gte(workoutLogs.date, from), lte(workoutLogs.date, today))),
+    db.select().from(healthDays).where(and(gte(healthDays.date, from), lte(healthDays.date, today))),
+    db.select().from(mealPlans).where(and(gte(mealPlans.date, from), lte(mealPlans.date, today))),
+    db.select().from(foodLogs).where(and(gte(foodLogs.date, from), lte(foodLogs.date, today))),
+    db.select().from(dayLogs).where(and(gte(dayLogs.date, from), lte(dayLogs.date, today))),
+    db
+      .select()
+      .from(strengthSessions)
+      .where(and(gte(strengthSessions.date, from), lte(strengthSessions.date, today))),
+    db.select().from(workouts).where(and(gte(workouts.date, nextStart), lte(workouts.date, nextEnd))).orderBy(workouts.date),
+    db.select().from(workouts).where(and(gte(workouts.date, today), lte(workouts.date, aheadEnd))).orderBy(workouts.date),
+    db
+      .select()
+      .from(strengthSessions)
+      .where(and(gte(strengthSessions.date, today), lte(strengthSessions.date, aheadEnd))),
+  ]);
+
+  const logByDate = new Map(logs.map((row) => [row.date, row]));
+  const healthByDate = new Map(health.map((row) => [row.date, row]));
+  const waterByDate = new Map(water.map((row) => [row.date, row]));
+  const strengthByDate = new Map(strength.map((row) => [row.date, row]));
+
+  const intake = new Map<string, { kcal: number; protein: number }>();
+  const add = (date: string, kcal: number, protein: number) => {
+    const row = intake.get(date) ?? { kcal: 0, protein: 0 };
+    row.kcal += kcal;
+    row.protein += protein;
+    intake.set(date, row);
+  };
+  for (const meal of meals) if (meal.eaten === 1) add(meal.date, meal.calories, meal.protein);
+  for (const extra of extras) add(extra.date, extra.calories, extra.protein);
+
+  const [todayRow] = plan.filter((row) => row.date === today);
+  const abs = await absStatus(current, today, {
+    phase: (todayRow?.phase ?? "base") as Phase,
+    type: (todayRow?.type ?? "rest") as WorkoutType,
+  });
+
+  const days: SnapshotDay[] = plan.map((row) => {
+    const log = logByDate.get(row.date);
+    const vitals = healthByDate.get(row.date);
+    const eaten = intake.get(row.date);
+    const type = row.type as WorkoutType;
+    const targets = computeTargets(
+      { weightKg: current.weightKg, heightCm: current.heightCm, age: current.age, sex: current.sex },
+      { type, distanceMi: row.distanceMi, durationMin: row.durationMin },
+      row.date,
+      {
+        deficitKcal: abs.deficitKcal - overrides.calorieDelta,
+        proteinPerKg: overrides.proteinFloor ?? abs.proteinPerKg,
+      },
+    );
+    const session = strengthByDate.get(row.date);
+
+    return {
+      date: row.date,
+      phase: row.phase as Phase,
+      type,
+      plannedMi: row.distanceMi,
+      status: row.status,
+      skipReason: row.skipReason,
+      actualMi: log?.distanceMi ?? null,
+      actualMin: log?.durationSec ? Math.round(log.durationSec / 60) : null,
+      avgHr: log?.avgHr ?? null,
+      feel: log?.feel ?? null,
+      rpe: log?.rpe ?? null,
+      source: log?.source ?? null,
+      asleepMin: vitals?.asleepMin ?? null,
+      restingHr: vitals?.restingHr ?? null,
+      hrvMs: vitals?.hrvMs === null || vitals?.hrvMs === undefined ? null : Math.round(vitals.hrvMs),
+      steps: vitals?.steps ?? null,
+      kcalIn: eaten ? Math.round(eaten.kcal) : null,
+      kcalTarget: targets.calories,
+      proteinIn: eaten ? Math.round(eaten.protein) : null,
+      proteinTarget: targets.protein,
+      waterOz: waterByDate.get(row.date)?.waterOz ?? null,
+      strength: session ? { focus: session.focus, status: session.status } : null,
+    };
+  });
+
+  const last7 = days.filter((day) => day.date >= addDays(today, -6));
+  const runDays = days.filter((day) => day.type !== "rest");
+  const older = days.slice(0, Math.max(0, days.length - 4));
+  const recent = days.slice(-4);
+
+  const kcalPairs = days.filter((day) => day.kcalIn !== null && day.kcalIn > 0);
+  const proteinPairs = kcalPairs;
+
+  const totals: Snapshot["totals"] = {
+    plannedMi14: round(days.reduce((sum, day) => sum + day.plannedMi, 0))!,
+    doneMi14: round(days.reduce((sum, day) => sum + (day.actualMi ?? 0), 0))!,
+    plannedMi7: round(last7.reduce((sum, day) => sum + day.plannedMi, 0))!,
+    doneMi7: round(last7.reduce((sum, day) => sum + (day.actualMi ?? 0), 0))!,
+    runsDone14: runDays.filter((day) => day.status === "done").length,
+    runsPlanned14: runDays.length,
+    skipped14: runDays.filter((day) => day.status === "skipped").length,
+    strengthDone14: days.filter((day) => day.strength?.status === "done").length,
+    strengthPlanned14: days.filter((day) => day.strength !== null).length,
+    avgSleepMin: round(mean(days.map((day) => day.asleepMin).filter((v): v is number => v !== null)), 0),
+    restingHrBaseline: round(median(older.map((day) => day.restingHr).filter((v): v is number => v !== null)), 0),
+    restingHrRecent: round(mean(recent.map((day) => day.restingHr).filter((v): v is number => v !== null)), 0),
+    hrvBaseline: round(median(older.map((day) => day.hrvMs).filter((v): v is number => v !== null)), 0),
+    hrvRecent: round(mean(recent.map((day) => day.hrvMs).filter((v): v is number => v !== null)), 0),
+    kcalAdherencePct: round(
+      mean(kcalPairs.map((day) => (day.kcalIn! / Math.max(1, day.kcalTarget)) * 100)),
+      0,
+    ),
+    proteinAdherencePct: round(
+      mean(proteinPairs.map((day) => (day.proteinIn! / Math.max(1, day.proteinTarget)) * 100)),
+      0,
+    ),
+  };
+
+  return {
+    today,
+    race: {
+      name: current.raceName,
+      date: current.raceDate,
+      daysAway: Math.max(0, daysBetween(today, current.raceDate)),
+    },
+    runner: {
+      experience: current.experience,
+      goal: current.goal,
+      longRunDay: current.longRunDay,
+      strengthDays: current.strengthDays,
+      absGoal: current.absGoal === 1,
+      weightKg: round(current.weightKg),
+      heightCm: current.heightCm,
+      age: current.age,
+      sex: current.sex,
+    },
+    current: todayRow
+      ? {
+          phase: todayRow.phase as Phase,
+          week: todayRow.week,
+          weekStart: startOfWeek(today),
+          type: todayRow.type as WorkoutType,
+          title: todayRow.title,
+        }
+      : null,
+    overrides,
+    abs: {
+      enabled: abs.enabled,
+      bodyFatPct: abs.bodyFatPct,
+      bodyFatSource: abs.bodyFatSource,
+      targetPct: abs.targetPct,
+      kgToLose: abs.kgToLose,
+      verdict: abs.verdict,
+      projectedDate: abs.projectedDate,
+      trend: abs.trend,
+      deficitKcal: abs.deficitKcal,
+    },
+    totals,
+    days,
+    ahead: aheadPlan.map((row) => ({
+      date: row.date,
+      type: row.type,
+      mi: row.distanceMi,
+      strength: aheadStrength.find((session) => session.date === row.date)?.focus ?? null,
+    })),
+    nextWeek: {
+      weekStart: nextStart,
+      longRunMi: upcoming.find((row) => row.type === "long")?.distanceMi ?? 0,
+      totalMi: round(upcoming.reduce((sum, row) => sum + row.distanceMi, 0))!,
+      days: upcoming.map((row) => ({ date: row.date, type: row.type, mi: row.distanceMi })),
+    },
+  };
+}

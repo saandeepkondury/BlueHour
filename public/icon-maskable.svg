@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Blue Hour">
+  <rect width="512" height="512" fill="#eae4d8" />
+  <path d="M0 320 L120 292 L200 306 L290 252 L370 282 L450 254 L512 274 L512 512 L0 512 Z" fill="#ded5c2" />
+  <path
+    d="M0 320 L120 292 L200 306 L290 252 L370 282 L450 254 L512 274"
+    fill="none"
+    stroke="#3c5140"
+    stroke-width="12"
+    stroke-linejoin="round"
+  />
+  <circle cx="330" cy="176" r="46" fill="#3f7196" />
+</svg>
