@@ -508,6 +508,40 @@ h4 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+/* Compact macro strip — keeps 3-up numbers readable on phone widths */
+.bento--macros .tile {
+  min-width: 0;
+  gap: 0.2rem;
+  padding: 0.7rem 0.55rem;
+  overflow: hidden;
+}
+
+.bento--macros .tile__label {
+  font-size: 0.625rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bento--macros .tile__value {
+  font-size: 1.25rem;
+  letter-spacing: -0.04em;
+}
+
+.bento--macros .tile__value small {
+  font-size: 0.6875rem;
+}
+
+.bento--macros .tile__foot {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .tile {
   display: flex;
   flex-direction: column;
@@ -1488,6 +1522,17 @@ pre {
 
 .fold__body {
   padding-top: 0.75rem;
+}
+
+.extra-food-list {
+  max-height: 16rem;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.extra-food-list .row__hit {
+  width: 100%;
+  text-align: left;
 }
 
 /* A fold whose trigger is the primary action until it opens, at which point it

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  addCustomFood,
   holdCurrentWeek,
   logWater,
   moveLongRunTo,
@@ -10,6 +9,7 @@ import {
   toggleMeal,
   toggleSupplement,
 } from "@/app/actions";
+import { AddExtraFood, type ExtraFoodOption } from "@/components/AddExtraFood";
 import { Check } from "@/components/Check";
 import { Icon } from "@/components/Icon";
 import { MacroBars } from "@/components/MacroBars";
@@ -21,6 +21,7 @@ import { WaterCard } from "@/components/WaterCard";
 import { dayOfWeek, startOfWeek } from "@/lib/date";
 import {
   candidatesFor,
+  MEAL_SLOTS,
   parseAllergies,
   SLOT_LABEL,
   type Diet,
@@ -30,6 +31,34 @@ import { isRun, type Phase, type WorkoutType } from "@/lib/plan/types";
 import type { DayBundle } from "@/lib/store";
 
 const DOW_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+const CATALOG_SLOTS: Slot[] = [
+  ...MEAL_SLOTS,
+  "fuel_pre",
+  "fuel_during",
+  "fuel_post",
+];
+
+function extraFoodCatalog(diet: Diet, allergies: ReturnType<typeof parseAllergies>): ExtraFoodOption[] {
+  const seen = new Set<string>();
+  const out: ExtraFoodOption[] = [];
+  for (const slot of CATALOG_SLOTS) {
+    for (const recipe of candidatesFor(slot, diet, allergies)) {
+      if (seen.has(recipe.id)) continue;
+      seen.add(recipe.id);
+      out.push({
+        id: recipe.id,
+        name: recipe.name,
+        slot: recipe.slot,
+        calories: recipe.calories,
+        protein: recipe.protein,
+        carbs: recipe.carbs,
+        fat: recipe.fat,
+      });
+    }
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
 
 export function DayView({
   bundle,
@@ -48,6 +77,7 @@ export function DayView({
   const weekStart = startOfWeek(date);
   const caloriePct = targets.calories > 0 ? (consumed.calories / targets.calories) * 100 : 0;
   const mealsEaten = meals.filter((meal) => meal.eaten === 1).length;
+  const foodCatalog = extraFoodCatalog(diet, allergies);
 
   return (
     <>
@@ -278,36 +308,7 @@ export function DayView({
             </div>
 
             <hr className="card__divide" />
-            <details className="fold">
-              <summary>Add something you ate</summary>
-              <div className="fold__body">
-                <form action={addCustomFood} className="stack">
-                  <input type="hidden" name="date" value={date} />
-                  <input name="name" placeholder="Taco from Veracruz" required />
-                  <div className="grid4">
-                    <label className="field">
-                      <span className="field__label">kcal</span>
-                      <input name="calories" type="number" min="0" inputMode="numeric" />
-                    </label>
-                    <label className="field">
-                      <span className="field__label">P</span>
-                      <input name="protein" type="number" min="0" inputMode="numeric" />
-                    </label>
-                    <label className="field">
-                      <span className="field__label">C</span>
-                      <input name="carbs" type="number" min="0" inputMode="numeric" />
-                    </label>
-                    <label className="field">
-                      <span className="field__label">F</span>
-                      <input name="fat" type="number" min="0" inputMode="numeric" />
-                    </label>
-                  </div>
-                  <button className="btn btn--ghost btn--sm btn--block" type="submit">
-                    Add
-                  </button>
-                </form>
-              </div>
-            </details>
+            <AddExtraFood date={date} catalog={foodCatalog} />
           </div>
 
           <WaterCard

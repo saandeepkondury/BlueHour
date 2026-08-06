@@ -198,30 +198,30 @@ export default async function FuelWeekPage({
             ) : null}
           </div>
 
-          <div className="bento bento--3" style={{ marginTop: "0.85rem" }}>
+          <div className="bento bento--3 bento--macros" style={{ marginTop: "0.85rem" }}>
             <div className="tile tile--sunk">
               <p className="tile__label">
                 <Icon name="flame" size={13} />
                 Avg day
               </p>
-              <p className="tile__value">
-                {avgDay}
-                <small>/ {avgTargetCalories}</small>
-              </p>
+              <p className="tile__value">{avgDay}</p>
+              <p className="tile__foot">of {avgTargetCalories}</p>
             </div>
             <div className="tile tile--sunk">
               <p className="tile__label">Protein</p>
               <p className="tile__value">
                 {avgProtein}
-                <small>/ {avgTargetProtein}g</small>
+                <small>g</small>
               </p>
+              <p className="tile__foot">of {avgTargetProtein}g</p>
             </div>
             <div className="tile tile--sunk">
               <p className="tile__label">Carbs</p>
               <p className="tile__value tile__value--accent">
                 {avgCarbs}
-                <small>/ {avgTargetCarbs}g</small>
+                <small>g</small>
               </p>
+              <p className="tile__foot">of {avgTargetCarbs}g</p>
             </div>
           </div>
 
