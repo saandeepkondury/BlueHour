@@ -3,13 +3,15 @@ import { AppBar } from "@/components/AppBar";
 import { Icon, type IconName } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Ring } from "@/components/Ring";
+import { SessionCard } from "@/components/SessionCard";
 import { Shell } from "@/components/Shell";
+import { StrengthCard } from "@/components/StrengthCard";
 import { formatRange, formatShort, startOfWeek, todayISO, weekdayShort } from "@/lib/date";
 import { formatMiles } from "@/lib/format";
 import { pendingCount } from "@/lib/coach/store";
 import { PHASE_LABEL, TYPE_LABEL, type Phase, type WorkoutType } from "@/lib/plan/types";
 import { getAllWorkoutLogs, getAllWorkouts } from "@/lib/store";
-import { parseBlocks } from "@/lib/strength/exercises";
+import { checkedExercises, strengthLogFor } from "@/lib/strength/log";
 import { strengthBetween } from "@/lib/strength/plan";
 import type { StrengthSession, Workout } from "@/drizzle/schema";
 
@@ -24,12 +26,6 @@ const TYPE_ICON: Record<WorkoutType, IconName> = {
   cross: "cross",
   shakeout: "run",
   race: "flag",
-};
-
-const FOCUS_LABEL: Record<string, string> = {
-  full: "Strength",
-  core: "Abs",
-  mobility: "Mobility",
 };
 
 interface WeekGroup {
@@ -128,14 +124,12 @@ export default async function PlanPage({
         : (active.days[0]?.date ?? today);
 
   const selectedDay = active.days.find((day) => day.date === selectedDate);
-  const selectedStrength = strengthByDate.get(selectedDate);
+  const selectedStrength = strengthByDate.get(selectedDate) ?? null;
   const selectedLog = loggedByDate.get(selectedDate);
-  const selectedType = (selectedDay?.type ?? "rest") as WorkoutType;
-  const selectedBlocks = selectedStrength ? parseBlocks(selectedStrength.blocks) : [];
-  const selectedExerciseCount = selectedBlocks.reduce(
-    (sum, block) => sum + block.exercises.length,
-    0,
-  );
+
+  const [strengthDone, strengthLog] = selectedDay
+    ? await Promise.all([checkedExercises(selectedDate), strengthLogFor(selectedDate)])
+    : [new Set<string>(), null];
 
   const previous = weeks[index - 1];
   const next = weeks[index + 1];
@@ -271,105 +265,34 @@ export default async function PlanPage({
 
         {selectedDay ? (
           <section className="block block--tight">
-            <div className="card">
-              <div className="row-between" style={{ marginBottom: "0.35rem" }}>
-                <div>
-                  <p className="label">
-                    {weekdayShort(selectedDate)} {formatShort(selectedDate)}
-                    {selectedDate === today ? " · today" : ""}
-                  </p>
-                  <p className="tile__value" style={{ marginTop: "0.25rem" }}>
-                    {dayTitle(selectedDay, selectedStrength)}
-                  </p>
-                </div>
-                <Link className="btn btn--ghost btn--sm" href={dayHref} prefetch={false}>
-                  Open day
-                  <Icon name="chevron" size={15} />
-                </Link>
-              </div>
-
-              <div className="btnrow" style={{ gap: "0.35rem", marginBottom: "0.75rem" }}>
-                <span
-                  className={`pill${selectedDay.status === "done" ? " pill--good" : selectedDay.status === "skipped" ? " pill--warn" : " pill--accent"}`}
-                >
-                  {TYPE_LABEL[selectedType]}
-                </span>
-                {selectedDay.status === "done" ? (
-                  <span className="pill pill--good">Done</span>
-                ) : null}
-                {selectedDay.status === "skipped" ? (
-                  <span className="pill pill--warn">Skipped</span>
-                ) : null}
-                {selectedStrength ? (
-                  <span className="pill">
-                    {FOCUS_LABEL[selectedStrength.focus] ?? "Strength"} · {selectedStrength.minutes}
-                    m
-                  </span>
-                ) : null}
-              </div>
-
-              {(selectedDay.distanceMi > 0 ||
-                selectedDay.durationMin ||
-                selectedLog ||
-                selectedExerciseCount > 0) && (
-                <div className="stats" style={{ marginBottom: "0.75rem" }}>
-                  {selectedDay.distanceMi > 0 || selectedLog ? (
-                    <div>
-                      <p className="stat__value">
-                        {formatMiles(selectedLog?.distanceMi ?? selectedDay.distanceMi)}
-                      </p>
-                      <p className="stat__label">{selectedLog ? "Logged mi" : "Target mi"}</p>
-                    </div>
-                  ) : null}
-                  {selectedDay.durationMin ? (
-                    <div>
-                      <p className="stat__value">{selectedDay.durationMin}</p>
-                      <p className="stat__label">Minutes</p>
-                    </div>
-                  ) : null}
-                  {selectedExerciseCount > 0 ? (
-                    <div>
-                      <p className="stat__value">{selectedExerciseCount}</p>
-                      <p className="stat__label">Moves</p>
-                    </div>
-                  ) : null}
-                </div>
-              )}
-
-              {selectedDay.purpose ? (
-                <p className="small sub" style={{ marginBottom: "0.5rem" }}>
-                  {selectedDay.purpose}
+            <div className="row-between" style={{ marginBottom: "0.75rem" }}>
+              <div>
+                <p className="label">
+                  {weekdayShort(selectedDate)} {formatShort(selectedDate)}
+                  {selectedDate === today ? " · today" : ""}
                 </p>
-              ) : null}
-              {selectedDay.tip ? (
-                <p className="small muted" style={{ marginBottom: "0.75rem" }}>
-                  {selectedDay.tip}
+                <p className="tile__value" style={{ marginTop: "0.25rem" }}>
+                  {dayTitle(selectedDay, selectedStrength ?? undefined)}
                 </p>
-              ) : null}
+              </div>
+              <Link className="btn btn--ghost btn--sm" href={dayHref} prefetch={false}>
+                Open day
+                <Icon name="chevron" size={15} />
+              </Link>
+            </div>
 
-              {selectedStrength && selectedBlocks.length > 0 ? (
-                <>
-                  <hr className="card__divide" />
-                  <p className="label" style={{ marginBottom: "0.35rem" }}>
-                    {selectedStrength.title}
-                  </p>
-                  <div className="rows">
-                    {selectedBlocks.flatMap((block) =>
-                      block.exercises.map((exercise) => (
-                        <div className="row" key={exercise.id}>
-                          <span className="row__body">
-                            <span className="row__title">{exercise.name}</span>
-                            <span className="row__sub row__sub--wrap">
-                              {block.name}
-                              {exercise.cue ? ` · ${exercise.cue}` : ""}
-                            </span>
-                          </span>
-                          <span className="row__meta">{exercise.prescription}</span>
-                        </div>
-                      )),
-                    )}
-                  </div>
-                </>
+            <div className="stack">
+              <SessionCard
+                workout={selectedDay}
+                log={selectedLog}
+                hasStrength={selectedStrength !== null}
+              />
+              {selectedStrength ? (
+                <StrengthCard
+                  session={selectedStrength}
+                  done={strengthDone}
+                  log={strengthLog}
+                />
               ) : null}
             </div>
           </section>
