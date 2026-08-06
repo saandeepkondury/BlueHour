@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { Ring } from "@/components/Ring";
-import type { Recovery } from "@/lib/health/read";
+import { formatShort, todayISO } from "@/lib/date";
+import { hasVitals, type Recovery } from "@/lib/health/read";
 
 function hoursMinutes(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -14,47 +15,82 @@ function hoursMinutes(minutes: number): string {
  * the plan — the coach proposes, you decide.
  */
 export function ReadinessCard({ recovery }: { recovery: Recovery }) {
-  const { day, score, label, baselineRestingHr, advisory } = recovery;
+  const { day, score, label, baselineRestingHr, advisory, vitalsDate, lastSyncAt } = recovery;
+  const today = todayISO();
+  const stale = Boolean(vitalsDate && vitalsDate !== today);
 
-  if (!day || score === null) {
+  if (!hasVitals(day)) {
     return (
       <Link className="banner cardlink" href="/settings/watch">
         <span className="row__lead row__lead--accent">
           <Icon name="watch" size={18} />
         </span>
         <span className="banner__body">
-          <span className="banner__title">Connect your Watch</span>
-          <span className="banner__sub">Sleep, HRV and runs land here on their own.</span>
+          {lastSyncAt ? (
+            <>
+              <span className="banner__title">Waiting on today&apos;s sleep &amp; rest HR</span>
+              <span className="banner__sub">
+                Watch is connected — sync again once this morning&apos;s readings land, or log them
+                by hand.
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="banner__title">Connect your Watch</span>
+              <span className="banner__sub">Sleep, HRV and runs land here on their own.</span>
+            </>
+          )}
         </span>
         <Icon name="chevron" size={16} />
       </Link>
     );
   }
 
-  const tone = score >= 75 ? "good" : score >= 55 ? "accent" : "bad";
+  const tone =
+    score === null ? "accent" : score >= 75 ? "good" : score >= 55 ? "accent" : "bad";
   const restingDelta =
-    baselineRestingHr !== null && day.restingHr !== null ? day.restingHr - baselineRestingHr : null;
+    baselineRestingHr !== null && day!.restingHr !== null
+      ? day!.restingHr - baselineRestingHr
+      : null;
 
   return (
     <div className="stack">
       <div className="card">
         <div className="row-between">
           <div>
-            <p className="label">Readiness</p>
+            <p className="label">{stale ? `Readiness · ${formatShort(vitalsDate!)}` : "Readiness"}</p>
             <p className="card__title" style={{ marginTop: "0.3rem" }}>
-              {label === "ready" ? "Green light" : label === "steady" ? "Steady" : "Hold back"}
+              {score === null
+                ? "Vitals in"
+                : label === "ready"
+                  ? "Green light"
+                  : label === "steady"
+                    ? "Steady"
+                    : "Hold back"}
             </p>
-            {advisory ? <p className="card__sub">{advisory}</p> : null}
+            {stale ? (
+              <p className="card__sub">
+                Latest Watch reading — today&apos;s sleep and rest HR have not landed yet.
+              </p>
+            ) : advisory ? (
+              <p className="card__sub">{advisory}</p>
+            ) : null}
           </div>
-          <Ring
-            pct={score}
-            tone={tone}
-            size={72}
-            thickness={7}
-            value={score}
-            caption="score"
-            label={`Readiness ${score} of 100`}
-          />
+          {score !== null ? (
+            <Ring
+              pct={score}
+              tone={tone}
+              size={72}
+              thickness={7}
+              value={score}
+              caption="score"
+              label={`Readiness ${score} of 100`}
+            />
+          ) : (
+            <span className="row__lead row__lead--accent">
+              <Icon name="watch" size={19} />
+            </span>
+          )}
         </div>
       </div>
 
@@ -65,7 +101,7 @@ export function ReadinessCard({ recovery }: { recovery: Recovery }) {
             Sleep
           </p>
           <p className="tile__value">
-            {day.asleepMin !== null ? hoursMinutes(day.asleepMin) : "—"}
+            {day!.asleepMin !== null ? hoursMinutes(day!.asleepMin) : "—"}
           </p>
         </div>
         <div className="tile tile--sunk">
@@ -74,8 +110,8 @@ export function ReadinessCard({ recovery }: { recovery: Recovery }) {
             Rest HR
           </p>
           <p className="tile__value">
-            {day.restingHr ?? "—"}
-            {day.restingHr !== null ? <small>bpm</small> : null}
+            {day!.restingHr ?? "—"}
+            {day!.restingHr !== null ? <small>bpm</small> : null}
           </p>
           {restingDelta !== null && restingDelta !== 0 ? (
             <p className="tile__foot">
@@ -90,8 +126,8 @@ export function ReadinessCard({ recovery }: { recovery: Recovery }) {
             HRV
           </p>
           <p className="tile__value">
-            {day.hrvMs !== null ? Math.round(day.hrvMs) : "—"}
-            {day.hrvMs !== null ? <small>ms</small> : null}
+            {day!.hrvMs !== null ? Math.round(day!.hrvMs) : "—"}
+            {day!.hrvMs !== null ? <small>ms</small> : null}
           </p>
         </div>
       </div>

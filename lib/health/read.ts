@@ -1,10 +1,12 @@
-import { and, desc, eq, gte, lt } from "drizzle-orm";
+import { and, desc, eq, gte, lt, lte } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
 import { healthDays, healthSync, workoutLogs, type HealthDay, type WorkoutLog } from "@/drizzle/schema";
 import { addDays } from "@/lib/date";
 
 export interface Recovery {
   day: HealthDay | null;
+  /** Calendar date the displayed vitals belong to (may lag today). */
+  vitalsDate: string | null;
   /** Median resting HR over the prior two weeks, once there is enough history. */
   baselineRestingHr: number | null;
   baselineHrvMs: number | null;
@@ -13,16 +15,25 @@ export interface Recovery {
   /** 0–100, or null until there is something to score. */
   score: number | null;
   label: "ready" | "steady" | "hold back" | null;
+  /** Last successful Health sync, if any. */
+  lastSyncAt: string | null;
 }
 
 const SHORT_SLEEP_MIN = 6 * 60;
 const RHR_ELEVATED_BPM = 5;
 const BASELINE_MIN_SAMPLES = 4;
+/** How far back Today may reach for sleep / rest HR when this morning is empty. */
+const VITALS_FALLBACK_DAYS = 3;
+
+export function hasVitals(day: HealthDay | null | undefined): boolean {
+  if (!day) return false;
+  return day.asleepMin !== null || day.restingHr !== null || day.hrvMs !== null;
+}
 
 export async function recoveryFor(date: string): Promise<Recovery> {
   await ready();
 
-  const [day] = await db.select().from(healthDays).where(eq(healthDays.date, date));
+  const [todayRow] = await db.select().from(healthDays).where(eq(healthDays.date, date));
   const history = await db
     .select()
     .from(healthDays)
@@ -40,15 +51,36 @@ export async function recoveryFor(date: string): Promise<Recovery> {
     .filter((value): value is number => value !== null);
   const baselineHrvMs = hrvSamples.length >= BASELINE_MIN_SAMPLES ? median(hrvSamples) : null;
 
-  const score = scoreFor(day ?? null, baselineRestingHr, baselineHrvMs);
+  let day: HealthDay | null = todayRow ?? null;
+  let vitalsDate: string | null = hasVitals(day) ? date : null;
+
+  if (!vitalsDate) {
+    const recent = await db
+      .select()
+      .from(healthDays)
+      .where(and(gte(healthDays.date, addDays(date, -VITALS_FALLBACK_DAYS)), lte(healthDays.date, date)))
+      .orderBy(desc(healthDays.date));
+    const hit = recent.find((row) => hasVitals(row));
+    if (hit) {
+      day = hit;
+      vitalsDate = hit.date;
+    } else {
+      day = null;
+    }
+  }
+
+  const score = scoreFor(day, baselineRestingHr, baselineHrvMs);
+  const sync = await lastSync();
 
   return {
-    day: day ?? null,
+    day,
+    vitalsDate,
     baselineRestingHr,
     baselineHrvMs,
-    advisory: advisoryFor(day ?? null, baselineRestingHr),
+    advisory: vitalsDate === date ? advisoryFor(day, baselineRestingHr) : null,
     score,
     label: score === null ? null : score >= 75 ? "ready" : score >= 55 ? "steady" : "hold back",
+    lastSyncAt: sync?.at ?? null,
   };
 }
 

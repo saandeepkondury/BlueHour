@@ -159,16 +159,18 @@ struct HealthBridge {
 
         return nights.compactMap { night in
             let asleep = night.filter { Self.isAsleep($0) }
-            guard let first = asleep.map(\.startDate).min(),
-                  let last = asleep.map(\.endDate).max() else { return nil }
+            let inBed = night.filter { Self.isInBed($0) }
 
-            let asleepMin = Self.mergedMinutes(asleep.map { ($0.startDate, $0.endDate) })
+            // Prefer staged/asleep samples. Some phones only write In Bed
+            // (no Watch stages) — count that so Today is not blank.
+            let counted = asleep.isEmpty ? inBed : asleep
+            guard let first = counted.map(\.startDate).min(),
+                  let last = counted.map(\.endDate).max() else { return nil }
+
+            let asleepMin = Self.mergedMinutes(counted.map { ($0.startDate, $0.endDate) })
             guard asleepMin > 0 else { return nil }
 
-            let inBedMin = Self.mergedMinutes(
-                night.filter { $0.value == HKCategoryValueSleepAnalysis.inBed.rawValue }
-                    .map { ($0.startDate, $0.endDate) }
-            )
+            let inBedMin = Self.mergedMinutes(inBed.map { ($0.startDate, $0.endDate) })
 
             return SleepSample(
                 startAt: first,
@@ -180,10 +182,27 @@ struct HealthBridge {
     }
 
     private static func isAsleep(_ sample: HKCategorySample) -> Bool {
-        switch HKCategoryValueSleepAnalysis(rawValue: sample.value) {
-        case .asleepUnspecified, .asleepCore, .asleepDeep, .asleepREM: return true
-        default: return false
+        guard let value = HKCategoryValueSleepAnalysis(rawValue: sample.value) else {
+            // Unknown writers — anything that is not awake/in-bed is sleep.
+            return !isAwake(sample) && !isInBed(sample)
         }
+        switch value {
+        case .asleepUnspecified, .asleepCore, .asleepDeep, .asleepREM:
+            return true
+        case .awake, .inBed:
+            return false
+        @unknown default:
+            // Future Apple sleep stages should count as asleep.
+            return true
+        }
+    }
+
+    private static func isInBed(_ sample: HKCategorySample) -> Bool {
+        sample.value == HKCategoryValueSleepAnalysis.inBed.rawValue
+    }
+
+    private static func isAwake(_ sample: HKCategorySample) -> Bool {
+        sample.value == HKCategoryValueSleepAnalysis.awake.rawValue
     }
 
     /// The Watch and iPhone both write sleep, so overlapping ranges are merged
