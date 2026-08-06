@@ -17,6 +17,15 @@ const TYPE_ICON: Record<WorkoutType, IconName> = {
 
 const FEELINGS = ["strong", "steady", "flat", "rough"];
 
+function logCaption(log: WorkoutLog, runDay: boolean, done: boolean): string | null {
+  if (done && runDay) return null;
+  if (log.source === "healthkit") {
+    return runDay ? "From Apple Health" : "From Apple Health · outside the plan";
+  }
+  if (!runDay) return "Logged · outside the plan";
+  return "Logged";
+}
+
 export function SessionCard({
   workout,
   log,
@@ -31,6 +40,8 @@ export function SessionCard({
   const date = workout.date;
   const done = workout.status === "done";
   const skipped = workout.status === "skipped";
+  const hasLog = Boolean(log && (log.distanceMi > 0 || (log.durationSec ?? 0) > 0));
+  const caption = log && hasLog ? logCaption(log, runDay, done) : null;
 
   return (
     <div className="card card--pad-lg">
@@ -44,19 +55,29 @@ export function SessionCard({
             </span>
             {done ? <span className="pill pill--good">Done</span> : null}
             {skipped ? <span className="pill pill--warn">Skipped</span> : null}
+            {!done && !skipped && hasLog ? (
+              <span className="pill pill--good">Workout logged</span>
+            ) : null}
           </div>
           <h2 className="card__title" style={{ marginTop: "0.5rem" }}>
             {type === "race" ? "Austin Half Marathon" : workout.title}
           </h2>
         </div>
-        <span className={`row__lead${done ? " row__lead--good" : " row__lead--accent"}`}>
-          <Icon name={TYPE_ICON[type]} size={19} />
+        <span
+          className={`row__lead${done || hasLog ? " row__lead--good" : " row__lead--accent"}`}
+        >
+          <Icon name={hasLog && !runDay ? "run" : TYPE_ICON[type]} size={19} />
         </span>
       </div>
 
-      {done && log ? (
+      {hasLog && log ? (
         <>
           <hr className="card__divide" />
+          {caption ? (
+            <p className="label" style={{ marginBottom: "0.45rem" }}>
+              {caption}
+            </p>
+          ) : null}
           <div className="stats">
             <div>
               <p className="stat__value">{formatMiles(log.distanceMi)}</p>
@@ -81,7 +102,7 @@ export function SessionCard({
         </>
       ) : null}
 
-      {!done && !skipped && (workout.distanceMi > 0 || workout.durationMin) ? (
+      {!done && !skipped && !hasLog && (workout.distanceMi > 0 || workout.durationMin) ? (
         <>
           <hr className="card__divide" />
           <div className="stats">
@@ -141,7 +162,7 @@ export function SessionCard({
                       step="any"
                       min="0"
                       inputMode="decimal"
-                      defaultValue={workout.distanceMi || ""}
+                      defaultValue={log?.distanceMi || workout.distanceMi || ""}
                     />
                   </label>
                   <label className="field">
@@ -151,7 +172,16 @@ export function SessionCard({
                       type="number"
                       min="0"
                       inputMode="numeric"
-                      placeholder={workout.durationMin ? String(workout.durationMin) : "0"}
+                      placeholder={
+                        log?.durationSec
+                          ? String(Math.floor(log.durationSec / 60))
+                          : workout.durationMin
+                            ? String(workout.durationMin)
+                            : "0"
+                      }
+                      defaultValue={
+                        log?.durationSec ? String(Math.floor(log.durationSec / 60)) : undefined
+                      }
                     />
                   </label>
                   <label className="field">
@@ -163,6 +193,9 @@ export function SessionCard({
                       max="59"
                       inputMode="numeric"
                       placeholder="00"
+                      defaultValue={
+                        log?.durationSec ? String(log.durationSec % 60) : undefined
+                      }
                     />
                   </label>
                 </div>
