@@ -5,9 +5,12 @@ import { formatQty } from "@/lib/nutrition/grocery";
 export function GroceryLineRow({
   item,
   action,
+  status,
 }: {
   item: GroceryLine;
   action: React.ReactNode;
+  /** Optional status line (e.g. on a recipe page) instead of dish list. */
+  status?: string;
 }) {
   return (
     <div className="grocery-line">
@@ -16,7 +19,9 @@ export function GroceryLineRow({
           <span className="grocery-line__name">{item.item}</span>
           <span className="grocery-line__qty">{formatQty(item)}</span>
         </div>
-        {item.dishes.length > 0 ? (
+        {status ? (
+          <p className="grocery-line__for">{status}</p>
+        ) : item.dishes.length > 0 ? (
           <div className="grocery-line__dishes">
             <p className="grocery-line__for">
               {item.dishes.length === 1 ? "For" : `For ${item.dishes.length} meals`}

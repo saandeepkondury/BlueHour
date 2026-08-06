@@ -113,6 +113,68 @@ export function formatQty(item: Pick<GroceryItem, "qty" | "unit">): string {
   return `${qty} ${item.unit}`;
 }
 
+/** Grocery lines for one recipe — same shape as the week shopping list. */
+export function groceryLinesForRecipe(recipe: Recipe): GroceryLine[] {
+  return recipe.ingredients.map((ingredient) => ({
+    key: ingredientKey(ingredient),
+    item: ingredient.item,
+    qty: ingredient.qty,
+    unit: ingredient.unit,
+    aisle: ingredient.aisle,
+    dishes: [recipe.name],
+  }));
+}
+
+/** Look up catalog ingredients by key (for shopping checks outside this week's plan). */
+export function groceryLinesForKeys(keys: Iterable<string>): GroceryLine[] {
+  const wanted = new Set(keys);
+  if (wanted.size === 0) return [];
+
+  const found = new Map<string, GroceryLine>();
+  for (const recipe of RECIPES) {
+    for (const ingredient of recipe.ingredients) {
+      const key = ingredientKey(ingredient);
+      if (!wanted.has(key)) continue;
+      const existing = found.get(key);
+      if (existing) {
+        if (!existing.dishes.includes(recipe.name)) existing.dishes.push(recipe.name);
+      } else {
+        found.set(key, {
+          key,
+          item: ingredient.item,
+          qty: ingredient.qty,
+          unit: ingredient.unit,
+          aisle: ingredient.aisle,
+          dishes: [recipe.name],
+        });
+      }
+    }
+  }
+
+  return [...found.values()]
+    .map((item) => ({
+      ...item,
+      dishes: [...item.dishes].sort((a, b) => a.localeCompare(b)),
+    }))
+    .sort((a, b) => a.item.localeCompare(b.item));
+}
+
+/**
+ * Week grocery list plus any buy-list keys that aren't from planned meals
+ * (e.g. added from a recipe page).
+ */
+export function mergeGroceryWithBuyList(
+  weekLines: GroceryLine[],
+  onBuyList: Iterable<string>,
+): GroceryLine[] {
+  const byKey = new Map(weekLines.map((line) => [line.key, line]));
+  const missingKeys = [...onBuyList].filter((key) => !byKey.has(key));
+  for (const line of groceryLinesForKeys(missingKeys)) {
+    byKey.set(line.key, line);
+  }
+  return [...byKey.values()];
+}
+
 /** How many of a recipe's ingredients are already at home. */
 export function recipeReadiness(recipe: Recipe, haveKeys: Set<string>): RecipeReadiness {
   const total = recipe.ingredients.length;

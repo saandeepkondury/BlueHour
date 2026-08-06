@@ -263,7 +263,7 @@ export default async function FuelWeekPage({
                       {formatShort(workout.date)}
                       {isToday ? " · today" : ""}
                     </span>
-                    <span className="row__sub">
+                    <span className="row__sub row__sub--wrap">
                       {TYPE_LABEL[workout.type as WorkoutType]}
                       {picked > 0
                         ? ` · ${picked} meal${picked === 1 ? "" : "s"} · ${protein}p / ${carbs}c`

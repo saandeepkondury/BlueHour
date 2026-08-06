@@ -195,6 +195,8 @@ export async function togglePantryItem(formData: FormData): Promise<void> {
   await setPantryHave(itemKey, have);
   revalidatePath("/fuel");
   revalidatePath("/fuel/grocery");
+  revalidatePath("/fuel/recipes");
+  revalidatePath("/recipe", "layout");
 }
 
 export async function addCustomFood(formData: FormData): Promise<void> {
@@ -263,6 +265,8 @@ export async function toggleGroceryItem(formData: FormData): Promise<void> {
   await toggleGroceryCheck(weekStart, itemKey, checked);
   revalidatePath("/fuel/grocery");
   revalidatePath("/fuel");
+  revalidatePath("/fuel/recipes");
+  revalidatePath("/recipe", "layout");
 }
 
 /** Checked off at the store: stock pantry and remove from the buy list. */
@@ -274,6 +278,8 @@ export async function markGroceryBought(formData: FormData): Promise<void> {
   await toggleGroceryCheck(weekStart, itemKey, false);
   revalidatePath("/fuel/grocery");
   revalidatePath("/fuel");
+  revalidatePath("/fuel/recipes");
+  revalidatePath("/recipe", "layout");
 }
 
 export async function clearGrocery(formData: FormData): Promise<void> {

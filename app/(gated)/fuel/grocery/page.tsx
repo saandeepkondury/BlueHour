@@ -4,7 +4,10 @@ import { GroceryLineRow } from "@/components/GroceryLineRow";
 import { Icon } from "@/components/Icon";
 import { Ring } from "@/components/Ring";
 import { addDays, formatRange, startOfWeek, todayISO } from "@/lib/date";
-import { buildGroceryListDetailed } from "@/lib/nutrition/grocery";
+import {
+  buildGroceryListDetailed,
+  mergeGroceryWithBuyList,
+} from "@/lib/nutrition/grocery";
 import {
   ensureWeekMeals,
   getGroceryChecks,
@@ -29,8 +32,8 @@ export default async function GroceryPage({
     getGroceryChecks(weekStart),
     getPantryHaveKeys(),
   ]);
-  const aisles = buildGroceryListDetailed(recipeIds);
-  const allItems = aisles.flatMap((aisle) => aisle.items);
+  const weekItems = buildGroceryListDetailed(recipeIds).flatMap((aisle) => aisle.items);
+  const allItems = mergeGroceryWithBuyList(weekItems, onBuyList);
 
   const atHome = allItems.filter((item) => pantry.has(item.key));
   const missing = allItems.filter(

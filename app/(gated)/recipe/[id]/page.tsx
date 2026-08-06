@@ -1,13 +1,23 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { addRecipeToDay } from "@/app/actions";
+import type { ReactNode } from "react";
+import {
+  addRecipeToDay,
+  markGroceryBought,
+  toggleGroceryItem,
+  togglePantryItem,
+} from "@/app/actions";
 import { AppBar } from "@/components/AppBar";
+import { GroceryLineRow } from "@/components/GroceryLineRow";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { addDays, formatShort, startOfWeek, todayISO, weekdayShort } from "@/lib/date";
-import { formatQty, ingredientKey, recipeReadiness } from "@/lib/nutrition/grocery";
+import {
+  groceryLinesForRecipe,
+  recipeReadiness,
+} from "@/lib/nutrition/grocery";
 import { recipeById, SLOT_LABEL, type Slot } from "@/lib/nutrition/recipes";
-import { getPantryHaveKeys } from "@/lib/store";
+import { getGroceryChecks, getPantryHaveKeys } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
@@ -35,9 +45,13 @@ export default async function RecipePage({
   const slot = (slotParam as Slot | undefined) || recipe.slot;
   const back = `/fuel?w=${weekStart}&d=${defaultDate}`;
 
-  const haveKeys = await getPantryHaveKeys();
+  const [haveKeys, onBuyList] = await Promise.all([
+    getPantryHaveKeys(),
+    getGroceryChecks(weekStart),
+  ]);
   const ready = recipeReadiness(recipe, haveKeys);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const ingredientLines = groceryLinesForRecipe(recipe);
 
   return (
     <>
@@ -128,19 +142,63 @@ export default async function RecipePage({
               <p className="label" style={{ marginBottom: "0.15rem" }}>
                 Ingredients
               </p>
-              <div className="rows">
-                {recipe.ingredients.map((ingredient) => {
-                  const atHome = haveKeys.has(ingredientKey(ingredient));
+              <p className="small sub" style={{ marginBottom: "0.5rem" }}>
+                Add missing items to this week&apos;s shopping list, or mark Bought / Missing.
+              </p>
+              <div className="grocery-lines">
+                {ingredientLines.map((item) => {
+                  const atHome = haveKeys.has(item.key);
+                  const onList = onBuyList.has(item.key);
+
+                  let status: string;
+                  let action: ReactNode;
+                  if (atHome) {
+                    status = "At home";
+                    action = (
+                      <form action={togglePantryItem}>
+                        <input type="hidden" name="itemKey" value={item.key} />
+                        <input type="hidden" name="have" value="0" />
+                        <button
+                          className="btn btn--quiet btn--sm nowrap"
+                          type="submit"
+                          aria-label={`Mark ${item.item} as missing`}
+                        >
+                          Missing
+                        </button>
+                      </form>
+                    );
+                  } else if (onList) {
+                    status = "On shopping list";
+                    action = (
+                      <form action={markGroceryBought}>
+                        <input type="hidden" name="weekStart" value={weekStart} />
+                        <input type="hidden" name="itemKey" value={item.key} />
+                        <button className="btn btn--primary btn--sm nowrap" type="submit">
+                          Bought
+                        </button>
+                      </form>
+                    );
+                  } else {
+                    status = "Missing at home";
+                    action = (
+                      <form action={toggleGroceryItem}>
+                        <input type="hidden" name="weekStart" value={weekStart} />
+                        <input type="hidden" name="itemKey" value={item.key} />
+                        <input type="hidden" name="checked" value="1" />
+                        <button className="btn btn--ghost btn--sm nowrap" type="submit">
+                          Add
+                        </button>
+                      </form>
+                    );
+                  }
+
                   return (
-                    <div className={atHome ? "row row--done" : "row"} key={ingredient.item}>
-                      <span className="row__body">
-                        <span className="row__title">{ingredient.item}</span>
-                        <span className="row__sub">{atHome ? "At home" : "Need"}</span>
-                      </span>
-                      <span className="row__meta">
-                        {formatQty(ingredient)}
-                      </span>
-                    </div>
+                    <GroceryLineRow
+                      key={item.key}
+                      item={item}
+                      status={status}
+                      action={action}
+                    />
                   );
                 })}
               </div>
