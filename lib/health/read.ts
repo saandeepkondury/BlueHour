@@ -186,3 +186,157 @@ export function meanOf(values: number[]): number | null {
   if (values.length === 0) return null;
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
+
+/** Sleep history with stage / sleep-HR rollups for the Sleep page. */
+export interface SleepSummary {
+  history: HealthDay[];
+  today: HealthDay | null;
+  todayMin: number | null;
+  weekAvgMin: number | null;
+  daysLogged: number;
+  avgSleepHr: number | null;
+  avgRemMin: number | null;
+  avgCoreMin: number | null;
+  avgDeepMin: number | null;
+}
+
+export async function getSleepSummary(): Promise<SleepSummary> {
+  const history = await getVitalsHistory("sleep");
+  const today = todayISO();
+  const todayRow = history.find((row) => row.date === today) ?? null;
+  const weekFrom = addDays(today, -6);
+  const weekRows = history.filter((row) => row.date >= weekFrom);
+
+  return {
+    history,
+    today: todayRow,
+    todayMin: todayRow?.asleepMin ?? null,
+    weekAvgMin: meanOf(weekRows.map((row) => row.asleepMin).filter((v): v is number => v !== null)),
+    daysLogged: history.length,
+    avgSleepHr: meanOf(
+      history.map((row) => row.sleepHr).filter((v): v is number => v !== null && v > 0),
+    ),
+    avgRemMin: meanOf(
+      history.map((row) => row.remMin).filter((v): v is number => v !== null && v > 0),
+    ),
+    avgCoreMin: meanOf(
+      history.map((row) => row.coreMin).filter((v): v is number => v !== null && v > 0),
+    ),
+    avgDeepMin: meanOf(
+      history.map((row) => row.deepMin).filter((v): v is number => v !== null && v > 0),
+    ),
+  };
+}
+
+/** Resting HR history with walking / sleep / daytime range rollups. */
+export interface RestHrSummary {
+  history: HealthDay[];
+  today: HealthDay | null;
+  todayHr: number | null;
+  weekAvg: number | null;
+  daysLogged: number;
+  baseline: number | null;
+  avgSleepHr: number | null;
+  avgWalkingHr: number | null;
+  avgHrMin: number | null;
+  avgHrMax: number | null;
+}
+
+export async function getRestHrSummary(): Promise<RestHrSummary> {
+  const history = await getVitalsHistory("rest_hr");
+  const today = todayISO();
+  const todayRow = history.find((row) => row.date === today) ?? null;
+  const weekFrom = addDays(today, -6);
+  const weekRows = history.filter((row) => row.date >= weekFrom);
+
+  // Two-week baseline excludes today so "vs normal" matches readiness.
+  const baselineRows = history.filter(
+    (row) => row.date >= addDays(today, -14) && row.date < today && row.restingHr !== null,
+  );
+  const baselineSamples = baselineRows
+    .map((row) => row.restingHr)
+    .filter((v): v is number => v !== null);
+  const baseline =
+    baselineSamples.length >= 4
+      ? [...baselineSamples].sort((a, b) => a - b)[
+          Math.floor(baselineSamples.length / 2)
+        ]
+      : null;
+
+  return {
+    history,
+    today: todayRow,
+    todayHr: todayRow?.restingHr ?? null,
+    weekAvg: meanOf(weekRows.map((row) => row.restingHr).filter((v): v is number => v !== null)),
+    daysLogged: history.length,
+    baseline,
+    avgSleepHr: meanOf(
+      history.map((row) => row.sleepHr).filter((v): v is number => v !== null && v > 0),
+    ),
+    avgWalkingHr: meanOf(
+      history.map((row) => row.walkingHr).filter((v): v is number => v !== null && v > 0),
+    ),
+    avgHrMin: meanOf(
+      history.map((row) => row.hrMin).filter((v): v is number => v !== null && v > 0),
+    ),
+    avgHrMax: meanOf(
+      history.map((row) => row.hrMax).filter((v): v is number => v !== null && v > 0),
+    ),
+  };
+}
+
+/** HRV history with daily range / sample-count rollups. */
+export interface HrvSummary {
+  history: HealthDay[];
+  today: HealthDay | null;
+  todayMs: number | null;
+  weekAvg: number | null;
+  daysLogged: number;
+  baseline: number | null;
+  avgHrvMin: number | null;
+  avgHrvMax: number | null;
+  avgHrvCount: number | null;
+  avgRestingHr: number | null;
+}
+
+export async function getHrvSummary(): Promise<HrvSummary> {
+  const history = await getVitalsHistory("hrv");
+  const today = todayISO();
+  const todayRow = history.find((row) => row.date === today) ?? null;
+  const weekFrom = addDays(today, -6);
+  const weekRows = history.filter((row) => row.date >= weekFrom);
+
+  const baselineSamples = history
+    .filter((row) => row.date >= addDays(today, -14) && row.date < today && row.hrvMs !== null)
+    .map((row) => row.hrvMs)
+    .filter((v): v is number => v !== null);
+  const baseline =
+    baselineSamples.length >= 4
+      ? [...baselineSamples].sort((a, b) => a - b)[Math.floor(baselineSamples.length / 2)]
+      : null;
+
+  return {
+    history,
+    today: todayRow,
+    todayMs: todayRow?.hrvMs === null || todayRow?.hrvMs === undefined ? null : Math.round(todayRow.hrvMs),
+    weekAvg: meanOf(
+      weekRows
+        .map((row) => (row.hrvMs === null ? null : Math.round(row.hrvMs)))
+        .filter((v): v is number => v !== null),
+    ),
+    daysLogged: history.length,
+    baseline: baseline === null ? null : Math.round(baseline),
+    avgHrvMin: meanOf(
+      history.map((row) => row.hrvMin).filter((v): v is number => v !== null && v > 0),
+    ),
+    avgHrvMax: meanOf(
+      history.map((row) => row.hrvMax).filter((v): v is number => v !== null && v > 0),
+    ),
+    avgHrvCount: meanOf(
+      history.map((row) => row.hrvCount).filter((v): v is number => v !== null && v > 0),
+    ),
+    avgRestingHr: meanOf(
+      history.map((row) => row.restingHr).filter((v): v is number => v !== null && v > 0),
+    ),
+  };
+}

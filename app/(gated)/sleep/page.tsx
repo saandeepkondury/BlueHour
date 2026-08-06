@@ -1,7 +1,7 @@
-import { VitalsTrackerPage } from "@/components/VitalsTrackerPage";
+import { SleepTrackerPage } from "@/components/SleepTrackerPage";
 
 export const dynamic = "force-dynamic";
 
 export default function SleepPage() {
-  return <VitalsTrackerPage metric="sleep" />;
+  return <SleepTrackerPage />;
 }

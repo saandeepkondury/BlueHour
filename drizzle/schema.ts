@@ -66,7 +66,8 @@ export const workoutLogs = sqliteTable("workout_logs", {
 
 /**
  * One row per morning. Sleep is keyed by the day you woke up, so "last night's
- * sleep" on Today is simply the row for today's date.
+ * sleep" on Today is simply the row for today's date. All sleep blocks that end
+ * that morning (night + naps) are summed into the minute fields.
  */
 export const healthDays = sqliteTable("health_days", {
   date: text("date").primaryKey(),
@@ -74,8 +75,24 @@ export const healthDays = sqliteTable("health_days", {
   sleepEnd: text("sleep_end"),
   asleepMin: integer("asleep_min"),
   inBedMin: integer("in_bed_min"),
+  /** Staged minutes from Apple Sleep (REM / Core / Deep). */
+  remMin: integer("rem_min"),
+  coreMin: integer("core_min"),
+  deepMin: integer("deep_min"),
+  /** Average heart rate across asleep windows that day. */
+  sleepHr: integer("sleep_hr"),
   restingHr: integer("resting_hr"),
+  /** Apple's walking heart-rate average for the day. */
+  walkingHr: integer("walking_hr"),
+  /** Daytime continuous heart-rate range from the Watch. */
+  hrMin: integer("hr_min"),
+  hrAvg: integer("hr_avg"),
+  hrMax: integer("hr_max"),
   hrvMs: real("hrv_ms"),
+  /** Day's HRV (SDNN) range across Watch readings. */
+  hrvMin: real("hrv_min"),
+  hrvMax: real("hrv_max"),
+  hrvCount: integer("hrv_count"),
   steps: integer("steps"),
   activeKcal: integer("active_kcal"),
   /** Body composition, from the Watch/scale or typed in by hand. */

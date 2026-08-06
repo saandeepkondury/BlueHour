@@ -1,7 +1,7 @@
-import { VitalsTrackerPage } from "@/components/VitalsTrackerPage";
+import { RestHrTrackerPage } from "@/components/RestHrTrackerPage";
 
 export const dynamic = "force-dynamic";
 
 export default function RestHrPage() {
-  return <VitalsTrackerPage metric="rest_hr" />;
+  return <RestHrTrackerPage />;
 }

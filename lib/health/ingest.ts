@@ -14,12 +14,20 @@ export interface SleepInput {
   endAt: string;
   asleepMin: number;
   inBedMin?: number | null;
+  remMin?: number | null;
+  coreMin?: number | null;
+  deepMin?: number | null;
+  avgHr?: number | null;
 }
 
 export interface VitalInput {
   at: string;
   restingHr?: number | null;
   hrvMs?: number | null;
+  walkingHr?: number | null;
+  hrMin?: number | null;
+  hrAvg?: number | null;
+  hrMax?: number | null;
 }
 
 /**
@@ -165,6 +173,10 @@ export function parsePayload(raw: unknown): HealthPayload {
       endAt: asTimestamp(s.endAt, `sleep[${i}].endAt`),
       asleepMin: Math.round(asNumber(s.asleepMin, `sleep[${i}].asleepMin`)),
       inBedMin: optionalRounded(s.inBedMin, `sleep[${i}].inBedMin`),
+      remMin: optionalRounded(s.remMin, `sleep[${i}].remMin`),
+      coreMin: optionalRounded(s.coreMin, `sleep[${i}].coreMin`),
+      deepMin: optionalRounded(s.deepMin, `sleep[${i}].deepMin`),
+      avgHr: optionalRounded(s.avgHr, `sleep[${i}].avgHr`),
     } satisfies SleepInput;
   });
 
@@ -174,6 +186,10 @@ export function parsePayload(raw: unknown): HealthPayload {
       at: asTimestamp(v.at, `vitals[${i}].at`),
       restingHr: optionalRounded(v.restingHr, `vitals[${i}].restingHr`),
       hrvMs: optionalNumber(v.hrvMs, `vitals[${i}].hrvMs`),
+      walkingHr: optionalRounded(v.walkingHr, `vitals[${i}].walkingHr`),
+      hrMin: optionalRounded(v.hrMin, `vitals[${i}].hrMin`),
+      hrAvg: optionalRounded(v.hrAvg, `vitals[${i}].hrAvg`),
+      hrMax: optionalRounded(v.hrMax, `vitals[${i}].hrMax`),
     } satisfies VitalInput;
   });
 
@@ -229,8 +245,19 @@ interface DayPatch {
   sleepEnd?: string;
   asleepMin?: number;
   inBedMin?: number | null;
+  remMin?: number | null;
+  coreMin?: number | null;
+  deepMin?: number | null;
+  sleepHr?: number | null;
   restingHr?: number;
+  walkingHr?: number;
+  hrMin?: number;
+  hrAvg?: number;
+  hrMax?: number;
   hrvMs?: number;
+  hrvMin?: number;
+  hrvMax?: number;
+  hrvCount?: number;
   steps?: number;
   activeKcal?: number;
   weightKg?: number;
@@ -240,7 +267,8 @@ interface DayPatch {
 
 /**
  * Sleep is filed under the morning you woke up, so Today can ask for its own
- * date and get last night. Overlapping naps lose to the longest block.
+ * date and get last night. Every block that ends that day is summed — overnight
+ * plus naps — so an afternoon nap is not dropped when a longer night exists.
  */
 function collectDays(payload: HealthPayload): Map<string, DayPatch> {
   const byDate = new Map<string, DayPatch>();
@@ -252,21 +280,110 @@ function collectDays(payload: HealthPayload): Map<string, DayPatch> {
     return fresh;
   };
 
+  // Accumulate sleep separately so we can weight heart rate by minutes slept.
+  const sleepAcc = new Map<
+    string,
+    {
+      asleepMin: number;
+      inBedMin: number;
+      remMin: number;
+      coreMin: number;
+      deepMin: number;
+      hrWeighted: number;
+      hrMinutes: number;
+      primaryAsleep: number;
+      primaryStart: string;
+      primaryEnd: string;
+    }
+  >();
+
   for (const night of payload.sleep ?? []) {
     const date = isoInTimeZone(new Date(night.endAt));
-    const day = patch(date);
-    if ((day.asleepMin ?? -1) >= night.asleepMin) continue;
-    day.sleepStart = night.startAt;
-    day.sleepEnd = night.endAt;
-    day.asleepMin = night.asleepMin;
-    day.inBedMin = night.inBedMin ?? null;
+    const rem = night.remMin ?? 0;
+    const core = night.coreMin ?? 0;
+    const deep = night.deepMin ?? 0;
+    const inBed = night.inBedMin ?? 0;
+    const existing = sleepAcc.get(date);
+
+    if (!existing) {
+      sleepAcc.set(date, {
+        asleepMin: night.asleepMin,
+        inBedMin: inBed,
+        remMin: rem,
+        coreMin: core,
+        deepMin: deep,
+        hrWeighted: night.avgHr != null ? night.avgHr * night.asleepMin : 0,
+        hrMinutes: night.avgHr != null ? night.asleepMin : 0,
+        primaryAsleep: night.asleepMin,
+        primaryStart: night.startAt,
+        primaryEnd: night.endAt,
+      });
+      continue;
+    }
+
+    existing.asleepMin += night.asleepMin;
+    existing.inBedMin += inBed;
+    existing.remMin += rem;
+    existing.coreMin += core;
+    existing.deepMin += deep;
+    if (night.avgHr != null) {
+      existing.hrWeighted += night.avgHr * night.asleepMin;
+      existing.hrMinutes += night.asleepMin;
+    }
+    // Keep bed/wake of the longest block for display; minutes still include naps.
+    if (night.asleepMin > existing.primaryAsleep) {
+      existing.primaryAsleep = night.asleepMin;
+      existing.primaryStart = night.startAt;
+      existing.primaryEnd = night.endAt;
+    }
   }
+
+  for (const [date, acc] of sleepAcc) {
+    const day = patch(date);
+    day.sleepStart = acc.primaryStart;
+    day.sleepEnd = acc.primaryEnd;
+    day.asleepMin = acc.asleepMin;
+    day.inBedMin = acc.inBedMin > 0 ? acc.inBedMin : null;
+    day.remMin = acc.remMin > 0 ? acc.remMin : null;
+    day.coreMin = acc.coreMin > 0 ? acc.coreMin : null;
+    day.deepMin = acc.deepMin > 0 ? acc.deepMin : null;
+    day.sleepHr = acc.hrMinutes > 0 ? Math.round(acc.hrWeighted / acc.hrMinutes) : null;
+  }
+
+  // Multiple SDNN readings per day are common; keep the range and use the mean.
+  const hrvAcc = new Map<string, { min: number; max: number; sum: number; count: number }>();
 
   for (const vital of payload.vitals ?? []) {
     const date = isoInTimeZone(new Date(vital.at));
     const day = patch(date);
     if (vital.restingHr !== null && vital.restingHr !== undefined) day.restingHr = vital.restingHr;
-    if (vital.hrvMs !== null && vital.hrvMs !== undefined) day.hrvMs = vital.hrvMs;
+    if (vital.walkingHr !== null && vital.walkingHr !== undefined) day.walkingHr = vital.walkingHr;
+    if (vital.hrMin !== null && vital.hrMin !== undefined) {
+      day.hrMin = day.hrMin === undefined ? vital.hrMin : Math.min(day.hrMin, vital.hrMin);
+    }
+    if (vital.hrMax !== null && vital.hrMax !== undefined) {
+      day.hrMax = day.hrMax === undefined ? vital.hrMax : Math.max(day.hrMax, vital.hrMax);
+    }
+    if (vital.hrAvg !== null && vital.hrAvg !== undefined) day.hrAvg = vital.hrAvg;
+    if (vital.hrvMs !== null && vital.hrvMs !== undefined) {
+      const existing = hrvAcc.get(date);
+      if (!existing) {
+        hrvAcc.set(date, { min: vital.hrvMs, max: vital.hrvMs, sum: vital.hrvMs, count: 1 });
+      } else {
+        existing.min = Math.min(existing.min, vital.hrvMs);
+        existing.max = Math.max(existing.max, vital.hrvMs);
+        existing.sum += vital.hrvMs;
+        existing.count += 1;
+      }
+    }
+  }
+
+  for (const [date, acc] of hrvAcc) {
+    const day = patch(date);
+    day.hrvMs = Math.round((acc.sum / acc.count) * 10) / 10;
+    day.hrvMin = Math.round(acc.min * 10) / 10;
+    day.hrvMax = Math.round(acc.max * 10) / 10;
+    day.hrvCount = acc.count;
   }
 
   // Pre-resolved days land last so an explicit value wins over a derived one.
@@ -315,8 +432,19 @@ export async function ingestHealth(payload: HealthPayload): Promise<IngestResult
         sleepEnd: day.sleepEnd ?? null,
         asleepMin: day.asleepMin ?? null,
         inBedMin: day.inBedMin ?? null,
+        remMin: day.remMin ?? null,
+        coreMin: day.coreMin ?? null,
+        deepMin: day.deepMin ?? null,
+        sleepHr: day.sleepHr ?? null,
         restingHr: day.restingHr ?? null,
+        walkingHr: day.walkingHr ?? null,
+        hrMin: day.hrMin ?? null,
+        hrAvg: day.hrAvg ?? null,
+        hrMax: day.hrMax ?? null,
         hrvMs: day.hrvMs ?? null,
+        hrvMin: day.hrvMin ?? null,
+        hrvMax: day.hrvMax ?? null,
+        hrvCount: day.hrvCount ?? null,
         steps: day.steps ?? null,
         activeKcal: day.activeKcal ?? null,
         weightKg: day.weightKg ?? null,
@@ -329,9 +457,29 @@ export async function ingestHealth(payload: HealthPayload): Promise<IngestResult
         // Keep whatever HealthKit did not send this round rather than nulling it.
         set: {
           ...(day.sleepStart ? { sleepStart: day.sleepStart, sleepEnd: day.sleepEnd } : {}),
-          ...(day.asleepMin !== undefined ? { asleepMin: day.asleepMin, inBedMin: day.inBedMin ?? null } : {}),
+          ...(day.asleepMin !== undefined
+            ? {
+                asleepMin: day.asleepMin,
+                inBedMin: day.inBedMin ?? null,
+                remMin: day.remMin ?? null,
+                coreMin: day.coreMin ?? null,
+                deepMin: day.deepMin ?? null,
+                sleepHr: day.sleepHr ?? null,
+              }
+            : {}),
           ...(day.restingHr !== undefined ? { restingHr: day.restingHr } : {}),
-          ...(day.hrvMs !== undefined ? { hrvMs: day.hrvMs } : {}),
+          ...(day.walkingHr !== undefined ? { walkingHr: day.walkingHr } : {}),
+          ...(day.hrMin !== undefined ? { hrMin: day.hrMin } : {}),
+          ...(day.hrAvg !== undefined ? { hrAvg: day.hrAvg } : {}),
+          ...(day.hrMax !== undefined ? { hrMax: day.hrMax } : {}),
+          ...(day.hrvMs !== undefined
+            ? {
+                hrvMs: day.hrvMs,
+                hrvMin: day.hrvMin ?? null,
+                hrvMax: day.hrvMax ?? null,
+                hrvCount: day.hrvCount ?? null,
+              }
+            : {}),
           ...(day.steps !== undefined ? { steps: day.steps } : {}),
           ...(day.activeKcal !== undefined ? { activeKcal: day.activeKcal } : {}),
           ...(day.weightKg !== undefined ? { weightKg: day.weightKg } : {}),

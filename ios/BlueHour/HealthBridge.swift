@@ -23,6 +23,7 @@ struct HealthBridge {
             HKObjectType.workoutType(),
             HKCategoryType(.sleepAnalysis),
             HKQuantityType(.restingHeartRate),
+            HKQuantityType(.walkingHeartRateAverage),
             HKQuantityType(.heartRateVariabilitySDNN),
             HKQuantityType(.heartRate),
             HKQuantityType(.distanceWalkingRunning),
@@ -39,18 +40,43 @@ struct HealthBridge {
 
     func collect() async throws -> HealthPayload {
         let start = Calendar.current.date(byAdding: .day, value: -lookbackDays, to: Date())!
+        let bpm = HKUnit.count().unitDivided(by: .minute())
 
         async let workouts = loadWorkouts(since: start)
         async let sleep = loadSleep(since: start)
-        async let resting = loadVitals(HKQuantityType(.restingHeartRate), unit: .count().unitDivided(by: .minute()), since: start)
+        async let resting = loadVitals(HKQuantityType(.restingHeartRate), unit: bpm, since: start)
+        async let walking = loadVitals(HKQuantityType(.walkingHeartRateAverage), unit: bpm, since: start)
         async let hrv = loadVitals(HKQuantityType(.heartRateVariabilitySDNN), unit: .secondUnit(with: .milli), since: start)
+        async let ranges = loadDailyHeartRanges(since: start)
 
         var vitals: [VitalSample] = []
         for sample in try await resting {
-            vitals.append(VitalSample(at: sample.date, restingHr: sample.value, hrvMs: nil))
+            vitals.append(
+                VitalSample(at: sample.date, restingHr: sample.value, hrvMs: nil, walkingHr: nil, hrMin: nil, hrAvg: nil, hrMax: nil)
+            )
+        }
+        for sample in try await walking {
+            vitals.append(
+                VitalSample(at: sample.date, restingHr: nil, hrvMs: nil, walkingHr: sample.value, hrMin: nil, hrAvg: nil, hrMax: nil)
+            )
         }
         for sample in try await hrv {
-            vitals.append(VitalSample(at: sample.date, restingHr: nil, hrvMs: sample.value))
+            vitals.append(
+                VitalSample(at: sample.date, restingHr: nil, hrvMs: sample.value, walkingHr: nil, hrMin: nil, hrAvg: nil, hrMax: nil)
+            )
+        }
+        for sample in try await ranges {
+            vitals.append(
+                VitalSample(
+                    at: sample.date,
+                    restingHr: nil,
+                    hrvMs: nil,
+                    walkingHr: nil,
+                    hrMin: sample.min,
+                    hrAvg: sample.average,
+                    hrMax: sample.max
+                )
+            )
         }
         // Ascending so the server's last write per day is the most recent reading.
         vitals.sort { $0.at < $1.at }
@@ -157,7 +183,8 @@ struct HealthBridge {
         }
         if !current.isEmpty { nights.append(current) }
 
-        return nights.compactMap { night in
+        var out: [SleepSample] = []
+        for night in nights {
             let asleep = night.filter { Self.isAsleep($0) }
             let inBed = night.filter { Self.isInBed($0) }
 
@@ -165,19 +192,48 @@ struct HealthBridge {
             // (no Watch stages) — count that so Today is not blank.
             let counted = asleep.isEmpty ? inBed : asleep
             guard let first = counted.map(\.startDate).min(),
-                  let last = counted.map(\.endDate).max() else { return nil }
+                  let last = counted.map(\.endDate).max() else { continue }
 
             let asleepMin = Self.mergedMinutes(counted.map { ($0.startDate, $0.endDate) })
-            guard asleepMin > 0 else { return nil }
+            guard asleepMin > 0 else { continue }
 
             let inBedMin = Self.mergedMinutes(inBed.map { ($0.startDate, $0.endDate) })
+            let remMin = Self.mergedMinutes(night.filter { Self.isStage($0, .asleepREM) }.map { ($0.startDate, $0.endDate) })
+            let coreMin = Self.mergedMinutes(night.filter { Self.isStage($0, .asleepCore) }.map { ($0.startDate, $0.endDate) })
+            let deepMin = Self.mergedMinutes(night.filter { Self.isStage($0, .asleepDeep) }.map { ($0.startDate, $0.endDate) })
+            let avgHr = try? await averageHeartRate(from: first, to: last)
 
-            return SleepSample(
-                startAt: first,
-                endAt: last,
-                asleepMin: asleepMin,
-                inBedMin: inBedMin > 0 ? inBedMin : nil
+            out.append(
+                SleepSample(
+                    startAt: first,
+                    endAt: last,
+                    asleepMin: asleepMin,
+                    inBedMin: inBedMin > 0 ? inBedMin : nil,
+                    remMin: remMin > 0 ? remMin : nil,
+                    coreMin: coreMin > 0 ? coreMin : nil,
+                    deepMin: deepMin > 0 ? deepMin : nil,
+                    avgHr: avgHr
+                )
             )
+        }
+        return out
+    }
+
+    private func averageHeartRate(from start: Date, to end: Date) async throws -> Double? {
+        let unit = HKUnit.count().unitDivided(by: .minute())
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKStatisticsQuery(
+                quantityType: HKQuantityType(.heartRate),
+                quantitySamplePredicate: predicate,
+                options: .discreteAverage
+            ) { _, statistics, _ in
+                continuation.resume(
+                    returning: statistics?.averageQuantity()?.doubleValue(for: unit)
+                )
+            }
+            store.execute(query)
         }
     }
 
@@ -195,6 +251,10 @@ struct HealthBridge {
             // Future Apple sleep stages should count as asleep.
             return true
         }
+    }
+
+    private static func isStage(_ sample: HKCategorySample, _ stage: HKCategoryValueSleepAnalysis) -> Bool {
+        sample.value == stage.rawValue
     }
 
     private static func isInBed(_ sample: HKCategorySample) -> Bool {
@@ -240,6 +300,54 @@ struct HealthBridge {
         let samples = try await runQuery(sampleType: type, predicate: predicate)
         guard let quantities = samples as? [HKQuantitySample] else { return [] }
         return quantities.map { ($0.startDate, $0.quantity.doubleValue(for: unit)) }
+    }
+
+    /// Min / avg / max heart rate for each calendar day from continuous Watch samples.
+    private func loadDailyHeartRanges(
+        since start: Date
+    ) async throws -> [(date: Date, min: Double, average: Double, max: Double)] {
+        let type = HKQuantityType(.heartRate)
+        let unit = HKUnit.count().unitDivided(by: .minute())
+        let calendar = Calendar.current
+        let anchor = calendar.startOfDay(for: start)
+        let interval = DateComponents(day: 1)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKStatisticsCollectionQuery(
+                quantityType: type,
+                quantitySamplePredicate: HKQuery.predicateForSamples(withStart: start, end: Date()),
+                options: [.discreteMin, .discreteAverage, .discreteMax],
+                anchorDate: anchor,
+                intervalComponents: interval
+            )
+            query.initialResultsHandler = { _, collection, error in
+                if error != nil {
+                    continuation.resume(returning: [])
+                    return
+                }
+                guard let collection else {
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                var out: [(date: Date, min: Double, average: Double, max: Double)] = []
+                collection.enumerateStatistics(from: start, to: Date()) { stats, _ in
+                    guard let minQ = stats.minimumQuantity(),
+                          let avgQ = stats.averageQuantity(),
+                          let maxQ = stats.maximumQuantity() else { return }
+                    out.append(
+                        (
+                            stats.startDate,
+                            minQ.doubleValue(for: unit),
+                            avgQ.doubleValue(for: unit),
+                            maxQ.doubleValue(for: unit)
+                        )
+                    )
+                }
+                continuation.resume(returning: out)
+            }
+            store.execute(query)
+        }
     }
 
     // MARK: - Plumbing

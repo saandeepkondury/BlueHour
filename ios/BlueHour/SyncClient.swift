@@ -12,12 +12,20 @@ struct SleepSample: Encodable {
     let endAt: Date
     let asleepMin: Int
     let inBedMin: Int?
+    let remMin: Int?
+    let coreMin: Int?
+    let deepMin: Int?
+    let avgHr: Double?
 }
 
 struct VitalSample: Encodable {
     let at: Date
     let restingHr: Double?
     let hrvMs: Double?
+    let walkingHr: Double?
+    let hrMin: Double?
+    let hrAvg: Double?
+    let hrMax: Double?
 }
 
 struct WorkoutSample: Encodable {
