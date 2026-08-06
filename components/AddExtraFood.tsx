@@ -3,7 +3,6 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addCustomFood } from "@/app/actions";
-import { Icon } from "@/components/Icon";
 import { SLOT_LABEL, type Slot } from "@/lib/nutrition/recipes";
 
 export type ExtraFoodOption = {
@@ -37,35 +36,11 @@ export function AddExtraFood({
   const [pending, start] = useTransition();
   const [mode, setMode] = useState<"catalog" | "custom">("catalog");
   const [recipeId, setRecipeId] = useState("");
-  const [query, setQuery] = useState("");
 
   const selected = useMemo(
     () => catalog.find((recipe) => recipe.id === recipeId) ?? null,
     [catalog, recipeId],
   );
-
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return catalog;
-    return catalog.filter(
-      (recipe) =>
-        recipe.name.toLowerCase().includes(needle) ||
-        SLOT_LABEL[recipe.slot].toLowerCase().includes(needle),
-    );
-  }, [catalog, query]);
-
-  const grouped = useMemo(() => {
-    const map = new Map<Slot, ExtraFoodOption[]>();
-    for (const recipe of filtered) {
-      const list = map.get(recipe.slot) ?? [];
-      list.push(recipe);
-      map.set(recipe.slot, list);
-    }
-    return SLOT_ORDER.filter((slot) => (map.get(slot)?.length ?? 0) > 0).map((slot) => ({
-      slot,
-      recipes: map.get(slot)!,
-    }));
-  }, [filtered]);
 
   function logRecipe(recipe: ExtraFoodOption) {
     const data = new FormData();
@@ -78,7 +53,6 @@ export function AddExtraFood({
     start(async () => {
       await addCustomFood(data);
       setRecipeId("");
-      setQuery("");
       router.refresh();
     });
   }
@@ -101,7 +75,7 @@ export function AddExtraFood({
             aria-selected={mode === "catalog"}
             onClick={() => setMode("catalog")}
           >
-            Catalogue
+            Meal
           </button>
           <button
             type="button"
@@ -120,7 +94,7 @@ export function AddExtraFood({
               <select
                 value={recipeId}
                 onChange={(event) => setRecipeId(event.target.value)}
-                aria-label="Pick a meal from the catalogue"
+                aria-label="Pick a meal"
               >
                 <option value="">Choose a meal…</option>
                 {SLOT_ORDER.map((slot) => {
@@ -157,61 +131,6 @@ export function AddExtraFood({
                 </button>
               </div>
             ) : null}
-
-            <label className="field">
-              <span className="field__label">Search catalogue</span>
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Oats, soya, snack…"
-                inputMode="search"
-                autoComplete="off"
-              />
-            </label>
-
-            <div className="rows extra-food-list" role="listbox" aria-label="Catalogue meals">
-              {grouped.length === 0 ? (
-                <p className="small sub" style={{ padding: "0.5rem 0" }}>
-                  No meals match that search.
-                </p>
-              ) : (
-                grouped.map((group) => (
-                  <div key={group.slot}>
-                    <p className="label" style={{ margin: "0.55rem 0 0.15rem" }}>
-                      {SLOT_LABEL[group.slot]}
-                    </p>
-                    {group.recipes.map((recipe) => {
-                      const on = recipe.id === recipeId;
-                      return (
-                        <button
-                          key={recipe.id}
-                          type="button"
-                          role="option"
-                          aria-selected={on}
-                          className={`row row__hit${on ? " row--selected" : ""}`}
-                          disabled={pending}
-                          onClick={() => {
-                            setRecipeId(recipe.id);
-                            logRecipe(recipe);
-                          }}
-                        >
-                          <span className="row__lead row__lead--accent">
-                            <Icon name="fuel" size={17} />
-                          </span>
-                          <span className="row__body">
-                            <span className="row__title">{recipe.name}</span>
-                            <span className="row__sub">
-                              {recipe.protein}p / {recipe.carbs}c / {recipe.fat}f
-                            </span>
-                          </span>
-                          <span className="row__meta">{recipe.calories}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))
-              )}
-            </div>
           </div>
         ) : (
           <form action={onCustomSubmit} className="stack">

@@ -1525,17 +1525,6 @@ pre {
   padding-top: 0.75rem;
 }
 
-.extra-food-list {
-  max-height: 16rem;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.extra-food-list .row__hit {
-  width: 100%;
-  text-align: left;
-}
-
 /* A fold whose trigger is the primary action until it opens, at which point it
    steps back so the Save button is the only filled control. */
 .fold--cta > summary {
