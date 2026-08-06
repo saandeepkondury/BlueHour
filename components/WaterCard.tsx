@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { Icon } from "@/components/Icon";
 import { Ring } from "@/components/Ring";
@@ -14,11 +15,14 @@ export function WaterCard({
   date,
   ounces,
   target,
+  historyHref = "/water",
 }: {
   action: (formData: FormData) => Promise<void>;
   date: string;
   ounces: number;
   target: number;
+  /** Link the Water label to history. Pass null on the history page itself. */
+  historyHref?: string | null;
 }) {
   const [, start] = useTransition();
   const [local, setLocal] = useState(ounces);
@@ -44,14 +48,24 @@ export function WaterCard({
   const cupsLabel = Number.isInteger(cups) ? String(cups) : cups.toFixed(1);
   const targetLabel = Number.isInteger(targetCups) ? String(targetCups) : targetCups.toFixed(1);
 
+  const label = (
+    <>
+      <Icon name="water" size={14} />
+      Water
+    </>
+  );
+
   return (
     <div className="card">
       <div className="row-between">
         <div>
-          <p className="tile__label">
-            <Icon name="water" size={14} />
-            Water
-          </p>
+          {historyHref ? (
+            <Link className="tile__label" href={historyHref} style={{ textDecoration: "none" }}>
+              {label}
+            </Link>
+          ) : (
+            <p className="tile__label">{label}</p>
+          )}
           <p className="tile__value" style={{ marginTop: "0.3rem" }}>
             {cupsLabel}
             <small>/ {targetLabel} cups</small>

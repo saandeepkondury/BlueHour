@@ -21,6 +21,7 @@ const GROUPS: { title: string; links: { href: string; label: string; icon: IconN
   {
     title: "Fuel",
     links: [
+      { href: "/water", label: "Water", icon: "water" },
       { href: "/fuel/grocery", label: "Grocery list", icon: "cart" },
       { href: "/fuel/supplements", label: "Supplements", icon: "pill" },
       { href: "/fuel/race", label: "Race-day playbook", icon: "flag" },

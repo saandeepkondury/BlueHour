@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, lte, sql } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
 import {
   dayLogs,
@@ -354,6 +354,16 @@ export async function getDayLogs(from: string, to: string) {
     .select()
     .from(dayLogs)
     .where(and(gte(dayLogs.date, from), lte(dayLogs.date, to)));
+}
+
+/** Days with any water logged, newest first. */
+export async function getWaterHistory() {
+  await ready();
+  return db
+    .select()
+    .from(dayLogs)
+    .where(gt(dayLogs.waterOz, 0))
+    .orderBy(desc(dayLogs.date));
 }
 
 // ---------- grocery ----------

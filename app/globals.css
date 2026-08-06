@@ -540,6 +540,14 @@ h4 {
   color: var(--ink-3);
 }
 
+a.tile__label {
+  color: var(--ink-3);
+}
+
+a.tile__label:active {
+  color: var(--accent);
+}
+
 .tile__value {
   display: flex;
   align-items: baseline;
