@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { startOfWeek, todayISO } from "@/lib/date";
 import { holdWeek, markDone, markPlanned, moveLongRun, skipWorkout } from "@/lib/plan/adapt";
-import { recipeById } from "@/lib/nutrition/recipes";
+import { recipeById, type Slot } from "@/lib/nutrition/recipes";
 import { saveManualHealth } from "@/lib/health/manual";
 import {
   completeStrength,
@@ -26,11 +26,13 @@ import {
   deleteFoodLog,
   ensureWeekMeals,
   getProfile,
+  removeMealSlot,
   replaceMeal,
   resetGroceryChecks,
   reshuffleWeekMeals,
   saveWorkoutLog,
   setMealEaten,
+  setPantryHave,
   setSupplementEnabled,
   toggleFuelCheck,
   toggleGroceryCheck,
@@ -151,6 +153,50 @@ export async function swapMeal(formData: FormData): Promise<void> {
   refresh(date);
 }
 
+/** Adds a recipe to a day for its slot (or an override slot). */
+export async function addRecipeToDay(formData: FormData): Promise<void> {
+  const date = str(formData.get("date"));
+  const recipeId = str(formData.get("recipeId"));
+  const slotOverride = str(formData.get("slot"));
+  if (!date || !recipeId) return;
+
+  const recipe = recipeById(recipeId);
+  if (!recipe) return;
+
+  const slot = (slotOverride || recipe.slot) as Slot;
+  await replaceMeal(date, slot, {
+    slot,
+    recipeId: recipe.id,
+    name: recipe.name,
+    calories: recipe.calories,
+    protein: recipe.protein,
+    carbs: recipe.carbs,
+    fat: recipe.fat,
+  });
+  revalidatePath("/fuel");
+  revalidatePath("/fuel/grocery");
+  refresh(date);
+}
+
+export async function clearDayMeal(formData: FormData): Promise<void> {
+  const date = str(formData.get("date"));
+  const slot = str(formData.get("slot"));
+  if (!date || !slot) return;
+  await removeMealSlot(date, slot);
+  revalidatePath("/fuel");
+  revalidatePath("/fuel/grocery");
+  refresh(date);
+}
+
+export async function togglePantryItem(formData: FormData): Promise<void> {
+  const itemKey = str(formData.get("itemKey"));
+  const have = str(formData.get("have")) === "1";
+  if (!itemKey) return;
+  await setPantryHave(itemKey, have);
+  revalidatePath("/fuel");
+  revalidatePath("/fuel/grocery");
+}
+
 export async function addCustomFood(formData: FormData): Promise<void> {
   const date = str(formData.get("date"));
   const name = str(formData.get("name"));
@@ -216,6 +262,18 @@ export async function toggleGroceryItem(formData: FormData): Promise<void> {
   if (!weekStart || !itemKey) return;
   await toggleGroceryCheck(weekStart, itemKey, checked);
   revalidatePath("/fuel/grocery");
+  revalidatePath("/fuel");
+}
+
+/** Checked off at the store: stock pantry and remove from the buy list. */
+export async function markGroceryBought(formData: FormData): Promise<void> {
+  const weekStart = str(formData.get("weekStart"));
+  const itemKey = str(formData.get("itemKey"));
+  if (!weekStart || !itemKey) return;
+  await setPantryHave(itemKey, true);
+  await toggleGroceryCheck(weekStart, itemKey, false);
+  revalidatePath("/fuel/grocery");
+  revalidatePath("/fuel");
 }
 
 export async function clearGrocery(formData: FormData): Promise<void> {

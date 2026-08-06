@@ -142,6 +142,13 @@ export const groceryChecks = sqliteTable(
   (t) => [unique("grocery_week_item").on(t.weekStart, t.itemKey)],
 );
 
+/** Persistent pantry: ingredients you already have at home. */
+export const pantryItems = sqliteTable("pantry_items", {
+  itemKey: text("item_key").primaryKey(),
+  haveAtHome: integer("have_at_home").notNull().default(1),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const supplementPrefs = sqliteTable("supplement_prefs", {
   id: text("id").primaryKey(),
   enabled: integer("enabled").notNull().default(1),
@@ -264,6 +271,7 @@ export type HealthSync = typeof healthSync.$inferSelect;
 export type MealPlanRow = typeof mealPlans.$inferSelect;
 export type FoodLog = typeof foodLogs.$inferSelect;
 export type DayLog = typeof dayLogs.$inferSelect;
+export type PantryItem = typeof pantryItems.$inferSelect;
 export type StrengthSession = typeof strengthSessions.$inferSelect;
 export type StrengthCheck = typeof strengthChecks.$inferSelect;
 export type StrengthLog = typeof strengthLogs.$inferSelect;

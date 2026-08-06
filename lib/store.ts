@@ -6,6 +6,7 @@ import {
   fuelChecks,
   groceryChecks,
   mealPlans,
+  pantryItems,
   profile,
   pushSubscriptions,
   supplementLogs,
@@ -290,8 +291,10 @@ export async function setMealEaten(date: string, slot: string, eaten: boolean): 
 export async function replaceMeal(date: string, slot: string, meal: PlannedMeal): Promise<void> {
   await ready();
   await db
-    .update(mealPlans)
-    .set({
+    .insert(mealPlans)
+    .values({
+      date,
+      slot,
       recipeId: meal.recipeId,
       name: meal.name,
       calories: meal.calories,
@@ -300,7 +303,23 @@ export async function replaceMeal(date: string, slot: string, meal: PlannedMeal)
       fat: meal.fat,
       eaten: 0,
     })
-    .where(and(eq(mealPlans.date, date), eq(mealPlans.slot, slot)));
+    .onConflictDoUpdate({
+      target: [mealPlans.date, mealPlans.slot],
+      set: {
+        recipeId: meal.recipeId,
+        name: meal.name,
+        calories: meal.calories,
+        protein: meal.protein,
+        carbs: meal.carbs,
+        fat: meal.fat,
+        eaten: 0,
+      },
+    });
+}
+
+export async function removeMealSlot(date: string, slot: string): Promise<void> {
+  await ready();
+  await db.delete(mealPlans).where(and(eq(mealPlans.date, date), eq(mealPlans.slot, slot)));
 }
 
 export async function clearMealPlan(from: string, to: string): Promise<void> {
@@ -377,6 +396,7 @@ export async function getGroceryChecks(weekStart: string): Promise<Set<string>> 
   return new Set(rows.map((row) => row.itemKey));
 }
 
+/** Marks an item on this week's shopping list. Does not touch the pantry. */
 export async function toggleGroceryCheck(
   weekStart: string,
   itemKey: string,
@@ -395,6 +415,30 @@ export async function toggleGroceryCheck(
 export async function resetGroceryChecks(weekStart: string): Promise<void> {
   await ready();
   await db.delete(groceryChecks).where(eq(groceryChecks.weekStart, weekStart));
+}
+
+// ---------- pantry (at home) ----------
+
+export async function getPantryHaveKeys(): Promise<Set<string>> {
+  await ready();
+  const rows = await db.select().from(pantryItems).where(eq(pantryItems.haveAtHome, 1));
+  return new Set(rows.map((row) => row.itemKey));
+}
+
+export async function setPantryHave(itemKey: string, have: boolean): Promise<void> {
+  await ready();
+  const updatedAt = new Date().toISOString();
+  if (!have) {
+    await db.delete(pantryItems).where(eq(pantryItems.itemKey, itemKey));
+    return;
+  }
+  await db
+    .insert(pantryItems)
+    .values({ itemKey, haveAtHome: 1, updatedAt })
+    .onConflictDoUpdate({
+      target: pantryItems.itemKey,
+      set: { haveAtHome: 1, updatedAt },
+    });
 }
 
 // ---------- supplements ----------

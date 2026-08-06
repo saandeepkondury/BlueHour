@@ -1,4 +1,11 @@
-import { recipeById, type Aisle, type Ingredient } from "./recipes";
+import {
+  recipeById,
+  RECIPES,
+  type Aisle,
+  type Ingredient,
+  type Recipe,
+  type Slot,
+} from "./recipes";
 
 export interface GroceryItem {
   key: string;
@@ -8,10 +15,28 @@ export interface GroceryItem {
   aisle: Aisle;
 }
 
+export interface GroceryLine extends GroceryItem {
+  /** Recipe names that need this ingredient this week. */
+  dishes: string[];
+}
+
 export interface GroceryAisle {
   aisle: Aisle;
   label: string;
   items: GroceryItem[];
+}
+
+export interface GroceryAisleDetailed {
+  aisle: Aisle;
+  label: string;
+  items: GroceryLine[];
+}
+
+export interface RecipeReadiness {
+  recipe: Recipe;
+  have: number;
+  total: number;
+  pct: number;
 }
 
 const AISLE_ORDER: Aisle[] = ["produce", "protein", "dairy", "bakery", "pantry", "frozen", "fuel"];
@@ -26,23 +51,33 @@ const AISLE_LABEL: Record<Aisle, string> = {
   fuel: "Run fuel",
 };
 
-function keyFor(ingredient: Ingredient): string {
+export function ingredientKey(ingredient: Ingredient): string {
   return `${ingredient.item.toLowerCase()}|${ingredient.unit.toLowerCase()}`;
 }
 
 /** Rolls a week of planned recipes into one shopping list, merged by item and unit. */
 export function buildGroceryList(recipeIds: (string | null)[]): GroceryAisle[] {
-  const merged = new Map<string, GroceryItem>();
+  return buildGroceryListDetailed(recipeIds).map((aisle) => ({
+    aisle: aisle.aisle,
+    label: aisle.label,
+    items: aisle.items.map(({ dishes: _dishes, ...item }) => item),
+  }));
+}
+
+/** Same as buildGroceryList, but each line lists which dishes need it. */
+export function buildGroceryListDetailed(recipeIds: (string | null)[]): GroceryAisleDetailed[] {
+  const merged = new Map<string, GroceryLine>();
 
   for (const id of recipeIds) {
     const recipe = recipeById(id);
     if (!recipe) continue;
 
     for (const ingredient of recipe.ingredients) {
-      const key = keyFor(ingredient);
+      const key = ingredientKey(ingredient);
       const existing = merged.get(key);
       if (existing) {
         existing.qty += ingredient.qty;
+        if (!existing.dishes.includes(recipe.name)) existing.dishes.push(recipe.name);
       } else {
         merged.set(key, {
           key,
@@ -50,24 +85,58 @@ export function buildGroceryList(recipeIds: (string | null)[]): GroceryAisle[] {
           qty: ingredient.qty,
           unit: ingredient.unit,
           aisle: ingredient.aisle,
+          dishes: [recipe.name],
         });
       }
     }
   }
 
-  const aisles: GroceryAisle[] = AISLE_ORDER.map((aisle) => ({
+  const aisles: GroceryAisleDetailed[] = AISLE_ORDER.map((aisle) => ({
     aisle,
     label: AISLE_LABEL[aisle],
     items: [...merged.values()]
       .filter((item) => item.aisle === aisle)
-      .map((item) => ({ ...item, qty: Math.round(item.qty * 100) / 100 }))
+      .map((item) => ({
+        ...item,
+        qty: Math.round(item.qty * 100) / 100,
+        dishes: [...item.dishes].sort((a, b) => a.localeCompare(b)),
+      }))
       .sort((a, b) => a.item.localeCompare(b.item)),
   }));
 
   return aisles.filter((aisle) => aisle.items.length > 0);
 }
 
-export function formatQty(item: GroceryItem): string {
+export function formatQty(item: Pick<GroceryItem, "qty" | "unit">): string {
   const qty = Number.isInteger(item.qty) ? String(item.qty) : item.qty.toFixed(2).replace(/0+$/, "");
   return `${qty} ${item.unit}`;
+}
+
+/** How many of a recipe's ingredients are already at home. */
+export function recipeReadiness(recipe: Recipe, haveKeys: Set<string>): RecipeReadiness {
+  const total = recipe.ingredients.length;
+  if (total === 0) return { recipe, have: 0, total: 0, pct: 0 };
+  const have = recipe.ingredients.filter((ing) => haveKeys.has(ingredientKey(ing))).length;
+  return { recipe, have, total, pct: Math.round((have / total) * 100) };
+}
+
+/** Recipes for a slot, sorted by pantry coverage (then name). */
+export function recipesReadyForSlot(
+  slot: Slot,
+  haveKeys: Set<string>,
+  dietLimit?: (recipe: Recipe) => boolean,
+): RecipeReadiness[] {
+  return RECIPES.filter((recipe) => recipe.slot === slot && (!dietLimit || dietLimit(recipe)))
+    .map((recipe) => recipeReadiness(recipe, haveKeys))
+    .sort((a, b) => b.pct - a.pct || a.recipe.name.localeCompare(b.recipe.name));
+}
+
+/** Top recipes across meal slots that you can mostly cook from what's at home. */
+export function topReadyRecipes(haveKeys: Set<string>, limit = 6): RecipeReadiness[] {
+  if (haveKeys.size === 0) return [];
+  return RECIPES.filter((recipe) => ["breakfast", "lunch", "dinner", "snack"].includes(recipe.slot))
+    .map((recipe) => recipeReadiness(recipe, haveKeys))
+    .filter((row) => row.total > 0 && row.pct >= 50)
+    .sort((a, b) => b.pct - a.pct || a.recipe.name.localeCompare(b.recipe.name))
+    .slice(0, limit);
 }

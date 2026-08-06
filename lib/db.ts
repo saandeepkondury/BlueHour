@@ -87,6 +87,11 @@ const DDL = [
     checked INTEGER NOT NULL DEFAULT 0,
     UNIQUE (week_start, item_key)
   )`,
+  `CREATE TABLE IF NOT EXISTS pantry_items (
+    item_key TEXT PRIMARY KEY,
+    have_at_home INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS supplement_prefs (
     id TEXT PRIMARY KEY,
     enabled INTEGER NOT NULL DEFAULT 1
