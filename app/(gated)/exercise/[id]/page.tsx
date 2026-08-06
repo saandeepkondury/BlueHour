@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { saveExerciseLoad, toggleStrengthExercise } from "@/app/actions";
 import { AppBar } from "@/components/AppBar";
 import { Check } from "@/components/Check";
+import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { formatShort, todayISO } from "@/lib/date";
@@ -39,6 +40,9 @@ export default async function ExercisePage({
   const detail = demo?.id ? await getWorkoutXExercise(demo.id) : null;
   const gifId = detail?.id || demo?.id;
   const steps = detail?.instructions?.filter(Boolean) ?? [];
+  const demoFallback = workoutxConfigured()
+    ? "WorkoutX had no GIF for this move. Cue below still stands."
+    : "Add WORKOUTX_API_KEY in .env.local to load the looping demo.";
 
   return (
     <>
@@ -49,16 +53,13 @@ export default async function ExercisePage({
           <div className="stack">
             <div className="card card--pad-lg">
               {gifId ? (
-                <div className="exercise-demo">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`/api/workoutx/gif/${gifId}`} alt={`${exercise.name} demonstration`} />
-                </div>
+                <ExerciseDemo
+                  src={`/api/workoutx/gif/${gifId}`}
+                  alt={`${exercise.name} demonstration`}
+                  fallback={demoFallback}
+                />
               ) : (
-                <p className="card__sub">
-                  {workoutxConfigured()
-                    ? "WorkoutX had no GIF for this catalog id. Cue below still stands."
-                    : "Add WORKOUTX_API_KEY in .env.local to load the looping demo."}
-                </p>
+                <p className="card__sub">{demoFallback}</p>
               )}
               <p className="card__sub" style={{ marginTop: gifId ? "0.85rem" : "0.35rem" }}>
                 {exercise.cue}
@@ -97,11 +98,15 @@ export default async function ExercisePage({
                   <input
                     name="load"
                     defaultValue={check?.load ?? ""}
-                    placeholder="e.g. 40 lb × 3 × 10, or 30 sec"
+                    placeholder={`Leave blank for ${exercise.prescription}`}
                   />
                 </label>
-                <button className="btn btn--primary btn--block" type="submit">
-                  Save load
+                <p className="small muted">
+                  Tick the move to log it. Empty notes mean you hit the prescription above; type here
+                  only when the load or reps differed.
+                </p>
+                <button className="btn btn--ghost btn--block" type="submit">
+                  Save notes
                 </button>
               </form>
             </div>

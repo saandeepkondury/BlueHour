@@ -4,6 +4,15 @@ import { wxIdFor } from "./queries";
 
 const BASE = "https://api.workoutxapp.com/v1";
 
+/**
+ * WorkoutX lists these ids but their watermarked GIF endpoint returns 503.
+ * Fall back to a close cousin that still demos the same position.
+ */
+const GIF_FALLBACKS: Record<string, string> = {
+  // Front Plank → Weighted Front Plank (same hold; plate is visible but the shape is right)
+  "5202": "2135",
+};
+
 export type WorkoutXExercise = {
   id: string;
   name: string;
@@ -87,21 +96,55 @@ export async function getWorkoutXExercise(wxId: string): Promise<WorkoutXExercis
   }
 }
 
-export async function fetchWorkoutXGif(wxId: string): Promise<{ body: ArrayBuffer; contentType: string } | null> {
+function gifCandidates(wxId: string): string[] {
+  const fallback = GIF_FALLBACKS[wxId];
+  return fallback && fallback !== wxId ? [wxId, fallback] : [wxId];
+}
+
+async function pullGif(
+  url: string,
+  key: string,
+): Promise<{ body: ArrayBuffer; contentType: string } | null> {
+  // Do not cache upstream failures — WorkoutX has returned multi-day 503s for
+  // specific catalog ids (e.g. Front Plank 5202), and a long revalidate would
+  // keep demos blank after a temporary outage.
+  const res = await fetch(url, {
+    headers: url.includes("api.workoutxapp.com") ? { "X-WorkoutX-Key": key } : undefined,
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const contentType = res.headers.get("content-type") || "";
+  if (!contentType.includes("image") && !contentType.includes("gif")) return null;
+  return {
+    body: await res.arrayBuffer(),
+    contentType: contentType.includes("image") ? contentType : "image/gif",
+  };
+}
+
+export async function fetchWorkoutXGif(
+  wxId: string,
+): Promise<{ body: ArrayBuffer; contentType: string } | null> {
   const key = apiKey();
   if (!key || !wxId) return null;
 
   const cached = await readCache();
-  const gifUrl = Object.values(cached).find((row) => row.id === wxId)?.gifUrl;
-  const url = gifUrl || `${BASE}/gifs/${encodeURIComponent(wxId)}.gif`;
 
-  const res = await fetch(url, {
-    headers: url.includes("api.workoutxapp.com") ? { "X-WorkoutX-Key": key } : undefined,
-    next: { revalidate: 60 * 60 * 24 * 14 },
-  });
-  if (!res.ok) return null;
-  return {
-    body: await res.arrayBuffer(),
-    contentType: res.headers.get("content-type") || "image/gif",
-  };
+  for (const id of gifCandidates(wxId)) {
+    const gifUrl = Object.values(cached).find((row) => row.id === id)?.gifUrl;
+    const urls = [
+      gifUrl,
+      `${BASE}/gifs/${encodeURIComponent(id)}.gif`,
+    ].filter((value, index, list): value is string => Boolean(value) && list.indexOf(value) === index);
+
+    for (const url of urls) {
+      try {
+        const gif = await pullGif(url, key);
+        if (gif) return gif;
+      } catch {
+        // try next candidate
+      }
+    }
+  }
+
+  return null;
 }

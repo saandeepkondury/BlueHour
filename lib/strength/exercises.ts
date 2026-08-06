@@ -246,6 +246,8 @@ const CORE_BY_LEVEL: Record<number, Exercise[]> = {
     ),
     ex(
       "core-plank",
+      // WorkoutX Front Plank (5202) metadata is fine; its watermarked GIF 503s.
+      // Client falls back to 2135 for the demo loop — keep this id for cues/copy.
       "5202",
       "Front plank",
       "3 × 30 sec",
