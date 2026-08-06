@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addRecipeToDay, clearDayMeal } from "@/app/actions";
 import { Icon } from "@/components/Icon";
-import type { BrowseRecipe } from "@/lib/nutrition/grocery";
+import { isVegRecipe, type BrowseRecipe } from "@/lib/nutrition/grocery";
 import { MEAL_SLOTS, SLOT_LABEL, type Slot } from "@/lib/nutrition/recipes";
 
 type DayMeal = {
@@ -44,6 +44,15 @@ export function DayMealSlots({
     () => (picking ? catalog.filter((recipe) => recipe.slot === picking) : []),
     [catalog, picking],
   );
+
+  const optionGroups = useMemo(() => {
+    const veg = options.filter(isVegRecipe);
+    const nonVeg = options.filter((recipe) => !isVegRecipe(recipe));
+    return [
+      { key: "veg", label: "Vegetarian", recipes: veg },
+      { key: "non-veg", label: "Non-veg", recipes: nonVeg },
+    ].filter((group) => group.recipes.length > 0);
+  }, [options]);
 
   useEffect(() => {
     if (!picking) return;
@@ -175,35 +184,46 @@ export function DayMealSlots({
                   No dishes for this meal yet.
                 </p>
               ) : (
-                <div className="rows">
-                  {options.map((recipe) => {
-                    const selected = mealBySlot.get(picking)?.recipeId === recipe.id;
-                    return (
-                      <div className={selected ? "row row--done" : "row"} key={recipe.id}>
-                        <button
-                          type="button"
-                          className="row__hit"
-                          onClick={() => pick(picking, recipe.id)}
-                        >
-                          <span className="row__body">
-                            <span className="row__title">{recipe.name}</span>
-                            <span className="row__sub">
-                              {recipe.calories} kcal · {recipe.protein}g protein
-                            </span>
-                          </span>
-                          {selected ? <Icon name="check" size={18} /> : null}
-                        </button>
-                        <Link
-                          href={`/recipe/${recipe.id}?week=${weekStart}&date=${date}&slot=${picking}`}
-                          prefetch={false}
-                          className="iconbtn"
-                          aria-label={`Open ${recipe.name} recipe`}
-                        >
-                          <Icon name="chevron" size={16} />
-                        </Link>
+                <div className="meal-groups">
+                  {optionGroups.map((group) => (
+                    <div className="meal-group" key={group.key}>
+                      <p className="label meal-group__label">{group.label}</p>
+                      <div className="rows">
+                        {group.recipes.map((recipe) => {
+                          const selected =
+                            mealBySlot.get(picking)?.recipeId === recipe.id;
+                          return (
+                            <div
+                              className={selected ? "row row--done" : "row"}
+                              key={recipe.id}
+                            >
+                              <button
+                                type="button"
+                                className="row__hit"
+                                onClick={() => pick(picking, recipe.id)}
+                              >
+                                <span className="row__body">
+                                  <span className="row__title">{recipe.name}</span>
+                                  <span className="row__sub">
+                                    {recipe.calories} kcal · {recipe.protein}g protein
+                                  </span>
+                                </span>
+                                {selected ? <Icon name="check" size={18} /> : null}
+                              </button>
+                              <Link
+                                href={`/recipe/${recipe.id}?week=${weekStart}&date=${date}&slot=${picking}`}
+                                prefetch={false}
+                                className="iconbtn"
+                                aria-label={`Open ${recipe.name} recipe`}
+                              >
+                                <Icon name="chevron" size={16} />
+                              </Link>
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

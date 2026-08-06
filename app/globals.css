@@ -1118,6 +1118,16 @@ a.tile__label:active {
   border-top: 1px solid var(--hair);
 }
 
+.meal-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.meal-group__label {
+  margin: 0 0 0.15rem;
+}
+
 .row {
   display: flex;
   align-items: center;

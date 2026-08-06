@@ -2,6 +2,7 @@ import {
   recipeById,
   RECIPES,
   type Aisle,
+  type Diet,
   type Ingredient,
   type Recipe,
   type Slot,
@@ -152,12 +153,17 @@ export interface BrowseRecipe {
   id: string;
   name: string;
   slot: Slot;
+  diet: Diet;
   calories: number;
   protein: number;
   minutes: number;
   have: number;
   total: number;
   pct: number;
+}
+
+export function isVegRecipe(recipe: Pick<BrowseRecipe, "diet">): boolean {
+  return recipe.diet === "vegan" || recipe.diet === "vegetarian";
 }
 
 /** Flat catalog for the client recipe picker — filter by slot in the browser. */
@@ -172,6 +178,7 @@ export function buildBrowseCatalog(
         id: recipe.id,
         name: recipe.name,
         slot: recipe.slot,
+        diet: recipe.diet,
         calories: recipe.calories,
         protein: recipe.protein,
         minutes: recipe.minutes,

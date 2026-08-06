@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import type { BrowseRecipe } from "@/lib/nutrition/grocery";
+import { isVegRecipe, type BrowseRecipe } from "@/lib/nutrition/grocery";
 import { MEAL_SLOTS, SLOT_LABEL, type Slot } from "@/lib/nutrition/recipes";
 
 const RUN_SLOTS: Slot[] = ["fuel_pre", "fuel_during", "fuel_post"];
@@ -28,6 +28,15 @@ export function RecipeBrowser({
     [catalog, slot],
   );
 
+  const listGroups = useMemo(() => {
+    const veg = list.filter(isVegRecipe);
+    const nonVeg = list.filter((recipe) => !isVegRecipe(recipe));
+    return [
+      { key: "veg", label: "Vegetarian", recipes: veg },
+      { key: "non-veg", label: "Non-veg", recipes: nonVeg },
+    ].filter((group) => group.recipes.length > 0);
+  }, [list]);
+
   const readyNow = useMemo(
     () =>
       catalog
@@ -37,6 +46,15 @@ export function RecipeBrowser({
         .slice(0, 6),
     [catalog],
   );
+
+  const readyGroups = useMemo(() => {
+    const veg = readyNow.filter(isVegRecipe);
+    const nonVeg = readyNow.filter((recipe) => !isVegRecipe(recipe));
+    return [
+      { key: "veg", label: "Vegetarian", recipes: veg },
+      { key: "non-veg", label: "Non-veg", recipes: nonVeg },
+    ].filter((group) => group.recipes.length > 0);
+  }, [readyNow]);
 
   return (
     <>
@@ -75,26 +93,36 @@ export function RecipeBrowser({
             ))}
           </div>
 
-          <div className="rows" style={{ opacity: pending ? 0.7 : 1 }}>
+          <div style={{ opacity: pending ? 0.7 : 1 }}>
             {list.length === 0 ? (
               <p className="small muted">No recipes for this meal type yet.</p>
             ) : (
-              list.map((recipe) => (
-                <Link
-                  className="row"
-                  key={recipe.id}
-                  href={`/recipe/${recipe.id}?week=${weekStart}&date=${today}&slot=${recipe.slot}`}
-                  prefetch={false}
-                  style={{ color: "inherit", textDecoration: "none" }}
-                >
-                  <span className="row__body">
-                    <span className="row__title">{recipe.name}</span>
-                    <span className="row__sub">
-                      {recipe.calories} kcal · {recipe.protein}g protein · {recipe.minutes} min
-                    </span>
-                  </span>
-                </Link>
-              ))
+              <div className="meal-groups">
+                {listGroups.map((group) => (
+                  <div className="meal-group" key={group.key}>
+                    <p className="label meal-group__label">{group.label}</p>
+                    <div className="rows">
+                      {group.recipes.map((recipe) => (
+                        <Link
+                          className="row"
+                          key={recipe.id}
+                          href={`/recipe/${recipe.id}?week=${weekStart}&date=${today}&slot=${recipe.slot}`}
+                          prefetch={false}
+                          style={{ color: "inherit", textDecoration: "none" }}
+                        >
+                          <span className="row__body">
+                            <span className="row__title">{recipe.name}</span>
+                            <span className="row__sub">
+                              {recipe.calories} kcal · {recipe.protein}g protein ·{" "}
+                              {recipe.minutes} min
+                            </span>
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
@@ -106,22 +134,29 @@ export function RecipeBrowser({
             <p className="label" style={{ marginBottom: "0.35rem" }}>
               Ready from your pantry
             </p>
-            <div className="rows">
-              {readyNow.map((recipe) => (
-                <Link
-                  className="row"
-                  key={recipe.id}
-                  href={`/recipe/${recipe.id}?week=${weekStart}&date=${today}&slot=${recipe.slot}`}
-                  prefetch={false}
-                  style={{ color: "inherit", textDecoration: "none" }}
-                >
-                  <span className="row__body">
-                    <span className="row__title">{recipe.name}</span>
-                    <span className="row__sub">
-                      {SLOT_LABEL[recipe.slot]} · {recipe.have}/{recipe.total} at home
-                    </span>
-                  </span>
-                </Link>
+            <div className="meal-groups">
+              {readyGroups.map((group) => (
+                <div className="meal-group" key={group.key}>
+                  <p className="label meal-group__label">{group.label}</p>
+                  <div className="rows">
+                    {group.recipes.map((recipe) => (
+                      <Link
+                        className="row"
+                        key={recipe.id}
+                        href={`/recipe/${recipe.id}?week=${weekStart}&date=${today}&slot=${recipe.slot}`}
+                        prefetch={false}
+                        style={{ color: "inherit", textDecoration: "none" }}
+                      >
+                        <span className="row__body">
+                          <span className="row__title">{recipe.name}</span>
+                          <span className="row__sub">
+                            {SLOT_LABEL[recipe.slot]} · {recipe.have}/{recipe.total} at home
+                          </span>
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
