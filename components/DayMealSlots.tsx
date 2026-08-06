@@ -17,6 +17,52 @@ type DayMeal = {
   eaten: number;
 };
 
+const CATALOG_SLOT_ORDER: Slot[] = [
+  "breakfast",
+  "lunch",
+  "dinner",
+  "snack",
+  "fuel_pre",
+  "fuel_during",
+  "fuel_post",
+];
+
+function MealCatalogSelect({
+  catalog,
+  value,
+  onChange,
+  id,
+}: {
+  catalog: BrowseRecipe[];
+  value: string;
+  onChange: (recipeId: string) => void;
+  id?: string;
+}) {
+  return (
+    <select
+      id={id}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      aria-label="Pick a meal from all recipes"
+    >
+      <option value="">Choose a meal…</option>
+      {CATALOG_SLOT_ORDER.map((slot) => {
+        const options = catalog.filter((recipe) => recipe.slot === slot);
+        if (options.length === 0) return null;
+        return (
+          <optgroup key={slot} label={SLOT_LABEL[slot]}>
+            {options.map((recipe) => (
+              <option key={recipe.id} value={recipe.id}>
+                {recipe.name} · {recipe.calories} kcal
+              </option>
+            ))}
+          </optgroup>
+        );
+      })}
+    </select>
+  );
+}
+
 export function DayMealSlots({
   date,
   weekStart,
@@ -33,6 +79,9 @@ export function DayMealSlots({
   const router = useRouter();
   const [pending, start] = useTransition();
   const [picking, setPicking] = useState<Slot | null>(null);
+  const [replaceSlot, setReplaceSlot] = useState<Slot>("breakfast");
+  const [replaceRecipeId, setReplaceRecipeId] = useState("");
+  const [sheetRecipeId, setSheetRecipeId] = useState("");
 
   const mealBySlot = useMemo(() => {
     const map = new Map<string, DayMeal>();
@@ -54,8 +103,21 @@ export function DayMealSlots({
     ].filter((group) => group.recipes.length > 0);
   }, [options]);
 
+  const replaceSelected = useMemo(
+    () => catalog.find((recipe) => recipe.id === replaceRecipeId) ?? null,
+    [catalog, replaceRecipeId],
+  );
+
+  const sheetSelected = useMemo(
+    () => catalog.find((recipe) => recipe.id === sheetRecipeId) ?? null,
+    [catalog, sheetRecipeId],
+  );
+
   useEffect(() => {
-    if (!picking) return;
+    if (!picking) {
+      setSheetRecipeId("");
+      return;
+    }
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") setPicking(null);
     }
@@ -74,6 +136,8 @@ export function DayMealSlots({
     data.set("slot", slot);
     data.set("recipeId", recipeId);
     setPicking(null);
+    setReplaceRecipeId("");
+    setSheetRecipeId("");
     start(async () => {
       await addRecipeToDay(data);
       router.refresh();
@@ -147,6 +211,57 @@ export function DayMealSlots({
         })}
       </div>
 
+      <details className="fold" style={{ marginTop: "0.65rem" }}>
+        <summary>Replace from all recipes</summary>
+        <div className="fold__body stack">
+          <label className="field">
+            <span className="field__label">Meal slot</span>
+            <select
+              value={replaceSlot}
+              onChange={(event) => setReplaceSlot(event.target.value as Slot)}
+              aria-label="Which meal to replace"
+            >
+              {MEAL_SLOTS.map((slot) => (
+                <option key={slot} value={slot}>
+                  {SLOT_LABEL[slot]}
+                  {mealBySlot.get(slot)?.name
+                    ? ` · ${mealBySlot.get(slot)!.name}`
+                    : " · empty"}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field">
+            <span className="field__label">Meal</span>
+            <MealCatalogSelect
+              catalog={catalog}
+              value={replaceRecipeId}
+              onChange={setReplaceRecipeId}
+            />
+          </label>
+
+          {replaceSelected ? (
+            <div className="card card--sunk" style={{ padding: "0.75rem" }}>
+              <p className="row__title">{replaceSelected.name}</p>
+              <p className="row__sub" style={{ marginTop: "0.2rem" }}>
+                {SLOT_LABEL[replaceSelected.slot]} · {replaceSelected.calories} kcal ·{" "}
+                {replaceSelected.protein}g protein
+              </p>
+              <button
+                className="btn btn--primary btn--sm btn--block"
+                type="button"
+                disabled={pending}
+                style={{ marginTop: "0.65rem" }}
+                onClick={() => pick(replaceSlot, replaceSelected.id)}
+              >
+                {pending ? "Replacing…" : `Use for ${SLOT_LABEL[replaceSlot].toLowerCase()}`}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </details>
+
       {picking ? (
         <div
           className="sheet"
@@ -178,13 +293,42 @@ export function DayMealSlots({
               </button>
             </div>
 
-            <div className="sheet__body">
+            <div className="sheet__body stack">
+              <label className="field">
+                <span className="field__label">From all recipes</span>
+                <MealCatalogSelect
+                  catalog={catalog}
+                  value={sheetRecipeId}
+                  onChange={setSheetRecipeId}
+                />
+              </label>
+
+              {sheetSelected ? (
+                <div className="card card--sunk" style={{ padding: "0.75rem" }}>
+                  <p className="row__title">{sheetSelected.name}</p>
+                  <p className="row__sub" style={{ marginTop: "0.2rem" }}>
+                    {SLOT_LABEL[sheetSelected.slot]} · {sheetSelected.calories} kcal ·{" "}
+                    {sheetSelected.protein}g protein
+                  </p>
+                  <button
+                    className="btn btn--primary btn--sm btn--block"
+                    type="button"
+                    disabled={pending}
+                    style={{ marginTop: "0.65rem" }}
+                    onClick={() => pick(picking, sheetSelected.id)}
+                  >
+                    {pending ? "Replacing…" : `Use for ${SLOT_LABEL[picking].toLowerCase()}`}
+                  </button>
+                </div>
+              ) : null}
+
               {options.length === 0 ? (
-                <p className="small muted" style={{ padding: "1rem 0" }}>
-                  No dishes for this meal yet.
+                <p className="small muted" style={{ padding: "0.5rem 0 1rem" }}>
+                  No same-slot dishes yet — pick any meal above.
                 </p>
               ) : (
                 <div className="meal-groups">
+                  <p className="label meal-group__label">Same slot</p>
                   {optionGroups.map((group) => (
                     <div className="meal-group" key={group.key}>
                       <p className="label meal-group__label">{group.label}</p>
