@@ -88,16 +88,13 @@ export function DayMealSlots({
         {MEAL_SLOTS.map((slot) => {
           const meal = mealBySlot.get(slot);
           const slotLabel = SLOT_LABEL[slot];
-          const recipeHref = meal?.recipeId
-            ? `/recipe/${meal.recipeId}?week=${weekStart}&date=${date}&slot=${slot}`
-            : null;
 
           return (
             <div className={meal?.eaten === 1 ? "row row--done" : "row"} key={slot}>
-              {recipeHref ? (
+              {meal?.recipeId ? (
                 <Link
                   className="row__hit"
-                  href={recipeHref}
+                  href={`/recipe/${meal.recipeId}?week=${weekStart}&date=${date}&slot=${slot}`}
                   prefetch={false}
                   aria-label={`Open ${meal.name} recipe`}
                 >
