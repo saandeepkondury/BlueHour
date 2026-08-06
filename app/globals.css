@@ -1157,6 +1157,7 @@ a.tile__label:active {
 }
 
 a.row,
+a.row__hit,
 a.row__title {
   color: inherit;
   text-decoration: none;

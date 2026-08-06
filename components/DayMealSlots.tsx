@@ -87,32 +87,53 @@ export function DayMealSlots({
       <div className="rows" style={{ opacity: pending ? 0.7 : 1 }}>
         {MEAL_SLOTS.map((slot) => {
           const meal = mealBySlot.get(slot);
+          const slotLabel = SLOT_LABEL[slot];
+          const recipeHref = meal?.recipeId
+            ? `/recipe/${meal.recipeId}?week=${weekStart}&date=${date}&slot=${slot}`
+            : null;
+
           return (
             <div className={meal?.eaten === 1 ? "row row--done" : "row"} key={slot}>
+              {recipeHref ? (
+                <Link
+                  className="row__hit"
+                  href={recipeHref}
+                  prefetch={false}
+                  aria-label={`Open ${meal.name} recipe`}
+                >
+                  <span className="row__body">
+                    <span className="row__title">{meal.name}</span>
+                    <span className="row__sub row__sub--wrap">
+                      {slotLabel}
+                      <span className="muted"> · {meal.calories} kcal</span>
+                    </span>
+                  </span>
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  className="row__hit"
+                  disabled={pending}
+                  onClick={() => setPicking(slot)}
+                  aria-label={`Choose ${slotLabel.toLowerCase()}`}
+                >
+                  <span className="row__body">
+                    <span className="row__title">{slotLabel}</span>
+                    <span className="row__sub">Choose a dish</span>
+                  </span>
+                </button>
+              )}
               <button
                 type="button"
-                className="row__hit"
+                className="iconbtn"
                 disabled={pending}
                 onClick={() => setPicking(slot)}
                 aria-label={
                   meal
-                    ? `Change ${SLOT_LABEL[slot]}: ${meal.name}`
-                    : `Choose ${SLOT_LABEL[slot].toLowerCase()}`
+                    ? `Change ${slotLabel}: pick a different dish`
+                    : `Choose ${slotLabel.toLowerCase()}`
                 }
               >
-                <span className="row__body">
-                  <span className="row__title">{SLOT_LABEL[slot]}</span>
-                  <span className="row__sub row__sub--wrap">
-                    {meal ? (
-                      <>
-                        {meal.name}
-                        <span className="muted"> · {meal.calories} kcal</span>
-                      </>
-                    ) : (
-                      "Choose a dish"
-                    )}
-                  </span>
-                </span>
                 <Icon name="chevron" size={16} />
               </button>
             </div>
