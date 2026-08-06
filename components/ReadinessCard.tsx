@@ -118,7 +118,7 @@ export function ReadinessCard({
       </div>
 
       <div className="bento bento--3">
-        <Link className="tile tile--sunk cardlink" href="/sleep" style={{ textDecoration: "none", color: "inherit" }}>
+        <Link className="tile cardlink" href="/sleep" style={{ textDecoration: "none", color: "inherit" }}>
           <p className="tile__label">
             <Icon name="moon" size={13} />
             Sleep
@@ -127,7 +127,7 @@ export function ReadinessCard({
             {day!.asleepMin !== null ? hoursMinutes(day!.asleepMin) : "—"}
           </p>
         </Link>
-        <Link className="tile tile--sunk cardlink" href="/rest-hr" style={{ textDecoration: "none", color: "inherit" }}>
+        <Link className="tile cardlink" href="/rest-hr" style={{ textDecoration: "none", color: "inherit" }}>
           <p className="tile__label">
             <Icon name="heart" size={13} />
             Rest HR
@@ -143,7 +143,7 @@ export function ReadinessCard({
             </p>
           ) : null}
         </Link>
-        <Link className="tile tile--sunk cardlink" href="/hrv" style={{ textDecoration: "none", color: "inherit" }}>
+        <Link className="tile cardlink" href="/hrv" style={{ textDecoration: "none", color: "inherit" }}>
           <p className="tile__label">
             <Icon name="pulse" size={13} />
             HRV
