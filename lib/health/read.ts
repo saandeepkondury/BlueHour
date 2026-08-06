@@ -1,7 +1,29 @@
 import { and, desc, eq, gte, isNotNull, lt, lte } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
-import { healthDays, healthSync, workoutLogs, type HealthDay, type WorkoutLog } from "@/drizzle/schema";
-import { addDays, todayISO } from "@/lib/date";
+import {
+  healthDays,
+  healthSync,
+  profile,
+  workoutLogs,
+  type HealthDay,
+  type WorkoutLog,
+} from "@/drizzle/schema";
+import { addDays, daysBetween, todayISO } from "@/lib/date";
+import { phaseFor } from "@/lib/plan/types";
+
+export interface TrainingLoad {
+  /** Miles logged the calendar day before the readiness date. */
+  yesterdayMi: number;
+  /** Minutes of running yesterday (0 if unknown). */
+  yesterdayMin: number;
+  /** Miles in the 7 days before the readiness date. */
+  weekMi: number;
+  /** Miles in the 7 days before that (acute:chronic baseline). */
+  priorWeekMi: number;
+  daysToRace: number | null;
+  /** Points already folded into the readiness score (usually ≤ 0). */
+  adjustment: number;
+}
 
 export interface Recovery {
   day: HealthDay | null;
@@ -17,6 +39,8 @@ export interface Recovery {
   label: "ready" | "steady" | "hold back" | null;
   /** Last successful Health sync, if any. */
   lastSyncAt: string | null;
+  /** Recent run load that moved the readiness needle. */
+  trainingLoad: TrainingLoad | null;
 }
 
 const SHORT_SLEEP_MIN = 6 * 60;
@@ -73,7 +97,8 @@ export async function recoveryFor(date: string): Promise<Recovery> {
     day = null;
   }
 
-  const score = scoreFor(day, baselineRestingHr, baselineHrvMs);
+  const trainingLoad = await trainingLoadFor(date);
+  const score = scoreFor(day, baselineRestingHr, baselineHrvMs, trainingLoad);
   const sync = await lastSync();
 
   return {
@@ -81,21 +106,24 @@ export async function recoveryFor(date: string): Promise<Recovery> {
     vitalsDate,
     baselineRestingHr,
     baselineHrvMs,
-    advisory: vitalsDate === date ? advisoryFor(day, baselineRestingHr) : null,
+    advisory: vitalsDate === date ? advisoryFor(day, baselineRestingHr, trainingLoad) : null,
     score,
     label: score === null ? null : score >= 75 ? "ready" : score >= 55 ? "steady" : "hold back",
     lastSyncAt: sync?.at ?? null,
+    trainingLoad,
   };
 }
 
 /**
  * A deliberately blunt readiness number: sleep carries most of it, resting
- * heart rate and HRV move it around the edges. It informs, it does not decide.
+ * heart rate, HRV, and recent run load move it around the edges. It informs,
+ * it does not decide.
  */
 function scoreFor(
   day: HealthDay | null,
   restingBaseline: number | null,
   hrvBaseline: number | null,
+  load: TrainingLoad | null,
 ): number | null {
   if (!day) return null;
   if (day.asleepMin === null && day.restingHr === null && day.hrvMs === null) return null;
@@ -117,7 +145,114 @@ function scoreFor(
     score += Math.max(-14, Math.min(12, Math.round(deltaPct / 3)));
   }
 
+  if (load) score += load.adjustment;
+
   return Math.max(5, Math.min(100, Math.round(score)));
+}
+
+/**
+ * Recent miles and time tell the other half of recovery: a long Saturday or a
+ * sharp weekly ramp costs readiness even when vitals look fine. Race proximity
+ * scales that cost — early base absorbs load; taper does not.
+ */
+async function trainingLoadFor(date: string): Promise<TrainingLoad | null> {
+  const from = addDays(date, -14);
+  const before = addDays(date, -1);
+  const logs = await db
+    .select()
+    .from(workoutLogs)
+    .where(and(gte(workoutLogs.date, from), lte(workoutLogs.date, before)));
+
+  if (logs.length === 0) {
+    const [row] = await db.select({ raceDate: profile.raceDate }).from(profile).where(eq(profile.id, 1));
+    const daysToRace = row ? Math.max(0, daysBetween(date, row.raceDate)) : null;
+    return {
+      yesterdayMi: 0,
+      yesterdayMin: 0,
+      weekMi: 0,
+      priorWeekMi: 0,
+      daysToRace,
+      adjustment: 0,
+    };
+  }
+
+  const [row] = await db.select({ raceDate: profile.raceDate }).from(profile).where(eq(profile.id, 1));
+  const daysToRace = row ? Math.max(0, daysBetween(date, row.raceDate)) : null;
+  const weeksToRace = daysToRace === null ? null : Math.max(0, Math.ceil(daysToRace / 7));
+  const phase = weeksToRace === null ? null : phaseFor(weeksToRace);
+
+  const yesterday = addDays(date, -1);
+  const weekFrom = addDays(date, -7);
+  const priorFrom = addDays(date, -14);
+  const priorTo = addDays(date, -8);
+
+  const milesBetween = (start: string, end: string) =>
+    round1(
+      logs
+        .filter((log) => log.date >= start && log.date <= end)
+        .reduce((sum, log) => sum + (log.distanceMi ?? 0), 0),
+    );
+
+  const yLog = logs.find((log) => log.date === yesterday) ?? null;
+  const yesterdayMi = round1(yLog?.distanceMi ?? 0);
+  const yesterdayMin = yLog?.durationSec ? Math.round(yLog.durationSec / 60) : 0;
+  const weekMi = milesBetween(weekFrom, yesterday);
+  const priorWeekMi = milesBetween(priorFrom, priorTo);
+
+  let adjustment = 0;
+
+  // Yesterday's session is the sharpest fatigue signal.
+  if (yesterdayMi >= 12) adjustment -= 14;
+  else if (yesterdayMi >= 10) adjustment -= 11;
+  else if (yesterdayMi >= 8) adjustment -= 8;
+  else if (yesterdayMi >= 6) adjustment -= 5;
+  else if (yesterdayMi >= 4) adjustment -= 3;
+
+  if (yesterdayMin >= 110) adjustment -= 5;
+  else if (yesterdayMin >= 90) adjustment -= 3;
+  else if (yesterdayMin >= 70) adjustment -= 2;
+
+  // Acute:chronic — this week vs the week before.
+  if (priorWeekMi >= 8) {
+    const ratio = weekMi / priorWeekMi;
+    if (ratio >= 1.5) adjustment -= 10;
+    else if (ratio >= 1.3) adjustment -= 6;
+    else if (ratio >= 1.15) adjustment -= 3;
+  } else if (weekMi >= 18) {
+    // Early block with little history but already a solid week.
+    adjustment -= 3;
+  }
+
+  // Same absolute load costs more as race day closes in.
+  if (phase === "taper" || phase === "race") {
+    if (yesterdayMi >= 5) adjustment -= 4;
+    else if (weekMi >= 20) adjustment -= 3;
+  } else if (phase === "peak" && yesterdayMi >= 8) {
+    adjustment -= 3;
+  } else if (phase === "specific" && yesterdayMi >= 10) {
+    adjustment -= 2;
+  }
+  // Base / early build (e.g. ~192 days out): expected load, no extra penalty.
+
+  // A quiet day after a heavy prior week is the point of the cutback.
+  if (yesterdayMi === 0 && priorWeekMi >= 15 && weekMi <= priorWeekMi * 0.75) {
+    adjustment += 3;
+  }
+
+  adjustment = Math.max(-22, Math.min(4, adjustment));
+
+  return {
+    yesterdayMi,
+    yesterdayMin,
+    weekMi,
+    priorWeekMi,
+    daysToRace,
+    adjustment,
+  };
+}
+
+function round1(value: number): number {
+  return Math.round(value * 10) / 10;
 }
 
 function median(values: number[]): number {
@@ -126,7 +261,11 @@ function median(values: number[]): number {
   return sorted.length % 2 === 0 ? Math.round((sorted[mid - 1] + sorted[mid]) / 2) : sorted[mid];
 }
 
-function advisoryFor(day: HealthDay | null, baseline: number | null): string | null {
+function advisoryFor(
+  day: HealthDay | null,
+  baseline: number | null,
+  load: TrainingLoad | null,
+): string | null {
   if (!day) return null;
 
   const shortSleep = day.asleepMin !== null && day.asleepMin < SHORT_SLEEP_MIN;
@@ -142,6 +281,25 @@ function advisoryFor(day: HealthDay | null, baseline: number | null): string | n
   if (highResting) {
     return `Resting heart rate is ${day.restingHr! - baseline} bpm above your two-week normal. Worth an easy day if it stays there.`;
   }
+
+  if (load && load.yesterdayMi >= 8) {
+    const raceBit =
+      load.daysToRace !== null && load.daysToRace > 0
+        ? ` With ${load.daysToRace} days to the half, protect the next easy day.`
+        : "";
+    return `You ran ${load.yesterdayMi} mi yesterday${
+      load.yesterdayMin > 0 ? ` in ${load.yesterdayMin} min` : ""
+    }.${raceBit}`;
+  }
+
+  if (load && load.priorWeekMi >= 8 && load.weekMi / load.priorWeekMi >= 1.3) {
+    return `Mileage jumped to ${load.weekMi} mi this week from ${load.priorWeekMi} mi last week. Keep today honest.`;
+  }
+
+  if (load && load.adjustment <= -8 && load.daysToRace !== null && load.daysToRace <= 21) {
+    return `Training load is still high with ${load.daysToRace} days to race. Err easy until it settles.`;
+  }
+
   return null;
 }
 

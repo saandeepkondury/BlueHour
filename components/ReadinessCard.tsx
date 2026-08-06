@@ -22,7 +22,8 @@ export function ReadinessCard({
   /** Calendar day being viewed — keeps copy honest on past days. */
   date: string;
 }) {
-  const { day, score, label, baselineRestingHr, advisory, vitalsDate, lastSyncAt } = recovery;
+  const { day, score, label, baselineRestingHr, advisory, vitalsDate, lastSyncAt, trainingLoad } =
+    recovery;
   const isToday = date === todayISO();
   const stale = Boolean(vitalsDate && vitalsDate !== date);
 
@@ -97,6 +98,15 @@ export function ReadinessCard({
               </p>
             ) : advisory ? (
               <p className="card__sub">{advisory}</p>
+            ) : trainingLoad && trainingLoad.daysToRace !== null && trainingLoad.adjustment !== 0 ? (
+              <p className="card__sub">
+                Training load {trainingLoad.adjustment > 0 ? "+" : ""}
+                {trainingLoad.adjustment}
+                {trainingLoad.weekMi > 0 ? ` · ${trainingLoad.weekMi} mi this week` : ""}
+                {` · ${trainingLoad.daysToRace} days to race`}
+              </p>
+            ) : trainingLoad && trainingLoad.daysToRace !== null ? (
+              <p className="card__sub">{trainingLoad.daysToRace} days to the half</p>
             ) : null}
           </div>
           {score !== null ? (
