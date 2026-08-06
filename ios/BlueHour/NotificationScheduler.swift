@@ -73,16 +73,17 @@ enum NotificationScheduler {
     static func sendTest() async {
         _ = await requestPermission()
         let content = UNMutableNotificationContent()
-        content.title = "Blue Hour"
-        content.body = "Native notifications are on. Morning briefs and water pings will land here. Water alerts include a + Cup button."
+        content.title = "Drink a glass of water"
+        content.body = "One cup now — tap + Cup to log it."
         content.sound = .default
+        content.threadIdentifier = "water"
         content.categoryIdentifier = waterCategory
         content.userInfo = ["kind": "water", "date": todayAustin()]
 
         let request = UNNotificationRequest(
             identifier: prefix + "test",
             content: content,
-            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 2, repeats: false)
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
         )
         try? await UNUserNotificationCenter.current().add(request)
     }

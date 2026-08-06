@@ -113,6 +113,10 @@ struct RootView: View {
         }
         .onOpenURL { url in
             guard url.scheme == "bluehour" else { return }
+            if url.host == "test-water" {
+                Task { await NotificationScheduler.sendTest() }
+                return
+            }
             Task { await model.syncIfPossible() }
         }
         .sheet(isPresented: $model.showSettings) {
