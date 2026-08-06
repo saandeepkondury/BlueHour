@@ -46,7 +46,7 @@ export async function GET(request: Request) {
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || url.origin;
-  const push = await sendPush(waterPush(appUrl, log.waterOz, target));
+  const push = await sendPush(waterPush(appUrl, log.waterOz, target, date));
 
   if (push.sent > 0) {
     await setSetting(KEYS.waterPushSlot, slot);

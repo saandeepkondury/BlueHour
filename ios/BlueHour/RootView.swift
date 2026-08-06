@@ -240,7 +240,7 @@ private struct SetupView: View {
                     } header: {
                         Text("Notifications")
                     } footer: {
-                        Text("Morning briefs and water reminders (every 2 hours, 8am–10pm Austin) are scheduled on this phone. Open the app once a day so copy stays current. Pause them in the website Settings if you want silence.")
+                        Text("Morning briefs and water reminders (every 2 hours, 8am–10pm Austin) are scheduled on this phone. Water banners include a + Cup button that logs without opening the app. Open once a day so copy stays current. Pause them in the website Settings if you want silence.")
                     }
                 }
             }

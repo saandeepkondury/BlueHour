@@ -49,6 +49,12 @@ struct IngestResponse: Decodable {
     let markedDone: [String]?
 }
 
+struct WaterLogResponse: Decodable {
+    let ok: Bool
+    let date: String?
+    let waterOz: Int?
+}
+
 enum SyncError: LocalizedError {
     case notConfigured
     case timeout
@@ -101,6 +107,27 @@ struct SyncClient {
         }
     }
 
+    func logWater(date: String, oz: Int = 8) async throws -> WaterLogResponse {
+        guard Settings.isConfigured, let url = Settings.waterLogURL() else {
+            throw SyncError.notConfigured
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(Settings.ingestSecret)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 30
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["date": date, "oz": oz])
+
+        do {
+            return try await performWater(request)
+        } catch let error as URLError where error.code == .timedOut {
+            throw SyncError.timeout
+        } catch let error as URLError where Self.unreachableCodes.contains(error.code) {
+            throw SyncError.unreachable
+        }
+    }
+
     private static let unreachableCodes: Set<URLError.Code> = [
         .cannotConnectToHost,
         .cannotFindHost,
@@ -118,5 +145,16 @@ struct SyncClient {
         }
 
         return try JSONDecoder().decode(IngestResponse.self, from: data)
+    }
+
+    private func performWater(_ request: URLRequest) async throws -> WaterLogResponse {
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+        guard (200..<300).contains(status) else {
+            throw SyncError.server(status: status, message: String(data: data, encoding: .utf8) ?? "")
+        }
+
+        return try JSONDecoder().decode(WaterLogResponse.self, from: data)
     }
 }

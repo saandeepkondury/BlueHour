@@ -1,4 +1,5 @@
 const SHELL_CACHE = "blue-hour-shell-v1";
+const WATER_LOG_ACTION = "log-cup";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -50,13 +51,53 @@ self.addEventListener("push", (event) => {
       icon: "/icon.svg",
       badge: "/icon.svg",
       tag: payload.tag || "daily-brief",
-      data: { url: payload.url || "/" },
+      actions: payload.actions || [],
+      data: {
+        url: payload.url || "/",
+        date: payload.date || null,
+        tag: payload.tag || "daily-brief",
+      },
     }),
   );
 });
 
+async function logCupFromNotification(data) {
+  const body = { oz: 8 };
+  if (data && typeof data.date === "string") body.date = data.date;
+
+  const response = await fetch("/api/water/log", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    await self.registration.showNotification("Could not log water", {
+      body: "Open Blue Hour and tap +1 cup on Today.",
+      tag: "water-log-fail",
+      data: { url: "/" },
+    });
+    return;
+  }
+
+  const result = await response.json().catch(() => ({}));
+  const oz = typeof result.waterOz === "number" ? result.waterOz : null;
+  await self.registration.showNotification("Cup logged", {
+    body: oz !== null ? `${oz} oz so far today.` : "One cup added.",
+    tag: "water-log-ok",
+    data: { url: "/water" },
+  });
+}
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+
+  if (event.action === WATER_LOG_ACTION) {
+    event.waitUntil(logCupFromNotification(event.notification.data));
+    return;
+  }
+
   const target = (event.notification.data && event.notification.data.url) || "/";
 
   event.waitUntil(

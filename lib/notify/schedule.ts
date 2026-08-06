@@ -10,6 +10,7 @@ export interface LocalPing {
   kind: LocalPingKind;
   title: string;
   body: string;
+  date: string;
   year: number;
   month: number;
   day: number;
@@ -44,7 +45,7 @@ function ping(
   if (wallTimeInZone(dateISO, hour, minute).getTime() <= Date.now() + LEAD_MS) {
     return null;
   }
-  return { id, kind, title, body, ...splitISO(dateISO), hour, minute };
+  return { id, kind, title, body, date: dateISO, ...splitISO(dateISO), hour, minute };
 }
 
 export async function buildLocalSchedule(appUrl: string): Promise<LocalSchedule> {
@@ -78,7 +79,7 @@ export async function buildLocalSchedule(appUrl: string): Promise<LocalSchedule>
     const target = bundle?.targets.waterOz ?? 80;
     if (log.waterOz >= target) continue;
 
-    const copy = waterPush(appUrl, log.waterOz, target);
+    const copy = waterPush(appUrl, log.waterOz, target, date);
     for (let hour = WATER_QUIET_START; hour <= WATER_QUIET_END; hour += 1) {
       if (!waterSlotDue(hour)) continue;
       const water = ping(

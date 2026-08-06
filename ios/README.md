@@ -49,10 +49,12 @@ The key is stored in the iPhone keychain, not in this repo. You only enter it on
 These are native local notifications on this phone, not Safari web push.
 
 - **Morning brief** — at the reminder hour in Settings (default 6am Austin), with that day's workout copy.
-- **Water** — every even hour from 8am to 10pm Austin, skipped once the day's water target is logged.
+- **Water** — every even hour from 8am to 10pm Austin, skipped once the day's water target is logged. Each water banner includes a **+ Cup** action that logs 8 oz without opening the app.
 - Both stop if morning reminders are paused on the website.
 
-Open the app (or return to it) to refresh the next few days of copy. Gear → **Send a test notification** to confirm iOS will show banners.
+Open the app (or return to it) to refresh the next few days of copy. Gear → **Send a test notification** to confirm iOS will show banners (the test includes the + Cup button).
+
+On a locked phone: long-press or pull down the banner to reveal **+ Cup**.
 
 If you denied the prompt: **Settings → Notifications → Blue Hour → Allow**.
 
@@ -67,5 +69,5 @@ Apps signed with a free Apple ID stop working after 7 days. When Blue Hour refus
 ## Permission notes
 
 - HealthKit denials are silent by design: iOS never tells an app which read permissions you refused, so a missing metric shows as "—" rather than an error.
-- To change what it can see later: **Health app → Sharing → Apps → Blue Hour**.
+- To change what it can see later: **Health app → Sharing → Apps → Blue Hour**. Turn on **Sleep** as well as heart rate and workouts — without Sleep, Today stays empty for overnight hours.
 - Health sync happens only while the app is open. Notifications are scheduled on-device for the next few days, so briefs and water pings still fire if you do not open the app that morning.

@@ -27,6 +27,11 @@ struct Settings {
         return base.appendingPathComponent("api/health/ingest")
     }
 
+    static func waterLogURL() -> URL? {
+        guard let base = URL(string: baseURL) else { return nil }
+        return base.appendingPathComponent("api/water/log")
+    }
+
     private static func keychainQuery() -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
