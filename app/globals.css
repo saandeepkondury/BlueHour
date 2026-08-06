@@ -670,6 +670,10 @@ a.tile__label:active {
   letter-spacing: -0.03em;
 }
 
+.ring__num--compact {
+  letter-spacing: -0.045em;
+}
+
 .ring__cap {
   margin-top: 0.15rem;
   font-size: 0.5625rem;

@@ -29,6 +29,14 @@ export function Ring({
   const r = (size - thickness) / 2;
   const circumference = 2 * Math.PI * r;
   const dash = (clamped / 100) * circumference;
+  // Keep the center label inside the stroke — three-digit % needs a smaller face.
+  const valueText =
+    typeof value === "string" || typeof value === "number" ? String(value) : "";
+  const digitCount = (valueText.match(/\d/g) ?? []).length;
+  const compact = digitCount >= 3;
+  const numStyle = compact
+    ? { fontSize: `${Math.max(13, Math.round(size * 0.23))}px` }
+    : undefined;
 
   return (
     <div
@@ -59,7 +67,11 @@ export function Ring({
       </svg>
       {value !== undefined || caption ? (
         <div className="ring__center">
-          {value !== undefined ? <span className="ring__num">{value}</span> : null}
+          {value !== undefined ? (
+            <span className={compact ? "ring__num ring__num--compact" : "ring__num"} style={numStyle}>
+              {value}
+            </span>
+          ) : null}
           {caption ? <span className="ring__cap">{caption}</span> : null}
         </div>
       ) : null}
