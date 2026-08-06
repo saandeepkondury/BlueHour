@@ -22,7 +22,7 @@ import { addDays, startOfWeek, todayISO } from "@/lib/date";
 import { generatePlan } from "@/lib/plan/generate";
 import type { WorkoutType } from "@/lib/plan/types";
 import { buildDayPlan, sumMacros, type PlannedMeal } from "@/lib/nutrition/meal-plan";
-import { candidatesFor, parseAllergies, type Diet, type Slot } from "@/lib/nutrition/recipes";
+import { candidatesFor, parseAllergies, recipeById, type Diet, type Slot } from "@/lib/nutrition/recipes";
 import {
   computeTargets,
   fuelPlan,
@@ -36,7 +36,7 @@ import { deficitFor, proteinPerKgFor } from "@/lib/strength/abs";
 import { ensureStrengthPlan, regenerateStrengthPlan, strengthFor } from "@/lib/strength/plan";
 import { checkedExercises, strengthLogFor } from "@/lib/strength/log";
 import { recoveryFor, type Recovery } from "@/lib/health/read";
-import { bannedRecipeIds, fuelOverrides } from "@/lib/settings";
+import { bannedRecipeIds, fuelOverrides, getSetting, KEYS, setSetting } from "@/lib/settings";
 import type { Phase } from "@/lib/plan/types";
 import type { StrengthLog, StrengthSession } from "@/drizzle/schema";
 
@@ -213,6 +213,90 @@ export async function saveWorkoutLog(entry: {
 
 // ---------- nutrition ----------
 
+/** Catalog marker after switching to Instagram-only recipes. */
+const MEALS_CATALOG_VERSION = "instagram-v1";
+
+/** Prevents re-entry while fillWeekMeals → ensureMealPlan → sync is in progress. */
+let mealsCatalogSyncing = false;
+
+/**
+ * One-shot: wipe planned meals that reference removed recipes, clear every week
+ * after the current one, and rebuild this week from the live catalog.
+ */
+export async function syncMealsToCurrentCatalog(): Promise<void> {
+  if (mealsCatalogSyncing) return;
+
+  await ready();
+  const currentVersion = await getSetting(KEYS.mealsCatalogVersion);
+  if (currentVersion === MEALS_CATALOG_VERSION) return;
+
+  mealsCatalogSyncing = true;
+  try {
+    const weekStart = startOfWeek(todayISO());
+    const weekEnd = addDays(weekStart, 6);
+
+    // Future weeks stay empty — runner fills them by hand.
+    await db.delete(mealPlans).where(gt(mealPlans.date, weekEnd));
+
+    // Drop anything pointing at a recipe that is no longer in the catalog.
+    const stale = await db
+      .select({ id: mealPlans.id, recipeId: mealPlans.recipeId })
+      .from(mealPlans);
+    const staleIds = stale
+      .filter((row) => !row.recipeId || !recipeById(row.recipeId))
+      .map((row) => row.id);
+    if (staleIds.length > 0) {
+      await db.delete(mealPlans).where(inArray(mealPlans.id, staleIds));
+    }
+
+    // Rebuild this week fresh from Instagram recipes.
+    await db
+      .delete(mealPlans)
+      .where(and(gte(mealPlans.date, weekStart), lte(mealPlans.date, weekEnd)));
+    await fillWeekMeals(weekStart);
+
+    await setSetting(KEYS.mealsCatalogVersion, MEALS_CATALOG_VERSION);
+  } finally {
+    mealsCatalogSyncing = false;
+  }
+}
+
+async function fillWeekMeals(weekStart: string): Promise<void> {
+  const weekEnd = addDays(weekStart, 6);
+  const [current, days, existing] = await Promise.all([
+    getProfile(),
+    getWorkouts(weekStart, weekEnd),
+    getWeekMeals(weekStart),
+  ]);
+  const datesWithMeals = new Set(existing.map((row) => row.date));
+  const missing = days.filter((day) => !datesWithMeals.has(day.date));
+  if (missing.length === 0) return;
+
+  const [banned, overrides] = await Promise.all([bannedRecipeIds(), fuelOverrides()]);
+  await Promise.all(
+    missing.map(async (day) => {
+      const type = day.type as WorkoutType;
+      const { kcal } = deficitFor(day.phase as Phase, type, current.absGoal === 1);
+      const adjust: TargetAdjust = {
+        deficitKcal: kcal - overrides.calorieDelta,
+        proteinPerKg: overrides.proteinFloor ?? proteinPerKgFor(kcal, type),
+      };
+      const targets = computeTargets(
+        {
+          weightKg: current.weightKg,
+          heightCm: current.heightCm,
+          age: current.age,
+          sex: current.sex,
+        },
+        { type, distanceMi: day.distanceMi, durationMin: day.durationMin },
+        day.date,
+        adjust,
+      );
+      await ensureMealPlan(day.date, current, day, targets, banned);
+    }),
+  );
+}
+
 export async function ensureMealPlan(
   date: string,
   current: Profile,
@@ -221,6 +305,7 @@ export async function ensureMealPlan(
   excludeIds?: string[],
 ): Promise<MealPlanRow[]> {
   await ready();
+  await syncMealsToCurrentCatalog();
 
   const existing = await db
     .select()
@@ -228,6 +313,11 @@ export async function ensureMealPlan(
     .where(eq(mealPlans.date, date))
     .orderBy(asc(mealPlans.id));
   if (existing.length > 0) return existing;
+
+  // Only auto-plan the current week. Future (and past) days stay empty for manual picks.
+  const thisWeek = startOfWeek(todayISO());
+  const weekEnd = addDays(thisWeek, 6);
+  if (date < thisWeek || date > weekEnd) return [];
 
   const banned = excludeIds ?? (await bannedRecipeIds());
   const planned = buildDayPlan({
@@ -665,46 +755,18 @@ export async function loadFuelWeek(weekStart: string): Promise<{
   pantry: Set<string>;
 }> {
   await ready();
+  await syncMealsToCurrentCatalog();
+
   const weekEnd = addDays(weekStart, 6);
-  const [current, days, existing, pantry] = await Promise.all([
+  const [current, days, meals, pantry] = await Promise.all([
     getProfile(),
     getWorkouts(weekStart, weekEnd),
     getWeekMeals(weekStart),
     getPantryHaveKeys(),
   ]);
 
-  const datesWithMeals = new Set(existing.map((row) => row.date));
-  const missing = days.filter((day) => !datesWithMeals.has(day.date));
-  if (missing.length === 0) {
-    return { profile: current, workouts: days, meals: existing, pantry };
-  }
-
-  const [banned, overrides] = await Promise.all([bannedRecipeIds(), fuelOverrides()]);
-
-  await Promise.all(
-    missing.map(async (day) => {
-      const type = day.type as WorkoutType;
-      const { kcal } = deficitFor(day.phase as Phase, type, current.absGoal === 1);
-      const adjust: TargetAdjust = {
-        deficitKcal: kcal - overrides.calorieDelta,
-        proteinPerKg: overrides.proteinFloor ?? proteinPerKgFor(kcal, type),
-      };
-      const targets = computeTargets(
-        {
-          weightKg: current.weightKg,
-          heightCm: current.heightCm,
-          age: current.age,
-          sex: current.sex,
-        },
-        { type, distanceMi: day.distanceMi, durationMin: day.durationMin },
-        day.date,
-        adjust,
-      );
-      await ensureMealPlan(day.date, current, day, targets, banned);
-    }),
-  );
-
-  const meals = await getWeekMeals(weekStart);
+  // Do not auto-fill missing days. This week was seeded by syncMealsToCurrentCatalog;
+  // later weeks stay empty until the runner picks dishes by hand.
   return { profile: current, workouts: days, meals, pantry };
 }
 

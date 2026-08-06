@@ -18,6 +18,8 @@ export const KEYS = {
   bannedRecipes: "banned_recipes",
   workoutxCache: "workoutx_cache",
   strengthCatalog: "strength_catalog_version",
+  /** Bumped when the meal catalog is replaced so planned meals can be wiped once. */
+  mealsCatalogVersion: "meals_catalog_version",
 } as const;
 
 export type SettingKey = (typeof KEYS)[keyof typeof KEYS];
