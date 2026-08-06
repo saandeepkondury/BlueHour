@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { clearDayMeal, reshuffleWeek } from "@/app/actions";
 import { Icon } from "@/components/Icon";
+import { RecipeBrowser, SlotJump } from "@/components/RecipeBrowser";
 import { addDays, formatRange, formatShort, startOfWeek, todayISO, weekdayShort } from "@/lib/date";
-import { recipesReadyForSlot, topReadyRecipes } from "@/lib/nutrition/grocery";
+import { buildBrowseCatalog } from "@/lib/nutrition/grocery";
 import {
   candidatesFor,
   MEAL_SLOTS,
@@ -12,17 +13,11 @@ import {
   type Slot,
 } from "@/lib/nutrition/recipes";
 import { TYPE_LABEL, type WorkoutType } from "@/lib/plan/types";
-import {
-  ensureWeekMeals,
-  getPantryHaveKeys,
-  getProfile,
-  getWorkouts,
-  slotOrder,
-} from "@/lib/store";
+import { loadFuelWeek, slotOrder } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
-const BROWSE_SLOTS: Slot[] = [
+const ALL_SLOTS: Slot[] = [
   ...MEAL_SLOTS,
   "fuel_pre",
   "fuel_during",
@@ -38,27 +33,17 @@ export default async function FuelWeekPage({
   const today = todayISO();
   const weekStart =
     week && /^\d{4}-\d{2}-\d{2}$/.test(week) ? startOfWeek(week) : startOfWeek(today);
-  const browseSlot: Slot =
-    slotParam && BROWSE_SLOTS.includes(slotParam as Slot)
-      ? (slotParam as Slot)
-      : "breakfast";
+  const initialSlot: Slot =
+    slotParam && ALL_SLOTS.includes(slotParam as Slot) ? (slotParam as Slot) : "breakfast";
 
-  const [meals, workouts, pantry, profile] = await Promise.all([
-    ensureWeekMeals(weekStart),
-    getWorkouts(weekStart, addDays(weekStart, 6)),
-    getPantryHaveKeys(),
-    getProfile(),
-  ]);
+  const { profile, workouts, meals, pantry } = await loadFuelWeek(weekStart);
 
   const diet = profile.dietPref as Diet;
   const allergies = parseAllergies(profile.allergies);
-
-  const catalog = recipesReadyForSlot(browseSlot, pantry, (recipe) =>
-    candidatesFor(browseSlot, diet, allergies).some((r) => r.id === recipe.id),
+  const allowedIds = new Set(
+    ALL_SLOTS.flatMap((s) => candidatesFor(s, diet, allergies)).map((r) => r.id),
   );
-  const readyNow = topReadyRecipes(pantry, 6).filter((row) =>
-    candidatesFor(row.recipe.slot, diet, allergies).some((r) => r.id === row.recipe.id),
-  );
+  const catalog = buildBrowseCatalog(pantry, (recipe) => allowedIds.has(recipe.id));
 
   const byDate = new Map<string, typeof meals>();
   for (const meal of meals) {
@@ -80,15 +65,17 @@ export default async function FuelWeekPage({
           <span style={{ display: "flex", gap: "0.35rem" }}>
             <Link
               className="iconbtn iconbtn--solid"
-              href={`/fuel?week=${addDays(weekStart, -7)}&slot=${browseSlot}`}
+              href={`/fuel?week=${addDays(weekStart, -7)}`}
               aria-label="Previous week"
+              prefetch
             >
               <Icon name="back" size={18} />
             </Link>
             <Link
               className="iconbtn iconbtn--solid"
-              href={`/fuel?week=${addDays(weekStart, 7)}&slot=${browseSlot}`}
+              href={`/fuel?week=${addDays(weekStart, 7)}`}
               aria-label="Next week"
+              prefetch
             >
               <Icon name="chevron" size={18} />
             </Link>
@@ -123,94 +110,13 @@ export default async function FuelWeekPage({
         </div>
       </section>
 
-      <section className="block block--tight">
-        <div className="card">
-          <p className="label" style={{ marginBottom: "0.35rem" }}>
-            Pick a recipe
-          </p>
-          <p className="small sub" style={{ marginBottom: "0.75rem" }}>
-            Filter by meal, open a dish for instructions, then add it to any day.
-          </p>
-          <div className="seg" role="tablist" aria-label="Meal type" style={{ marginBottom: "0.75rem" }}>
-            {BROWSE_SLOTS.map((s) => (
-              <Link
-                key={s}
-                href={`/fuel?week=${weekStart}&slot=${s}#browse`}
-                role="tab"
-                aria-selected={browseSlot === s}
-                aria-current={browseSlot === s ? "page" : undefined}
-              >
-                {SLOT_LABEL[s]}
-              </Link>
-            ))}
-          </div>
-
-          <div id="browse" className="rows" style={{ maxHeight: "18rem", overflow: "auto" }}>
-            {catalog.length === 0 ? (
-              <p className="small muted">No recipes for this meal type yet.</p>
-            ) : (
-              catalog.map(({ recipe, have, total, pct }) => (
-                <Link
-                  className="row"
-                  key={recipe.id}
-                  href={`/recipe/${recipe.id}?week=${weekStart}&date=${today}&slot=${recipe.slot}`}
-                  style={{ color: "inherit", textDecoration: "none" }}
-                >
-                  <span className="row__body">
-                    <span className="row__title">{recipe.name}</span>
-                    <span className="row__sub">
-                      {recipe.calories} kcal · {recipe.protein}g protein · {recipe.minutes} min
-                      {total > 0 ? ` · ${have}/${total} at home` : ""}
-                    </span>
-                  </span>
-                  <span className="row__meta">{total > 0 ? `${pct}%` : "→"}</span>
-                </Link>
-              ))
-            )}
-          </div>
-        </div>
-      </section>
-
-      {readyNow.length > 0 ? (
-        <section className="block block--tight">
-          <div className="card">
-            <p className="label" style={{ marginBottom: "0.35rem" }}>
-              Ready from your pantry
-            </p>
-            <p className="small sub" style={{ marginBottom: "0.75rem" }}>
-              Dishes where you already have most of the ingredients.
-            </p>
-            <div className="rows">
-              {readyNow.map(({ recipe, have, total, pct }) => (
-                <Link
-                  className="row"
-                  key={recipe.id}
-                  href={`/recipe/${recipe.id}?week=${weekStart}&date=${today}&slot=${recipe.slot}`}
-                  style={{ color: "inherit", textDecoration: "none" }}
-                >
-                  <span className="row__body">
-                    <span className="row__title">{recipe.name}</span>
-                    <span className="row__sub">
-                      {SLOT_LABEL[recipe.slot]} · {have}/{total} ingredients
-                    </span>
-                  </span>
-                  <span className="row__meta">{pct}%</span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : pantry.size === 0 ? (
-        <section className="block block--tight">
-          <div className="card">
-            <p className="small sub">
-              Mark what you have on{" "}
-              <Link href={`/fuel/grocery?week=${weekStart}`}>Grocery</Link> and we&apos;ll surface
-              recipes you can cook tonight.
-            </p>
-          </div>
-        </section>
-      ) : null}
+      <RecipeBrowser
+        weekStart={weekStart}
+        today={today}
+        catalog={catalog}
+        initialSlot={initialSlot}
+        hasPantry={pantry.size > 0}
+      />
 
       <section className="block block--tight">
         <div className="stack">
@@ -251,6 +157,7 @@ export default async function FuelWeekPage({
                           {meal.recipeId ? (
                             <Link
                               href={`/recipe/${meal.recipeId}?week=${weekStart}&date=${workout.date}&slot=${meal.slot}`}
+                              prefetch={false}
                               style={{ color: "inherit" }}
                             >
                               {meal.name}
@@ -261,7 +168,10 @@ export default async function FuelWeekPage({
                         </span>
                         <span className="row__sub">{SLOT_LABEL[meal.slot as Slot]}</span>
                       </span>
-                      <span className="row__meta" style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
+                      <span
+                        className="row__meta"
+                        style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}
+                      >
                         {meal.calories}
                         <form action={clearDayMeal}>
                           <input type="hidden" name="date" value={workout.date} />
@@ -280,21 +190,19 @@ export default async function FuelWeekPage({
                   ))}
                 </div>
 
-                <div className="btnrow" style={{ marginTop: "0.75rem", flexWrap: "wrap", gap: "0.35rem" }}>
+                <div
+                  className="btnrow"
+                  style={{ marginTop: "0.75rem", flexWrap: "wrap", gap: "0.35rem" }}
+                >
                   {MEAL_SLOTS.map((s) => (
-                    <Link
-                      key={s}
-                      className="btn btn--ghost btn--sm"
-                      href={`/fuel?week=${weekStart}&slot=${s}#browse`}
-                    >
-                      + {SLOT_LABEL[s]}
-                    </Link>
+                    <SlotJump key={s} slot={s} label={SLOT_LABEL[s]} />
                   ))}
                 </div>
 
                 <Link
                   className="btn btn--ghost btn--sm btn--block"
                   href={`/day/${workout.date}`}
+                  prefetch={false}
                   style={{ marginTop: "0.5rem" }}
                 >
                   Open day

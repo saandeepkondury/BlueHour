@@ -218,23 +218,29 @@ export async function ensureMealPlan(
   current: Profile,
   workout: Pick<Workout, "type" | "distanceMi" | "durationMin">,
   targets: DayTargets,
+  excludeIds?: string[],
 ): Promise<MealPlanRow[]> {
   await ready();
+
+  const existing = await db
+    .select()
+    .from(mealPlans)
+    .where(eq(mealPlans.date, date))
+    .orderBy(asc(mealPlans.id));
+  if (existing.length > 0) return existing;
+
+  const banned = excludeIds ?? (await bannedRecipeIds());
   const planned = buildDayPlan({
     date,
     targets,
     workoutType: workout.type as WorkoutType,
     diet: current.dietPref as Diet,
     allergies: parseAllergies(current.allergies),
-    excludeIds: await bannedRecipeIds(),
+    excludeIds: banned,
   });
 
-  // Insert-ignore keeps any meal the runner already swapped or ate.
-  for (const meal of planned) {
-    await db
-      .insert(mealPlans)
-      .values({ date, ...meal })
-      .onConflictDoNothing();
+  if (planned.length > 0) {
+    await db.insert(mealPlans).values(planned.map((meal) => ({ date, ...meal }))).onConflictDoNothing();
   }
 
   return db.select().from(mealPlans).where(eq(mealPlans.date, date)).orderBy(asc(mealPlans.id));
@@ -632,34 +638,74 @@ export async function weekRecipeIds(weekStart: string): Promise<(string | null)[
   return rows.map((row) => row.recipeId);
 }
 
-/** Ensures a whole week of meals exists, which the Fuel tab and grocery list rely on. */
-export async function ensureWeekMeals(weekStart: string): Promise<MealPlanRow[]> {
-  const current = await getProfile();
-  const days = await getWorkouts(weekStart, addDays(weekStart, 6));
-
-  for (const day of days) {
-    const type = day.type as WorkoutType;
-    const { adjust } = await fuelAdjustFor(current, { phase: day.phase, type });
-    const targets = computeTargets(
-      {
-        weightKg: current.weightKg,
-        heightCm: current.heightCm,
-        age: current.age,
-        sex: current.sex,
-      },
-      { type, distanceMi: day.distanceMi, durationMin: day.durationMin },
-      day.date,
-      adjust,
-    );
-    await ensureMealPlan(day.date, current, day, targets);
-  }
-
+/** Read-only week meals — no planning side effects. */
+export async function getWeekMeals(weekStart: string): Promise<MealPlanRow[]> {
   await ready();
   return db
     .select()
     .from(mealPlans)
     .where(and(gte(mealPlans.date, weekStart), lte(mealPlans.date, addDays(weekStart, 6))))
     .orderBy(asc(mealPlans.date), asc(mealPlans.id));
+}
+
+/**
+ * Ensures a whole week of meals exists. Skips days that already have rows so
+ * Fuel tab switches stay cheap after the first visit in a week.
+ */
+export async function ensureWeekMeals(weekStart: string): Promise<MealPlanRow[]> {
+  const { meals } = await loadFuelWeek(weekStart);
+  return meals;
+}
+
+/** One round-trip bundle for the Fuel week page — profile, workouts, meals, pantry. */
+export async function loadFuelWeek(weekStart: string): Promise<{
+  profile: Profile;
+  workouts: Workout[];
+  meals: MealPlanRow[];
+  pantry: Set<string>;
+}> {
+  await ready();
+  const weekEnd = addDays(weekStart, 6);
+  const [current, days, existing, pantry] = await Promise.all([
+    getProfile(),
+    getWorkouts(weekStart, weekEnd),
+    getWeekMeals(weekStart),
+    getPantryHaveKeys(),
+  ]);
+
+  const datesWithMeals = new Set(existing.map((row) => row.date));
+  const missing = days.filter((day) => !datesWithMeals.has(day.date));
+  if (missing.length === 0) {
+    return { profile: current, workouts: days, meals: existing, pantry };
+  }
+
+  const [banned, overrides] = await Promise.all([bannedRecipeIds(), fuelOverrides()]);
+
+  await Promise.all(
+    missing.map(async (day) => {
+      const type = day.type as WorkoutType;
+      const { kcal } = deficitFor(day.phase as Phase, type, current.absGoal === 1);
+      const adjust: TargetAdjust = {
+        deficitKcal: kcal - overrides.calorieDelta,
+        proteinPerKg: overrides.proteinFloor ?? proteinPerKgFor(kcal, type),
+      };
+      const targets = computeTargets(
+        {
+          weightKg: current.weightKg,
+          heightCm: current.heightCm,
+          age: current.age,
+          sex: current.sex,
+        },
+        { type, distanceMi: day.distanceMi, durationMin: day.durationMin },
+        day.date,
+        adjust,
+      );
+      await ensureMealPlan(day.date, current, day, targets, banned);
+    }),
+  );
+
+  const meals = await getWeekMeals(weekStart);
+  return { profile: current, workouts: days, meals, pantry };
 }
 
 export function slotOrder(slot: string): number {

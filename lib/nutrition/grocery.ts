@@ -132,11 +132,54 @@ export function recipesReadyForSlot(
 }
 
 /** Top recipes across meal slots that you can mostly cook from what's at home. */
-export function topReadyRecipes(haveKeys: Set<string>, limit = 6): RecipeReadiness[] {
+export function topReadyRecipes(
+  haveKeys: Set<string>,
+  limit = 6,
+  allow?: (recipe: Recipe) => boolean,
+): RecipeReadiness[] {
   if (haveKeys.size === 0) return [];
-  return RECIPES.filter((recipe) => ["breakfast", "lunch", "dinner", "snack"].includes(recipe.slot))
+  return RECIPES.filter(
+    (recipe) =>
+      ["breakfast", "lunch", "dinner", "snack"].includes(recipe.slot) && (!allow || allow(recipe)),
+  )
     .map((recipe) => recipeReadiness(recipe, haveKeys))
     .filter((row) => row.total > 0 && row.pct >= 50)
     .sort((a, b) => b.pct - a.pct || a.recipe.name.localeCompare(b.recipe.name))
     .slice(0, limit);
 }
+
+export interface BrowseRecipe {
+  id: string;
+  name: string;
+  slot: Slot;
+  calories: number;
+  protein: number;
+  minutes: number;
+  have: number;
+  total: number;
+  pct: number;
+}
+
+/** Flat catalog for the client recipe picker — filter by slot in the browser. */
+export function buildBrowseCatalog(
+  haveKeys: Set<string>,
+  allow: (recipe: Recipe) => boolean,
+): BrowseRecipe[] {
+  return RECIPES.filter(allow)
+    .map((recipe) => {
+      const ready = recipeReadiness(recipe, haveKeys);
+      return {
+        id: recipe.id,
+        name: recipe.name,
+        slot: recipe.slot,
+        calories: recipe.calories,
+        protein: recipe.protein,
+        minutes: recipe.minutes,
+        have: ready.have,
+        total: ready.total,
+        pct: ready.pct,
+      };
+    })
+    .sort((a, b) => b.pct - a.pct || a.name.localeCompare(b.name));
+}
+

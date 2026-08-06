@@ -15,17 +15,21 @@ export function FuelTabs() {
 
   return (
     <div className="seg" role="tablist" aria-label="Fuel sections">
-      {TABS.map((tab) => (
-        <Link
-          key={tab.href}
-          href={tab.href}
-          role="tab"
-          aria-selected={pathname === tab.href}
-          aria-current={pathname === tab.href ? "page" : undefined}
-        >
-          {tab.label}
-        </Link>
-      ))}
+      {TABS.map((tab) => {
+        const active = pathname === tab.href;
+        return (
+          <Link
+            key={tab.href}
+            href={tab.href}
+            role="tab"
+            prefetch
+            aria-selected={active}
+            aria-current={active ? "page" : undefined}
+          >
+            {tab.label}
+          </Link>
+        );
+      })}
     </div>
   );
 }

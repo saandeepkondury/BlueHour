@@ -1,4 +1,5 @@
-import { and, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { cache } from "react";
 import { db, ready } from "@/lib/db";
 import { coachSuggestions, profile, strengthSessions, type CoachSuggestion, type Profile } from "@/drizzle/schema";
 import { addDays, isoInTimeZone, startOfWeek, todayISO } from "@/lib/date";
@@ -131,9 +132,15 @@ export async function pendingSuggestions(): Promise<CoachSuggestion[]> {
     .orderBy(desc(coachSuggestions.createdAt));
 }
 
-export async function pendingCount(): Promise<number> {
-  return (await pendingSuggestions()).length;
-}
+/** Cheap badge count — cached per request so layouts and pages share one query. */
+export const pendingCount = cache(async (): Promise<number> => {
+  await ready();
+  const rows = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(coachSuggestions)
+    .where(eq(coachSuggestions.status, "pending"));
+  return Number(rows[0]?.n ?? 0);
+});
 
 export async function decidedSuggestions(limit = 30): Promise<CoachSuggestion[]> {
   await ready();
