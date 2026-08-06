@@ -71,33 +71,54 @@ export function buildDayPlan({
   const meals: PlannedMeal[] = [];
   const pool = (slot: Slot) => candidatesFor(slot, diet, allergies, excludeIds);
 
-  const breakfast = pick(pool("breakfast"), date, "breakfast");
-  const lunch = pick(pool("lunch"), date, "lunch");
-  const snack = pick(pool("snack"), date, "snack");
+  const breakfastOptions = pool("breakfast");
+  const lunchOptions = pool("lunch");
+  const snackOptions = pool("snack");
+  const dinnerOptions = pool("dinner");
+  if (
+    breakfastOptions.length === 0 ||
+    lunchOptions.length === 0 ||
+    snackOptions.length === 0 ||
+    dinnerOptions.length === 0
+  ) {
+    throw new Error("Meal catalog is missing a required slot (breakfast/lunch/dinner/snack).");
+  }
+
+  const breakfast = pick(breakfastOptions, date, "breakfast");
+  const lunch = pick(lunchOptions, date, "lunch");
+  const snack = pick(snackOptions, date, "snack");
 
   meals.push(toMeal(breakfast), toMeal(lunch));
 
+  // Run fuel only when the catalog has Instagram (or other) recipes for those slots.
   const fuel: PlannedMeal[] = [];
   if (workoutType === "long" || workoutType === "race") {
-    fuel.push(toMeal(pick(pool("fuel_pre"), date, "pre")));
+    const preOptions = pool("fuel_pre");
+    if (preOptions.length > 0) fuel.push(toMeal(pick(preOptions, date, "pre")));
     if (targets.needsDuringFuel) {
-      const during = pick(pool("fuel_during"), date, "during");
-      const servings = Math.max(1, Math.round(Math.max(0, targets.runMinutes / 60 - 1) * 45 / 25));
-      fuel.push({
-        ...toMeal(during),
-        name: servings > 1 ? `${during.name} × ${servings}` : during.name,
-        calories: during.calories * servings,
-        carbs: during.carbs * servings,
-      });
+      const duringOptions = pool("fuel_during");
+      if (duringOptions.length > 0) {
+        const during = pick(duringOptions, date, "during");
+        const servings = Math.max(
+          1,
+          Math.round((Math.max(0, targets.runMinutes / 60 - 1) * 45) / 25),
+        );
+        fuel.push({
+          ...toMeal(during),
+          name: servings > 1 ? `${during.name} × ${servings}` : during.name,
+          calories: during.calories * servings,
+          carbs: during.carbs * servings,
+        });
+      }
     }
-    fuel.push(toMeal(pick(pool("fuel_post"), date, "post")));
+    const postOptions = pool("fuel_post");
+    if (postOptions.length > 0) fuel.push(toMeal(pick(postOptions, date, "post")));
   }
 
   const committed = [...meals, ...fuel, toMeal(snack)];
   const usedCalories = committed.reduce((sum, meal) => sum + meal.calories, 0);
   const usedProtein = committed.reduce((sum, meal) => sum + meal.protein, 0);
 
-  const dinnerOptions = pool("dinner");
   const remainingCalories = targets.calories - usedCalories;
   const remainingProtein = targets.protein - usedProtein;
 
