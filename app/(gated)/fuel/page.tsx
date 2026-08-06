@@ -320,8 +320,8 @@ export default async function FuelWeekPage({
             </div>
 
             <p className="small sub" style={{ marginBottom: "0.75rem" }}>
-              Macros from meals on this day vs your target. Tap a meal for the recipe · arrow to
-              swap · or pick any recipe from the list below.
+              Macros from meals on this day vs your target. Tap a meal for the recipe · shuffle to
+              change it.
             </p>
 
             <MacroBars

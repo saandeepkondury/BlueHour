@@ -1506,6 +1506,10 @@ pre {
   color: var(--ink);
 }
 
+.sheet__search {
+  margin: 0.15rem 0 0.65rem;
+}
+
 .sheet__body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;

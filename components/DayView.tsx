@@ -4,13 +4,12 @@ import {
   logWater,
   moveLongRunTo,
   removeFood,
-  swapMeal,
   toggleFuelStage,
-  toggleMeal,
   toggleSupplement,
 } from "@/app/actions";
 import { AddExtraFood, type ExtraFoodOption } from "@/components/AddExtraFood";
 import { Check } from "@/components/Check";
+import { DayMealSlots } from "@/components/DayMealSlots";
 import { Icon } from "@/components/Icon";
 import { MacroBars } from "@/components/MacroBars";
 import { ReadinessCard } from "@/components/ReadinessCard";
@@ -18,17 +17,17 @@ import { Ring } from "@/components/Ring";
 import { SessionCard } from "@/components/SessionCard";
 import { StrengthCard } from "@/components/StrengthCard";
 import { WaterCard } from "@/components/WaterCard";
-import { dayOfWeek, startOfWeek } from "@/lib/date";
+import { dayOfWeek, formatShort, startOfWeek, weekdayShort } from "@/lib/date";
+import { buildBrowseCatalog } from "@/lib/nutrition/grocery";
 import {
   candidatesFor,
   MEAL_SLOTS,
   parseAllergies,
-  SLOT_LABEL,
   type Diet,
   type Slot,
 } from "@/lib/nutrition/recipes";
 import { isRun, type Phase, type WorkoutType } from "@/lib/plan/types";
-import type { DayBundle } from "@/lib/store";
+import { getPantryHaveKeys, type DayBundle } from "@/lib/store";
 
 const DOW_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -60,7 +59,7 @@ function extraFoodCatalog(diet: Diet, allergies: ReturnType<typeof parseAllergie
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function DayView({
+export async function DayView({
   bundle,
   isToday,
   longRunOptions,
@@ -76,8 +75,13 @@ export function DayView({
   const diet = profile.dietPref as Diet;
   const weekStart = startOfWeek(date);
   const caloriePct = targets.calories > 0 ? (consumed.calories / targets.calories) * 100 : 0;
-  const mealsEaten = meals.filter((meal) => meal.eaten === 1).length;
   const foodCatalog = extraFoodCatalog(diet, allergies);
+
+  const pantry = await getPantryHaveKeys();
+  const allowedIds = new Set(
+    CATALOG_SLOTS.flatMap((slot) => candidatesFor(slot, diet, allergies)).map((recipe) => recipe.id),
+  );
+  const catalog = buildBrowseCatalog(pantry, (recipe) => allowedIds.has(recipe.id));
 
   return (
     <>
@@ -182,27 +186,31 @@ export function DayView({
 
         <div className="stack">
           <div className="card">
-            <div className="row-between">
+            <div className="row-between" style={{ marginBottom: "0.35rem" }}>
               <div>
-                <p className="tile__label">
-                  <Icon name="flame" size={13} />
-                  Calories
+                <p className="label">
+                  {weekdayShort(date)} {formatShort(date)}
+                  {isToday ? " · today" : ""}
                 </p>
-                <p className="tile__value" style={{ marginTop: "0.3rem" }}>
+                <p className="tile__value" style={{ marginTop: "0.25rem" }}>
                   {Math.round(consumed.calories)}
-                  <small>/ {targets.calories}</small>
+                  <small>/ {targets.calories} kcal</small>
                 </p>
               </div>
               <Ring
                 pct={caloriePct}
-                tone={caloriePct > 108 ? "warn" : "accent"}
+                tone={caloriePct > 108 ? "warn" : caloriePct >= 92 ? "good" : "accent"}
                 size={64}
                 thickness={6}
                 value={`${Math.min(999, Math.round(caloriePct))}%`}
                 label={`${Math.round(consumed.calories)} of ${targets.calories} calories`}
               />
             </div>
-            <hr className="card__divide" />
+
+            <p className="small sub" style={{ marginBottom: "0.75rem" }}>
+              Check off what you ate · tap a meal for the recipe · shuffle to change it.
+            </p>
+
             <MacroBars
               rows={[
                 { label: "Protein", value: consumed.protein, target: targets.protein, unit: "g" },
@@ -215,97 +223,52 @@ export function DayView({
                 Estimated from an average build. <Link href="/settings">Add your stats</Link>.
               </p>
             ) : null}
-          </div>
 
-          <div className="card">
-            <div className="row-between" style={{ marginBottom: "0.25rem" }}>
-              <p className="label">Meals</p>
-              <span className="pill">
-                {mealsEaten}/{meals.length}
-              </span>
-            </div>
-            <div className="rows">
-              {meals.map((meal) => {
-                const eaten = meal.eaten === 1;
-                const options = candidatesFor(meal.slot as Slot, diet, allergies);
-                return (
-                  <div className={eaten ? "row row--done" : "row"} key={meal.id}>
-                    <Check
-                      action={toggleMeal}
-                      on={eaten}
-                      flag="eaten"
-                      label={meal.name}
-                      fields={{ date, slot: meal.slot }}
-                    />
-                    <div className="row__body">
-                      <span className="row__title">
-                        {meal.recipeId ? (
-                          <Link href={`/recipe/${meal.recipeId}`} style={{ color: "inherit" }}>
-                            {meal.name}
-                          </Link>
-                        ) : (
-                          meal.name
-                        )}
+            <hr className="card__divide" />
+
+            <DayMealSlots
+              date={date}
+              weekStart={weekStart}
+              weekday={`${weekdayShort(date)} ${formatShort(date)}`}
+              meals={meals}
+              catalog={catalog}
+              showEaten
+            />
+
+            {extras.length > 0 ? (
+              <>
+                <hr className="card__divide" />
+                <div className="rows">
+                  {extras.map((extra) => (
+                    <div className="row" key={extra.id}>
+                      <span className="check check--on" aria-hidden="true">
+                        <span className="check__box">
+                          <Icon name="check" size={14} strokeWidth={2.6} />
+                        </span>
                       </span>
-                      <span className="row__sub">
-                        {SLOT_LABEL[meal.slot as Slot]} · {meal.protein}p / {meal.carbs}c /{" "}
-                        {meal.fat}f
-                      </span>
-                      {options.length > 1 ? (
-                        <details className="fold">
-                          <summary style={{ minHeight: "1.75rem", fontSize: "0.75rem" }}>
-                            Swap
-                          </summary>
-                          <div className="fold__body">
-                            <form action={swapMeal}>
-                              <input type="hidden" name="date" value={date} />
-                              <input type="hidden" name="slot" value={meal.slot} />
-                              <div className="inline-field">
-                                <select name="recipeId" defaultValue={meal.recipeId ?? options[0].id}>
-                                  {options.map((option) => (
-                                    <option key={option.id} value={option.id}>
-                                      {option.name} · {option.calories} kcal
-                                    </option>
-                                  ))}
-                                </select>
-                                <button className="btn btn--quiet btn--sm nowrap" type="submit">
-                                  Use
-                                </button>
-                              </div>
-                            </form>
-                          </div>
-                        </details>
-                      ) : null}
+                      <div className="row__body">
+                        <span className="row__title">{extra.name}</span>
+                        <span className="row__sub">
+                          Added · {extra.protein}p / {extra.carbs}c / {extra.fat}f
+                        </span>
+                      </div>
+                      <span className="row__meta">{extra.calories}</span>
+                      <form action={removeFood}>
+                        <input type="hidden" name="id" value={extra.id} />
+                        <input type="hidden" name="date" value={date} />
+                        <button
+                          className="iconbtn"
+                          type="submit"
+                          aria-label={`Remove ${extra.name}`}
+                        >
+                          <Icon name="minus" size={17} />
+                        </button>
+                      </form>
                     </div>
-                    <span className="row__meta">{meal.calories}</span>
-                  </div>
-                );
-              })}
-
-              {extras.map((extra) => (
-                <div className="row" key={extra.id}>
-                  <span className="check check--on" aria-hidden="true">
-                    <span className="check__box">
-                      <Icon name="check" size={14} strokeWidth={2.6} />
-                    </span>
-                  </span>
-                  <div className="row__body">
-                    <span className="row__title">{extra.name}</span>
-                    <span className="row__sub">
-                      Added · {extra.protein}p / {extra.carbs}c / {extra.fat}f
-                    </span>
-                  </div>
-                  <span className="row__meta">{extra.calories}</span>
-                  <form action={removeFood}>
-                    <input type="hidden" name="id" value={extra.id} />
-                    <input type="hidden" name="date" value={date} />
-                    <button className="iconbtn" type="submit" aria-label={`Remove ${extra.name}`}>
-                      <Icon name="minus" size={17} />
-                    </button>
-                  </form>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            ) : null}
 
             <hr className="card__divide" />
             <AddExtraFood date={date} catalog={foodCatalog} />
