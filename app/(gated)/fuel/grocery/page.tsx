@@ -1,14 +1,10 @@
 import Link from "next/link";
-import {
-  clearGrocery,
-  markGroceryBought,
-  toggleGroceryItem,
-  togglePantryItem,
-} from "@/app/actions";
+import { markGroceryBought, toggleGroceryItem, togglePantryItem } from "@/app/actions";
+import { GroceryLineRow } from "@/components/GroceryLineRow";
 import { Icon } from "@/components/Icon";
 import { Ring } from "@/components/Ring";
 import { addDays, formatRange, startOfWeek, todayISO } from "@/lib/date";
-import { buildGroceryListDetailed, formatQty } from "@/lib/nutrition/grocery";
+import { buildGroceryListDetailed } from "@/lib/nutrition/grocery";
 import {
   ensureWeekMeals,
   getGroceryChecks,
@@ -37,9 +33,12 @@ export default async function GroceryPage({
   const allItems = aisles.flatMap((aisle) => aisle.items);
 
   const atHome = allItems.filter((item) => pantry.has(item.key));
-  const missing = allItems.filter((item) => !pantry.has(item.key));
-  const shopping = missing.filter((item) => onBuyList.has(item.key));
-  const needDecide = missing.filter((item) => !onBuyList.has(item.key));
+  const missing = allItems.filter(
+    (item) => !pantry.has(item.key) && !onBuyList.has(item.key),
+  );
+  const shopping = allItems.filter(
+    (item) => onBuyList.has(item.key) && !pantry.has(item.key),
+  );
 
   const total = allItems.length;
   const covered = atHome.length;
@@ -66,10 +65,6 @@ export default async function GroceryPage({
               label={`${covered} of ${total} covered`}
             />
           </div>
-          <p className="small sub" style={{ marginTop: "0.75rem" }}>
-            Mark what you already have. Add missing items to this week&apos;s shopping list, then
-            check them off at the store.
-          </p>
           <div className="btnrow btnrow--split" style={{ marginTop: "0.875rem" }}>
             <Link
               className="btn btn--ghost btn--sm"
@@ -96,10 +91,10 @@ export default async function GroceryPage({
               <span className="empty__icon">
                 <Icon name="cart" size={20} />
               </span>
-              <p className="card__title">Nothing to buy yet</p>
-              <p className="small sub">Add recipes to your week on Fuel and the list builds itself.</p>
+              <p className="card__title">Nothing to shop for</p>
+              <p className="small sub">Pick meals on the Week tab and ingredients show up here.</p>
               <Link className="btn btn--primary btn--sm" href="/fuel">
-                Open Fuel
+                Open Week
               </Link>
             </div>
           </div>
@@ -113,77 +108,54 @@ export default async function GroceryPage({
               Shopping list · {shopping.length}
             </p>
             <p className="small sub" style={{ marginBottom: "0.5rem" }}>
-              At the store — tap Got it to stock your pantry.
+              At the store — mark Bought when it&apos;s in the cart.
             </p>
-            <div className="rows">
+            <div className="grocery-lines">
               {shopping.map((item) => (
-                <div className="row" key={`buy-${item.key}`}>
-                  <div className="row__body">
-                    <span className="row__title">{item.item}</span>
-                    <span className="row__sub">
-                      {formatQty(item)} · {item.dishes.join(" · ")}
-                    </span>
-                    <div className="btnrow" style={{ marginTop: "0.35rem", gap: "0.35rem" }}>
-                      <form action={markGroceryBought}>
-                        <input type="hidden" name="weekStart" value={weekStart} />
-                        <input type="hidden" name="itemKey" value={item.key} />
-                        <button className="btn btn--primary btn--sm" type="submit">
-                          Got it
-                        </button>
-                      </form>
-                      <form action={toggleGroceryItem}>
-                        <input type="hidden" name="weekStart" value={weekStart} />
-                        <input type="hidden" name="itemKey" value={item.key} />
-                        <input type="hidden" name="checked" value="0" />
-                        <button className="btn btn--quiet btn--sm" type="submit">
-                          Remove
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-                </div>
+                <GroceryLineRow
+                  key={`shop-${item.key}`}
+                  item={item}
+                  action={
+                    <form action={markGroceryBought}>
+                      <input type="hidden" name="weekStart" value={weekStart} />
+                      <input type="hidden" name="itemKey" value={item.key} />
+                      <button className="btn btn--primary btn--sm nowrap" type="submit">
+                        Bought
+                      </button>
+                    </form>
+                  }
+                />
               ))}
             </div>
           </div>
         </section>
       ) : null}
 
-      {needDecide.length > 0 ? (
+      {missing.length > 0 ? (
         <section className="block block--tight">
           <div className="card">
             <p className="label" style={{ marginBottom: "0.15rem" }}>
-              Missing · decide what to buy
+              Missing at home · {missing.length}
             </p>
             <p className="small sub" style={{ marginBottom: "0.5rem" }}>
-              Not at home. Add to the shopping list or mark as already stocked.
+              Add what you need to the shopping list.
             </p>
-            <div className="rows">
-              {needDecide.map((item) => (
-                <div className="row" key={`need-${item.key}`}>
-                  <div className="row__body">
-                    <span className="row__title">{item.item}</span>
-                    <span className="row__sub">
-                      {formatQty(item)} · for {item.dishes.join(", ")}
-                    </span>
-                    <div className="btnrow" style={{ marginTop: "0.35rem", gap: "0.35rem" }}>
-                      <form action={toggleGroceryItem}>
-                        <input type="hidden" name="weekStart" value={weekStart} />
-                        <input type="hidden" name="itemKey" value={item.key} />
-                        <input type="hidden" name="checked" value="1" />
-                        <button className="btn btn--primary btn--sm" type="submit">
-                          Buy
-                        </button>
-                      </form>
-                      <form action={togglePantryItem}>
-                        <input type="hidden" name="itemKey" value={item.key} />
-                        <input type="hidden" name="have" value="1" />
-                        <button className="btn btn--ghost btn--sm" type="submit">
-                          Have at home
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-                </div>
+            <div className="grocery-lines">
+              {missing.map((item) => (
+                <GroceryLineRow
+                  key={`miss-${item.key}`}
+                  item={item}
+                  action={
+                    <form action={toggleGroceryItem}>
+                      <input type="hidden" name="weekStart" value={weekStart} />
+                      <input type="hidden" name="itemKey" value={item.key} />
+                      <input type="hidden" name="checked" value="1" />
+                      <button className="btn btn--ghost btn--sm nowrap" type="submit">
+                        Add
+                      </button>
+                    </form>
+                  }
+                />
               ))}
             </div>
           </div>
@@ -196,35 +168,37 @@ export default async function GroceryPage({
             <p className="label" style={{ marginBottom: "0.15rem" }}>
               At home · {atHome.length}
             </p>
-            <div className="rows">
+            <div className="grocery-lines">
               {atHome.map((item) => (
-                <div className="row row--done" key={`home-${item.key}`}>
-                  <div className="row__body">
-                    <span className="row__title">{item.item}</span>
-                    <span className="row__sub">{item.dishes.join(" · ")}</span>
-                    <form action={togglePantryItem} style={{ marginTop: "0.25rem" }}>
+                <GroceryLineRow
+                  key={`home-${item.key}`}
+                  item={item}
+                  action={
+                    <form action={togglePantryItem}>
                       <input type="hidden" name="itemKey" value={item.key} />
                       <input type="hidden" name="have" value="0" />
-                      <button className="btn btn--quiet btn--sm" type="submit">
-                        Mark missing
+                      <button
+                        className="btn btn--quiet btn--sm nowrap"
+                        type="submit"
+                        aria-label={`Mark ${item.item} as missing`}
+                      >
+                        Missing
                       </button>
                     </form>
-                  </div>
-                  <span className="row__meta">{formatQty(item)}</span>
-                </div>
+                  }
+                />
               ))}
             </div>
           </div>
         </section>
       ) : null}
 
-      {onBuyList.size > 0 ? (
-        <form action={clearGrocery} style={{ margin: "0 1rem 1.5rem" }}>
-          <input type="hidden" name="weekStart" value={weekStart} />
-          <button className="btn btn--quiet btn--sm btn--block" type="submit">
-            Clear shopping list
-          </button>
-        </form>
+      {shopping.length === 0 && missing.length === 0 && atHome.length > 0 ? (
+        <section className="block block--tight">
+          <div className="card">
+            <p className="small sub">You have everything for this week&apos;s meals.</p>
+          </div>
+        </section>
       ) : null}
     </>
   );

@@ -24,7 +24,12 @@ export function Nav({ pending = 0 }: { pending?: number }) {
       {TABS.map((tab) => {
         const active =
           tab.href === "/"
-            ? pathname === "/" || pathname.startsWith("/day/") || pathname.startsWith("/water")
+            ? pathname === "/" ||
+              pathname.startsWith("/day/") ||
+              pathname.startsWith("/water") ||
+              pathname.startsWith("/sleep") ||
+              pathname.startsWith("/rest-hr") ||
+              pathname.startsWith("/hrv")
             : pathname.startsWith(tab.href);
         const badge = tab.href === "/coach" && pending > 0;
 

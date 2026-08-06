@@ -14,12 +14,35 @@ function hoursMinutes(minutes: number): string {
  * Watch data as four glanceable tiles led by one score. Nothing here changes
  * the plan — the coach proposes, you decide.
  */
-export function ReadinessCard({ recovery }: { recovery: Recovery }) {
+export function ReadinessCard({
+  recovery,
+  date,
+}: {
+  recovery: Recovery;
+  /** Calendar day being viewed — keeps copy honest on past days. */
+  date: string;
+}) {
   const { day, score, label, baselineRestingHr, advisory, vitalsDate, lastSyncAt } = recovery;
-  const today = todayISO();
-  const stale = Boolean(vitalsDate && vitalsDate !== today);
+  const isToday = date === todayISO();
+  const stale = Boolean(vitalsDate && vitalsDate !== date);
 
   if (!hasVitals(day)) {
+    if (!isToday) {
+      return (
+        <div className="banner">
+          <span className="row__lead row__lead--accent">
+            <Icon name="watch" size={18} />
+          </span>
+          <span className="banner__body">
+            <span className="banner__title">No Watch data for this day</span>
+            <span className="banner__sub">
+              Sleep, rest HR, and HRV for {formatShort(date)} were not synced.
+            </span>
+          </span>
+        </div>
+      );
+    }
+
     return (
       <Link className="banner cardlink" href="/settings/watch">
         <span className="row__lead row__lead--accent">
@@ -68,7 +91,7 @@ export function ReadinessCard({ recovery }: { recovery: Recovery }) {
                     ? "Steady"
                     : "Hold back"}
             </p>
-            {stale ? (
+            {stale && isToday ? (
               <p className="card__sub">
                 Latest Watch reading — today&apos;s sleep and rest HR have not landed yet.
               </p>
@@ -95,7 +118,7 @@ export function ReadinessCard({ recovery }: { recovery: Recovery }) {
       </div>
 
       <div className="bento bento--3">
-        <div className="tile tile--sunk">
+        <Link className="tile tile--sunk cardlink" href="/sleep" style={{ textDecoration: "none", color: "inherit" }}>
           <p className="tile__label">
             <Icon name="moon" size={13} />
             Sleep
@@ -103,8 +126,8 @@ export function ReadinessCard({ recovery }: { recovery: Recovery }) {
           <p className="tile__value">
             {day!.asleepMin !== null ? hoursMinutes(day!.asleepMin) : "—"}
           </p>
-        </div>
-        <div className="tile tile--sunk">
+        </Link>
+        <Link className="tile tile--sunk cardlink" href="/rest-hr" style={{ textDecoration: "none", color: "inherit" }}>
           <p className="tile__label">
             <Icon name="heart" size={13} />
             Rest HR
@@ -119,8 +142,8 @@ export function ReadinessCard({ recovery }: { recovery: Recovery }) {
               {restingDelta} vs normal
             </p>
           ) : null}
-        </div>
-        <div className="tile tile--sunk">
+        </Link>
+        <Link className="tile tile--sunk cardlink" href="/hrv" style={{ textDecoration: "none", color: "inherit" }}>
           <p className="tile__label">
             <Icon name="pulse" size={13} />
             HRV
@@ -129,7 +152,7 @@ export function ReadinessCard({ recovery }: { recovery: Recovery }) {
             {day!.hrvMs !== null ? Math.round(day!.hrvMs) : "—"}
             {day!.hrvMs !== null ? <small>ms</small> : null}
           </p>
-        </div>
+        </Link>
       </div>
     </div>
   );

@@ -53,7 +53,7 @@ export function DayView({
     <>
       <section className="block">
         <div className="stack">
-          <ReadinessCard recovery={bundle.recovery} />
+          <ReadinessCard recovery={bundle.recovery} date={date} />
           <SessionCard workout={workout} log={workoutLog} hasStrength={bundle.strength !== null} />
         </div>
 

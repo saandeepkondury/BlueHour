@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const TABS = [
   { href: "/fuel", label: "Week" },
+  { href: "/fuel/recipes", label: "Recipes" },
   { href: "/fuel/grocery", label: "Grocery" },
   { href: "/fuel/supplements", label: "Supplements" },
   { href: "/fuel/race", label: "Race day" },
@@ -16,7 +17,8 @@ export function FuelTabs() {
   return (
     <div className="seg" role="tablist" aria-label="Fuel sections">
       {TABS.map((tab) => {
-        const active = pathname === tab.href;
+        const active =
+          tab.href === "/fuel" ? pathname === "/fuel" : pathname.startsWith(tab.href);
         return (
           <Link
             key={tab.href}

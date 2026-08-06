@@ -33,7 +33,7 @@ export default async function RecipePage({
   const defaultDate =
     dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : today;
   const slot = (slotParam as Slot | undefined) || recipe.slot;
-  const back = `/fuel?week=${weekStart}&slot=${recipe.slot}`;
+  const back = `/fuel?w=${weekStart}&d=${defaultDate}`;
 
   const haveKeys = await getPantryHaveKeys();
   const ready = recipeReadiness(recipe, haveKeys);

@@ -1,7 +1,7 @@
-import { and, desc, eq, gte, lt, lte } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, lt, lte } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
 import { healthDays, healthSync, workoutLogs, type HealthDay, type WorkoutLog } from "@/drizzle/schema";
-import { addDays } from "@/lib/date";
+import { addDays, todayISO } from "@/lib/date";
 
 export interface Recovery {
   day: HealthDay | null;
@@ -54,7 +54,9 @@ export async function recoveryFor(date: string): Promise<Recovery> {
   let day: HealthDay | null = todayRow ?? null;
   let vitalsDate: string | null = hasVitals(day) ? date : null;
 
-  if (!vitalsDate) {
+  // Only the live Today screen borrows a recent morning reading when Watch sync lags.
+  // Opening a past/future day stays locked to that calendar date.
+  if (!vitalsDate && date === todayISO()) {
     const recent = await db
       .select()
       .from(healthDays)
@@ -67,6 +69,8 @@ export async function recoveryFor(date: string): Promise<Recovery> {
     } else {
       day = null;
     }
+  } else if (!vitalsDate) {
+    day = null;
   }
 
   const score = scoreFor(day, baselineRestingHr, baselineHrvMs);
@@ -151,4 +155,34 @@ export async function lastSync(): Promise<{ at: string; device: string | null } 
   await ready();
   const [row] = await db.select().from(healthSync).orderBy(desc(healthSync.lastSyncAt)).limit(1);
   return row ? { at: row.lastSyncAt, device: row.device } : null;
+}
+
+export type VitalMetric = "sleep" | "rest_hr" | "hrv";
+
+/** Days that have the requested vital, newest first. */
+export async function getVitalsHistory(metric: VitalMetric): Promise<HealthDay[]> {
+  await ready();
+  const column =
+    metric === "sleep"
+      ? healthDays.asleepMin
+      : metric === "rest_hr"
+        ? healthDays.restingHr
+        : healthDays.hrvMs;
+
+  return db
+    .select()
+    .from(healthDays)
+    .where(isNotNull(column))
+    .orderBy(desc(healthDays.date));
+}
+
+export function formatSleep(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m`;
+}
+
+export function meanOf(values: number[]): number | null {
+  if (values.length === 0) return null;
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }

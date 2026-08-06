@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import type { BrowseRecipe } from "@/lib/nutrition/grocery";
 import { MEAL_SLOTS, SLOT_LABEL, type Slot } from "@/lib/nutrition/recipes";
 
-const BROWSE_SLOTS: Slot[] = [...MEAL_SLOTS, "fuel_pre", "fuel_during", "fuel_post"];
+const RUN_SLOTS: Slot[] = ["fuel_pre", "fuel_during", "fuel_post"];
 
 export function RecipeBrowser({
   weekStart,
@@ -22,17 +22,6 @@ export function RecipeBrowser({
 }) {
   const [slot, setSlot] = useState<Slot>(initialSlot);
   const [pending, start] = useTransition();
-
-  useEffect(() => {
-    function onSlot(event: Event) {
-      const next = (event as CustomEvent<Slot>).detail;
-      if (!next || !BROWSE_SLOTS.includes(next)) return;
-      start(() => setSlot(next));
-      document.getElementById("browse")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-    window.addEventListener("fuel-slot", onSlot);
-    return () => window.removeEventListener("fuel-slot", onSlot);
-  }, []);
 
   const list = useMemo(
     () => catalog.filter((recipe) => recipe.slot === slot),
@@ -54,13 +43,26 @@ export function RecipeBrowser({
       <section className="block block--tight">
         <div className="card">
           <p className="label" style={{ marginBottom: "0.35rem" }}>
-            Pick a recipe
+            All recipes
           </p>
           <p className="small sub" style={{ marginBottom: "0.75rem" }}>
-            Filter by meal, open a dish for instructions, then add it to any day.
+            Open a dish for instructions. Add it to a day from the Week tab.
           </p>
-          <div className="seg" role="tablist" aria-label="Meal type" style={{ marginBottom: "0.75rem" }}>
-            {BROWSE_SLOTS.map((s) => (
+          <div className="seg" role="tablist" aria-label="Meal type" style={{ marginBottom: "0.5rem" }}>
+            {MEAL_SLOTS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                role="tab"
+                aria-selected={slot === s}
+                onClick={() => start(() => setSlot(s))}
+              >
+                {SLOT_LABEL[s]}
+              </button>
+            ))}
+          </div>
+          <div className="seg" role="tablist" aria-label="Run fuel" style={{ marginBottom: "0.75rem" }}>
+            {RUN_SLOTS.map((s) => (
               <button
                 key={s}
                 type="button"
@@ -73,11 +75,7 @@ export function RecipeBrowser({
             ))}
           </div>
 
-          <div
-            id="browse"
-            className="rows"
-            style={{ maxHeight: "18rem", overflow: "auto", opacity: pending ? 0.7 : 1 }}
-          >
+          <div className="rows" style={{ opacity: pending ? 0.7 : 1 }}>
             {list.length === 0 ? (
               <p className="small muted">No recipes for this meal type yet.</p>
             ) : (
@@ -93,10 +91,8 @@ export function RecipeBrowser({
                     <span className="row__title">{recipe.name}</span>
                     <span className="row__sub">
                       {recipe.calories} kcal · {recipe.protein}g protein · {recipe.minutes} min
-                      {recipe.total > 0 ? ` · ${recipe.have}/${recipe.total} at home` : ""}
                     </span>
                   </span>
-                  <span className="row__meta">{recipe.total > 0 ? `${recipe.pct}%` : "→"}</span>
                 </Link>
               ))
             )}
@@ -110,9 +106,6 @@ export function RecipeBrowser({
             <p className="label" style={{ marginBottom: "0.35rem" }}>
               Ready from your pantry
             </p>
-            <p className="small sub" style={{ marginBottom: "0.75rem" }}>
-              Dishes where you already have most of the ingredients.
-            </p>
             <div className="rows">
               {readyNow.map((recipe) => (
                 <Link
@@ -125,10 +118,9 @@ export function RecipeBrowser({
                   <span className="row__body">
                     <span className="row__title">{recipe.name}</span>
                     <span className="row__sub">
-                      {SLOT_LABEL[recipe.slot]} · {recipe.have}/{recipe.total} ingredients
+                      {SLOT_LABEL[recipe.slot]} · {recipe.have}/{recipe.total} at home
                     </span>
                   </span>
-                  <span className="row__meta">{recipe.pct}%</span>
                 </Link>
               ))}
             </div>
@@ -139,26 +131,12 @@ export function RecipeBrowser({
           <div className="card">
             <p className="small sub">
               Mark what you have on{" "}
-              <Link href={`/fuel/grocery?week=${weekStart}`}>Grocery</Link> and we&apos;ll surface
-              recipes you can cook tonight.
+              <Link href={`/fuel/grocery?week=${weekStart}`}>Grocery</Link> to highlight dishes you
+              can cook.
             </p>
           </div>
         </section>
       ) : null}
     </>
-  );
-}
-
-export function SlotJump({ slot, label }: { slot: Slot; label: string }) {
-  return (
-    <button
-      type="button"
-      className="btn btn--ghost btn--sm"
-      onClick={() => {
-        window.dispatchEvent(new CustomEvent("fuel-slot", { detail: slot }));
-      }}
-    >
-      + {label}
-    </button>
   );
 }

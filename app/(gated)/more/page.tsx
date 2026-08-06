@@ -19,9 +19,17 @@ const GROUPS: { title: string; links: { href: string; label: string; icon: IconN
     ],
   },
   {
-    title: "Fuel",
+    title: "Recovery",
     links: [
       { href: "/water", label: "Water", icon: "water" },
+      { href: "/sleep", label: "Sleep", icon: "moon" },
+      { href: "/rest-hr", label: "Resting HR", icon: "heart" },
+      { href: "/hrv", label: "HRV", icon: "pulse" },
+    ],
+  },
+  {
+    title: "Fuel",
+    links: [
       { href: "/fuel/grocery", label: "Grocery list", icon: "cart" },
       { href: "/fuel/supplements", label: "Supplements", icon: "pill" },
       { href: "/fuel/race", label: "Race-day playbook", icon: "flag" },

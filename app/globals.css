@@ -933,6 +933,102 @@ a.tile__label:active {
   color: var(--bad);
 }
 
+/* ============================================================ grocery lines */
+
+.grocery-lines {
+  display: flex;
+  flex-direction: column;
+}
+
+.grocery-lines > * + * {
+  border-top: 1px solid var(--hair);
+}
+
+.grocery-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem 0;
+}
+
+.grocery-line__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.grocery-line__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.grocery-line__name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.3;
+}
+
+.grocery-line__qty {
+  flex: 0 0 auto;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--canvas-sunk);
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--r-chip);
+  white-space: nowrap;
+}
+
+.grocery-line__dishes {
+  margin-top: 0.45rem;
+}
+
+.grocery-line__for {
+  margin: 0 0 0.2rem;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.grocery-line__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grocery-line__list li {
+  position: relative;
+  padding-left: 0.7rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.grocery-line__list li + li {
+  margin-top: 0.1rem;
+}
+
+.grocery-line__list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 0.28rem;
+  height: 0.28rem;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+
+.grocery-line__action {
+  flex: 0 0 auto;
+  padding-top: 0.1rem;
+}
+
 /* ============================================================ segmented */
 
 .seg {
@@ -991,6 +1087,27 @@ a.tile__label:active {
   min-height: 3rem;
   padding: 0.625rem 0;
   color: inherit;
+}
+
+.row__hit {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.row__hit:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .row__body {
@@ -1092,6 +1209,14 @@ a.row__title {
 }
 
 .row--now .row__date {
+  color: var(--accent);
+}
+
+.row--selected {
+  background: var(--accent-wash);
+}
+
+.row--selected .row__date {
   color: var(--accent);
 }
 
@@ -1270,6 +1395,95 @@ pre {
 
 .fold[open] > summary::after {
   transform: rotate(225deg) translateY(-2px);
+}
+
+/* ============================================================ sheet (iOS-style picker) */
+
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.sheet__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  background: rgba(22, 26, 23, 0.4);
+  cursor: pointer;
+}
+
+.sheet__panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  max-height: min(78vh, 36rem);
+  padding: 0.35rem 1.1rem calc(1rem + env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-radius: 1.15rem 1.15rem 0 0;
+  box-shadow: 0 -12px 40px rgba(22, 26, 23, 0.18);
+  animation: sheet-up 0.28s var(--ease) both;
+}
+
+.sheet__handle {
+  width: 2.25rem;
+  height: 0.28rem;
+  margin: 0.35rem auto 0.65rem;
+  border-radius: 999px;
+  background: var(--hair-strong, var(--ink-3));
+  opacity: 0.45;
+}
+
+.sheet__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.sheet__title {
+  margin: 0.1rem 0 0;
+  font-family: var(--brand-face);
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.sheet__body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: 0.5rem;
+}
+
+.sheet__foot {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--hair);
+}
+
+@keyframes sheet-up {
+  from {
+    opacity: 0.6;
+    transform: translateY(1.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet__panel {
+    animation: none;
+  }
 }
 
 .fold__body {

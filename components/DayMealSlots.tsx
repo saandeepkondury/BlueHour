@@ -1,0 +1,209 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { addRecipeToDay, clearDayMeal } from "@/app/actions";
+import { Icon } from "@/components/Icon";
+import type { BrowseRecipe } from "@/lib/nutrition/grocery";
+import { MEAL_SLOTS, SLOT_LABEL, type Slot } from "@/lib/nutrition/recipes";
+
+type DayMeal = {
+  id: number;
+  slot: string;
+  recipeId: string | null;
+  name: string;
+  calories: number;
+  eaten: number;
+};
+
+export function DayMealSlots({
+  date,
+  weekStart,
+  weekday,
+  meals,
+  catalog,
+}: {
+  date: string;
+  weekStart: string;
+  weekday: string;
+  meals: DayMeal[];
+  catalog: BrowseRecipe[];
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [picking, setPicking] = useState<Slot | null>(null);
+
+  const mealBySlot = useMemo(() => {
+    const map = new Map<string, DayMeal>();
+    for (const meal of meals) map.set(meal.slot, meal);
+    return map;
+  }, [meals]);
+
+  const options = useMemo(
+    () => (picking ? catalog.filter((recipe) => recipe.slot === picking) : []),
+    [catalog, picking],
+  );
+
+  useEffect(() => {
+    if (!picking) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setPicking(null);
+    }
+    window.addEventListener("keydown", onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [picking]);
+
+  function pick(slot: Slot, recipeId: string) {
+    const data = new FormData();
+    data.set("date", date);
+    data.set("slot", slot);
+    data.set("recipeId", recipeId);
+    setPicking(null);
+    start(async () => {
+      await addRecipeToDay(data);
+      router.refresh();
+    });
+  }
+
+  function remove(slot: Slot) {
+    const data = new FormData();
+    data.set("date", date);
+    data.set("slot", slot);
+    setPicking(null);
+    start(async () => {
+      await clearDayMeal(data);
+      router.refresh();
+    });
+  }
+
+  return (
+    <>
+      <div className="rows" style={{ opacity: pending ? 0.7 : 1 }}>
+        {MEAL_SLOTS.map((slot) => {
+          const meal = mealBySlot.get(slot);
+          return (
+            <div className={meal?.eaten === 1 ? "row row--done" : "row"} key={slot}>
+              <button
+                type="button"
+                className="row__hit"
+                disabled={pending}
+                onClick={() => setPicking(slot)}
+                aria-label={
+                  meal
+                    ? `Change ${SLOT_LABEL[slot]}: ${meal.name}`
+                    : `Choose ${SLOT_LABEL[slot].toLowerCase()}`
+                }
+              >
+                <span className="row__body">
+                  <span className="row__title">{SLOT_LABEL[slot]}</span>
+                  <span className="row__sub row__sub--wrap">
+                    {meal ? (
+                      <>
+                        {meal.name}
+                        <span className="muted"> · {meal.calories} kcal</span>
+                      </>
+                    ) : (
+                      "Choose a dish"
+                    )}
+                  </span>
+                </span>
+                <Icon name="chevron" size={16} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {picking ? (
+        <div
+          className="sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={`pick-${date}-${picking}`}
+        >
+          <button
+            type="button"
+            className="sheet__backdrop"
+            aria-label="Close"
+            onClick={() => setPicking(null)}
+          />
+          <div className="sheet__panel">
+            <div className="sheet__handle" aria-hidden="true" />
+            <div className="sheet__head">
+              <div>
+                <p className="label">{weekday}</p>
+                <h2 className="sheet__title" id={`pick-${date}-${picking}`}>
+                  {SLOT_LABEL[picking]}
+                </h2>
+              </div>
+              <button
+                type="button"
+                className="btn btn--quiet btn--sm"
+                onClick={() => setPicking(null)}
+              >
+                Done
+              </button>
+            </div>
+
+            <div className="sheet__body">
+              {options.length === 0 ? (
+                <p className="small muted" style={{ padding: "1rem 0" }}>
+                  No dishes for this meal yet.
+                </p>
+              ) : (
+                <div className="rows">
+                  {options.map((recipe) => {
+                    const selected = mealBySlot.get(picking)?.recipeId === recipe.id;
+                    return (
+                      <div className={selected ? "row row--done" : "row"} key={recipe.id}>
+                        <button
+                          type="button"
+                          className="row__hit"
+                          onClick={() => pick(picking, recipe.id)}
+                        >
+                          <span className="row__body">
+                            <span className="row__title">{recipe.name}</span>
+                            <span className="row__sub">
+                              {recipe.calories} kcal · {recipe.protein}g protein
+                            </span>
+                          </span>
+                          {selected ? <Icon name="check" size={18} /> : null}
+                        </button>
+                        <Link
+                          href={`/recipe/${recipe.id}?week=${weekStart}&date=${date}&slot=${picking}`}
+                          prefetch={false}
+                          className="iconbtn"
+                          aria-label={`Open ${recipe.name} recipe`}
+                        >
+                          <Icon name="chevron" size={16} />
+                        </Link>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {mealBySlot.get(picking) ? (
+              <div className="sheet__foot">
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm btn--block"
+                  onClick={() => remove(picking)}
+                >
+                  Clear {SLOT_LABEL[picking].toLowerCase()}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
