@@ -34,6 +34,8 @@ export interface Recipe {
   note: string;
   steps: string[];
   ingredients: Ingredient[];
+  /** Instagram Reel / post (or other) video for the cook-along. */
+  videoUrl?: string;
 }
 
 export const SLOT_LABEL: Record<Slot, string> = {
@@ -210,6 +212,43 @@ export const RECIPES: Recipe[] = [
       { item: "Whole grain bread", qty: 2, unit: "slice", aisle: "bakery" },
       { item: "Eggs", qty: 1, unit: "ea", aisle: "protein" },
       { item: "Tomato", qty: 0.5, unit: "ea", aisle: "produce" },
+    ],
+  },
+  {
+    id: "oats-macaroni",
+    name: "Healthy oats macaroni",
+    slot: "breakfast",
+    diet: "vegetarian",
+    allergens: ["dairy", "gluten"],
+    calories: 325,
+    protein: 25,
+    carbs: 28,
+    fat: 10,
+    minutes: 15,
+    note: "Creamy oats + paneer “macaroni.” From your Instagram breakfast series.",
+    videoUrl: "https://www.instagram.com/reel/DaUi_34ChKp/",
+    steps: [
+      "Lightly brush a pan with oil.",
+      "Add chopped garlic and sauté about 2 minutes.",
+      "Add onion and green chillies; cook 2–3 minutes.",
+      "Add tomato and salt; cook until soft.",
+      "Add capsicum and sweet corn; cook 4–5 minutes.",
+      "Stir in tomato ketchup.",
+      "Pour in 1 cup water, add crumbled paneer, and bring to a boil.",
+      "Add oats, mix, and cook until the water is absorbed.",
+      "Garnish with spring onions and serve hot.",
+    ],
+    ingredients: [
+      { item: "Garlic", qty: 2, unit: "clove", aisle: "produce" },
+      { item: "Onion (small)", qty: 1, unit: "ea", aisle: "produce" },
+      { item: "Green chillies", qty: 2, unit: "ea", aisle: "produce" },
+      { item: "Tomato", qty: 1, unit: "ea", aisle: "produce" },
+      { item: "Capsicum (bell pepper)", qty: 0.5, unit: "ea", aisle: "produce" },
+      { item: "Sweet corn", qty: 1, unit: "tbsp", aisle: "frozen" },
+      { item: "Tomato ketchup", qty: 1, unit: "tbsp", aisle: "pantry" },
+      { item: "High-protein low-fat paneer", qty: 80, unit: "g", aisle: "dairy" },
+      { item: "Rolled oats", qty: 30, unit: "g", aisle: "pantry" },
+      { item: "Spring onions", qty: 2, unit: "tbsp", aisle: "produce" },
     ],
   },
 
@@ -581,6 +620,44 @@ export const RECIPES: Recipe[] = [
       { item: "Baby potatoes", qty: 400, unit: "g", aisle: "produce" },
       { item: "Broccoli", qty: 2, unit: "cup", aisle: "produce" },
       { item: "Lemon", qty: 1, unit: "ea", aisle: "produce" },
+    ],
+  },
+  {
+    id: "palak-soya",
+    name: "Creamy high-protein palak soya",
+    slot: "dinner",
+    diet: "vegetarian",
+    allergens: ["dairy", "soy", "gluten"],
+    calories: 190,
+    protein: 21,
+    carbs: 16,
+    fat: 6,
+    minutes: 25,
+    note: "No cream — paneer blended smooth. Macros are per serving (batch serves 2). Serve with chapati or rice.",
+    videoUrl: "https://www.instagram.com/reel/DapJEKcRRJo/",
+    steps: [
+      "Heat oil; sauté onion, garlic, and green chillies 3–4 minutes.",
+      "Add spinach and cook until it releases its water.",
+      "Add coriander powder, turmeric, and salt; cook 4–5 minutes.",
+      "Boil soya chunks with water, salt, a pinch of sugar, and ginger-garlic paste. Do not squeeze — add chunks and cooking liquid to the pan; cook 3–4 minutes.",
+      "Blend paneer, Kashmiri red chilli powder, and water until smooth; stir into the pan.",
+      "Mix, cover, and simmer 4–5 minutes.",
+      "Serve hot with chapati or rice.",
+    ],
+    ingredients: [
+      // Quantities are for one serving (half the posted batch).
+      { item: "Mustard oil", qty: 0.25, unit: "tbsp", aisle: "pantry" },
+      { item: "Onion", qty: 0.5, unit: "ea", aisle: "produce" },
+      { item: "Garlic", qty: 2, unit: "clove", aisle: "produce" },
+      { item: "Green chillies", qty: 1, unit: "ea", aisle: "produce" },
+      { item: "Spinach", qty: 1, unit: "cup", aisle: "produce" },
+      { item: "Coriander powder", qty: 1, unit: "tsp", aisle: "pantry" },
+      { item: "Turmeric powder", qty: 0.5, unit: "tsp", aisle: "pantry" },
+      { item: "Dry soya chunks", qty: 25, unit: "g", aisle: "pantry" },
+      { item: "Ginger-garlic paste", qty: 0.25, unit: "tbsp", aisle: "pantry" },
+      { item: "High-protein low-fat paneer", qty: 25, unit: "g", aisle: "dairy" },
+      { item: "Kashmiri red chilli powder", qty: 1, unit: "tsp", aisle: "pantry" },
+      { item: "Chapati", qty: 2, unit: "ea", aisle: "bakery" },
     ],
   },
 

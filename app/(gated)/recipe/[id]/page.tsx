@@ -46,6 +46,19 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
                   <p className="small sub">{recipe.note}</p>
                 </>
               ) : null}
+              {recipe.videoUrl ? (
+                <>
+                  <hr className="card__divide" />
+                  <a
+                    className="btn btn--ghost btn--block"
+                    href={recipe.videoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Watch on Instagram
+                  </a>
+                </>
+              ) : null}
             </div>
 
             <div className="card">
