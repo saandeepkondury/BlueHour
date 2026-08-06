@@ -11,19 +11,38 @@ import {
 import { addDays, daysBetween, todayISO } from "@/lib/date";
 import { phaseFor } from "@/lib/plan/types";
 
-export interface TrainingLoad {
-  /** Miles logged the calendar day before the readiness date. */
-  yesterdayMi: number;
-  /** Minutes of running yesterday (0 if unknown). */
-  yesterdayMin: number;
-  /** Miles in the 7 days before the readiness date. */
-  weekMi: number;
-  /** Miles in the 7 days before that (acute:chronic baseline). */
-  priorWeekMi: number;
+/** Half-marathon distance the score is aiming toward. */
+const HALF_MI = 13.1;
+/** A strong peak long before race day — not quite the full half. */
+const TARGET_LONG_MI = 12;
+/** Solid weekly volume for half training. */
+const TARGET_WEEK_MI = 25;
+
+export interface RacePrep {
   daysToRace: number | null;
-  /** Points already folded into the readiness score (usually ≤ 0). */
-  adjustment: number;
+  longestMi: number;
+  longestMin: number;
+  weekMi: number;
+  priorWeekMi: number;
+  runsLast14: number;
+  /** Recent average pace in sec/mi across timed runs. */
+  avgPaceSecPerMi: number | null;
+  /** Recent average running heart rate. */
+  avgRunHr: number | null;
+  yesterdayMi: number;
+  yesterdayMin: number;
+  endurancePts: number;
+  volumePts: number;
+  aerobicPts: number;
+  consistencyPts: number;
+  recoveryPts: number;
 }
+
+/** @deprecated Prefer RacePrep — kept so older call sites still type-check. */
+export type TrainingLoad = Pick<
+  RacePrep,
+  "yesterdayMi" | "yesterdayMin" | "weekMi" | "priorWeekMi" | "daysToRace"
+> & { adjustment: number };
 
 export interface Recovery {
   day: HealthDay | null;
@@ -34,12 +53,14 @@ export interface Recovery {
   baselineHrvMs: number | null;
   /** Soft nudge only — the plan never changes itself from these numbers. */
   advisory: string | null;
-  /** 0–100, or null until there is something to score. */
+  /** 0–100 race-prep feel, or null until there is something to score. */
   score: number | null;
-  label: "ready" | "steady" | "hold back" | null;
+  label: "building" | "on track" | "race ready" | null;
   /** Last successful Health sync, if any. */
   lastSyncAt: string | null;
-  /** Recent run load that moved the readiness needle. */
+  /** Training capacity toward the half. */
+  racePrep: RacePrep | null;
+  /** Mirror of racePrep fields used by older card copy. */
   trainingLoad: TrainingLoad | null;
 }
 
@@ -52,6 +73,13 @@ const VITALS_FALLBACK_DAYS = 3;
 export function hasVitals(day: HealthDay | null | undefined): boolean {
   if (!day) return false;
   return day.asleepMin !== null || day.restingHr !== null || day.hrvMs !== null;
+}
+
+/** Score can stand on run history even when this morning's sleep has not landed. */
+export function hasReadinessSignal(recovery: Recovery): boolean {
+  if (hasVitals(recovery.day)) return true;
+  const prep = recovery.racePrep;
+  return Boolean(prep && (prep.longestMi > 0 || prep.runsLast14 > 0));
 }
 
 export async function recoveryFor(date: string): Promise<Recovery> {
@@ -97,89 +125,90 @@ export async function recoveryFor(date: string): Promise<Recovery> {
     day = null;
   }
 
-  const trainingLoad = await trainingLoadFor(date);
-  const score = scoreFor(day, baselineRestingHr, baselineHrvMs, trainingLoad);
+  const racePrep = await racePrepFor(date, day, baselineRestingHr, baselineHrvMs);
+  const score = scoreFor(racePrep);
   const sync = await lastSync();
+
+  const trainingLoad: TrainingLoad | null = racePrep
+    ? {
+        yesterdayMi: racePrep.yesterdayMi,
+        yesterdayMin: racePrep.yesterdayMin,
+        weekMi: racePrep.weekMi,
+        priorWeekMi: racePrep.priorWeekMi,
+        daysToRace: racePrep.daysToRace,
+        adjustment: racePrep.recoveryPts,
+      }
+    : null;
 
   return {
     day,
     vitalsDate,
     baselineRestingHr,
     baselineHrvMs,
-    advisory: vitalsDate === date ? advisoryFor(day, baselineRestingHr, trainingLoad) : null,
+    advisory: advisoryFor(day, baselineRestingHr, racePrep, vitalsDate === date),
     score,
-    label: score === null ? null : score >= 75 ? "ready" : score >= 55 ? "steady" : "hold back",
+    label:
+      score === null ? null : score >= 75 ? "race ready" : score >= 56 ? "on track" : "building",
     lastSyncAt: sync?.at ?? null,
+    racePrep,
     trainingLoad,
   };
 }
 
 /**
- * A deliberately blunt readiness number: sleep carries most of it, resting
- * heart rate, HRV, and recent run load move it around the edges. It informs,
- * it does not decide.
+ * Race-feel readiness: can you cover distance sustainably for the half?
+ * Longest run and weekly volume carry most of the weight; run HR / pace and
+ * today's recovery nudge the edges. Good sleep alone cannot make this 100.
  */
-function scoreFor(
-  day: HealthDay | null,
-  restingBaseline: number | null,
-  hrvBaseline: number | null,
-  load: TrainingLoad | null,
-): number | null {
-  if (!day) return null;
-  if (day.asleepMin === null && day.restingHr === null && day.hrvMs === null) return null;
+function scoreFor(prep: RacePrep | null): number | null {
+  if (!prep) return null;
+  if (prep.longestMi <= 0 && prep.runsLast14 <= 0 && prep.recoveryPts === 0) return null;
 
-  let score = 70;
+  let score =
+    prep.endurancePts +
+    prep.volumePts +
+    prep.aerobicPts +
+    prep.consistencyPts +
+    prep.recoveryPts;
 
-  if (day.asleepMin !== null) {
-    const hours = day.asleepMin / 60;
-    // Seven and a half hours is the pivot; each hour either side is worth ~9.
-    score += Math.max(-28, Math.min(20, Math.round((hours - 7.5) * 9)));
-  }
+  // Hard ceiling: without long-run proof, you cannot feel race-ready.
+  const longCeiling =
+    prep.longestMi <= 0
+      ? 28
+      : prep.longestMi < 4
+        ? 42
+        : prep.longestMi < 6
+          ? 55
+          : prep.longestMi < 8
+            ? 68
+            : prep.longestMi < 10
+              ? 80
+              : prep.longestMi < TARGET_LONG_MI
+                ? 90
+                : 100;
 
-  if (day.restingHr !== null && restingBaseline !== null) {
-    score -= Math.max(-8, Math.min(24, (day.restingHr - restingBaseline) * 4));
-  }
-
-  if (day.hrvMs !== null && hrvBaseline !== null && hrvBaseline > 0) {
-    const deltaPct = ((day.hrvMs - hrvBaseline) / hrvBaseline) * 100;
-    score += Math.max(-14, Math.min(12, Math.round(deltaPct / 3)));
-  }
-
-  if (load) score += load.adjustment;
-
+  score = Math.min(score, longCeiling);
   return Math.max(5, Math.min(100, Math.round(score)));
 }
 
-/**
- * Recent miles and time tell the other half of recovery: a long Saturday or a
- * sharp weekly ramp costs readiness even when vitals look fine. Race proximity
- * scales that cost — early base absorbs load; taper does not.
- */
-async function trainingLoadFor(date: string): Promise<TrainingLoad | null> {
-  const from = addDays(date, -14);
+async function racePrepFor(
+  date: string,
+  day: HealthDay | null,
+  restingBaseline: number | null,
+  hrvBaseline: number | null,
+): Promise<RacePrep | null> {
+  const [row] = await db.select({ raceDate: profile.raceDate }).from(profile).where(eq(profile.id, 1));
+  const daysToRace = row ? Math.max(0, daysBetween(date, row.raceDate)) : null;
+
+  // Look back far enough to find the true longest, not just this week's easy miles.
+  const historyFrom = addDays(date, -120);
   const before = addDays(date, -1);
   const logs = await db
     .select()
     .from(workoutLogs)
-    .where(and(gte(workoutLogs.date, from), lte(workoutLogs.date, before)));
+    .where(and(gte(workoutLogs.date, historyFrom), lte(workoutLogs.date, before)));
 
-  if (logs.length === 0) {
-    const [row] = await db.select({ raceDate: profile.raceDate }).from(profile).where(eq(profile.id, 1));
-    const daysToRace = row ? Math.max(0, daysBetween(date, row.raceDate)) : null;
-    return {
-      yesterdayMi: 0,
-      yesterdayMin: 0,
-      weekMi: 0,
-      priorWeekMi: 0,
-      daysToRace,
-      adjustment: 0,
-    };
-  }
-
-  const [row] = await db.select({ raceDate: profile.raceDate }).from(profile).where(eq(profile.id, 1));
-  const daysToRace = row ? Math.max(0, daysBetween(date, row.raceDate)) : null;
-  const weeksToRace = daysToRace === null ? null : Math.max(0, Math.ceil(daysToRace / 7));
-  const phase = weeksToRace === null ? null : phaseFor(weeksToRace);
+  const runs = logs.filter((log) => (log.distanceMi ?? 0) > 0.2);
 
   const yesterday = addDays(date, -1);
   const weekFrom = addDays(date, -7);
@@ -188,66 +217,149 @@ async function trainingLoadFor(date: string): Promise<TrainingLoad | null> {
 
   const milesBetween = (start: string, end: string) =>
     round1(
-      logs
+      runs
         .filter((log) => log.date >= start && log.date <= end)
         .reduce((sum, log) => sum + (log.distanceMi ?? 0), 0),
     );
 
-  const yLog = logs.find((log) => log.date === yesterday) ?? null;
+  const yLog = runs.find((log) => log.date === yesterday) ?? null;
   const yesterdayMi = round1(yLog?.distanceMi ?? 0);
   const yesterdayMin = yLog?.durationSec ? Math.round(yLog.durationSec / 60) : 0;
   const weekMi = milesBetween(weekFrom, yesterday);
   const priorWeekMi = milesBetween(priorFrom, priorTo);
+  const recent = runs.filter((log) => log.date >= priorFrom);
+  const runsLast14 = recent.length;
 
-  let adjustment = 0;
+  let longestMi = 0;
+  let longestMin = 0;
+  for (const log of runs) {
+    if ((log.distanceMi ?? 0) > longestMi) {
+      longestMi = round1(log.distanceMi ?? 0);
+      longestMin = log.durationSec ? Math.round(log.durationSec / 60) : 0;
+    }
+  }
 
-  // Yesterday's session is the sharpest fatigue signal.
-  if (yesterdayMi >= 12) adjustment -= 14;
-  else if (yesterdayMi >= 10) adjustment -= 11;
-  else if (yesterdayMi >= 8) adjustment -= 8;
-  else if (yesterdayMi >= 6) adjustment -= 5;
-  else if (yesterdayMi >= 4) adjustment -= 3;
+  const paced = recent.filter(
+    (log) => (log.distanceMi ?? 0) >= 1 && (log.durationSec ?? 0) >= 60,
+  );
+  const avgPaceSecPerMi =
+    paced.length === 0
+      ? null
+      : Math.round(
+          paced.reduce((sum, log) => sum + log.durationSec! / log.distanceMi!, 0) / paced.length,
+        );
 
-  if (yesterdayMin >= 110) adjustment -= 5;
-  else if (yesterdayMin >= 90) adjustment -= 3;
-  else if (yesterdayMin >= 70) adjustment -= 2;
+  const withHr = recent.filter((log) => log.avgHr !== null && log.avgHr > 0);
+  const avgRunHr =
+    withHr.length === 0
+      ? null
+      : Math.round(withHr.reduce((sum, log) => sum + log.avgHr!, 0) / withHr.length);
 
-  // Acute:chronic — this week vs the week before.
+  // --- Endurance (0–40): proof you can go long ---
+  const endurancePts = Math.round(Math.min(40, (longestMi / TARGET_LONG_MI) * 40));
+
+  // --- Volume (0–20): recent weekly miles ---
+  const volumePts = Math.round(Math.min(20, (weekMi / TARGET_WEEK_MI) * 20));
+
+  // --- Aerobic (0–20): can you cover ground without redlining? ---
+  let aerobicPts = 0;
+  if (avgRunHr !== null) {
+    // Easy aerobic work usually sits well under ~145 for this block.
+    if (avgRunHr <= 125) aerobicPts += 12;
+    else if (avgRunHr <= 135) aerobicPts += 9;
+    else if (avgRunHr <= 145) aerobicPts += 5;
+    else if (avgRunHr <= 155) aerobicPts += 2;
+  }
+  if (avgPaceSecPerMi !== null && longestMi >= 3) {
+    // Time-on-feet credit: finishing miles matters more than speed this early.
+    const minPerMi = avgPaceSecPerMi / 60;
+    if (minPerMi <= 12) aerobicPts += 8;
+    else if (minPerMi <= 14) aerobicPts += 6;
+    else if (minPerMi <= 16) aerobicPts += 4;
+    else if (minPerMi <= 18) aerobicPts += 2;
+  } else if (longestMin >= 60) {
+    aerobicPts += 4;
+  }
+  // High HR on short runs is a "not ready for long" signal.
+  if (avgRunHr !== null && avgRunHr >= 150 && longestMi < 6) {
+    aerobicPts = Math.max(0, aerobicPts - 4);
+  }
+  aerobicPts = Math.min(20, aerobicPts);
+
+  // --- Consistency (0–10) ---
+  const consistencyPts = Math.min(10, runsLast14 * 2);
+
+  // --- Recovery (±15): sleep / RHR / HRV / yesterday's fatigue ---
+  let recoveryPts = 0;
+  if (day?.asleepMin !== null && day?.asleepMin !== undefined) {
+    const hours = day.asleepMin / 60;
+    recoveryPts += Math.max(-10, Math.min(6, Math.round((hours - 7.5) * 4)));
+  }
+  if (day?.restingHr !== null && day?.restingHr !== undefined && restingBaseline !== null) {
+    recoveryPts -= Math.max(-4, Math.min(10, Math.round((day.restingHr - restingBaseline) * 2)));
+  }
+  if (day?.hrvMs !== null && day?.hrvMs !== undefined && hrvBaseline !== null && hrvBaseline > 0) {
+    const deltaPct = ((day.hrvMs - hrvBaseline) / hrvBaseline) * 100;
+    recoveryPts += Math.max(-6, Math.min(5, Math.round(deltaPct / 5)));
+  }
+  if (yesterdayMi >= 10) recoveryPts -= 6;
+  else if (yesterdayMi >= 8) recoveryPts -= 4;
+  else if (yesterdayMi >= 6) recoveryPts -= 2;
+  if (yesterdayMin >= 100) recoveryPts -= 3;
+  else if (yesterdayMin >= 75) recoveryPts -= 1;
+
   if (priorWeekMi >= 8) {
     const ratio = weekMi / priorWeekMi;
-    if (ratio >= 1.5) adjustment -= 10;
-    else if (ratio >= 1.3) adjustment -= 6;
-    else if (ratio >= 1.15) adjustment -= 3;
-  } else if (weekMi >= 18) {
-    // Early block with little history but already a solid week.
-    adjustment -= 3;
+    if (ratio >= 1.4) recoveryPts -= 4;
+    else if (ratio >= 1.25) recoveryPts -= 2;
   }
 
-  // Same absolute load costs more as race day closes in.
-  if (phase === "taper" || phase === "race") {
-    if (yesterdayMi >= 5) adjustment -= 4;
-    else if (weekMi >= 20) adjustment -= 3;
-  } else if (phase === "peak" && yesterdayMi >= 8) {
-    adjustment -= 3;
-  } else if (phase === "specific" && yesterdayMi >= 10) {
-    adjustment -= 2;
-  }
-  // Base / early build (e.g. ~192 days out): expected load, no extra penalty.
+  const weeksToRace = daysToRace === null ? null : Math.max(0, Math.ceil(daysToRace / 7));
+  const phase = weeksToRace === null ? null : phaseFor(weeksToRace);
+  if ((phase === "taper" || phase === "race") && yesterdayMi >= 5) recoveryPts -= 3;
 
-  // A quiet day after a heavy prior week is the point of the cutback.
-  if (yesterdayMi === 0 && priorWeekMi >= 15 && weekMi <= priorWeekMi * 0.75) {
-    adjustment += 3;
-  }
+  recoveryPts = Math.max(-15, Math.min(12, recoveryPts));
 
-  adjustment = Math.max(-22, Math.min(4, adjustment));
+  if (
+    runs.length === 0 &&
+    !hasVitals(day) &&
+    recoveryPts === 0
+  ) {
+    return {
+      daysToRace,
+      longestMi: 0,
+      longestMin: 0,
+      weekMi: 0,
+      priorWeekMi: 0,
+      runsLast14: 0,
+      avgPaceSecPerMi: null,
+      avgRunHr: null,
+      yesterdayMi: 0,
+      yesterdayMin: 0,
+      endurancePts: 0,
+      volumePts: 0,
+      aerobicPts: 0,
+      consistencyPts: 0,
+      recoveryPts: 0,
+    };
+  }
 
   return {
-    yesterdayMi,
-    yesterdayMin,
+    daysToRace,
+    longestMi,
+    longestMin,
     weekMi,
     priorWeekMi,
-    daysToRace,
-    adjustment,
+    runsLast14,
+    avgPaceSecPerMi,
+    avgRunHr,
+    yesterdayMi,
+    yesterdayMin,
+    endurancePts,
+    volumePts,
+    aerobicPts,
+    consistencyPts,
+    recoveryPts,
   };
 }
 
@@ -261,43 +373,58 @@ function median(values: number[]): number {
   return sorted.length % 2 === 0 ? Math.round((sorted[mid - 1] + sorted[mid]) / 2) : sorted[mid];
 }
 
+function formatPace(secPerMi: number): string {
+  const m = Math.floor(secPerMi / 60);
+  const s = Math.round(secPerMi % 60);
+  return `${m}:${String(s).padStart(2, "0")}/mi`;
+}
+
 function advisoryFor(
   day: HealthDay | null,
   baseline: number | null,
-  load: TrainingLoad | null,
+  prep: RacePrep | null,
+  freshVitals: boolean,
 ): string | null {
-  if (!day) return null;
+  if (freshVitals && day) {
+    const shortSleep = day.asleepMin !== null && day.asleepMin < SHORT_SLEEP_MIN;
+    const highResting =
+      baseline !== null && day.restingHr !== null && day.restingHr - baseline >= RHR_ELEVATED_BPM;
 
-  const shortSleep = day.asleepMin !== null && day.asleepMin < SHORT_SLEEP_MIN;
-  const highResting =
-    baseline !== null && day.restingHr !== null && day.restingHr - baseline >= RHR_ELEVATED_BPM;
-
-  if (shortSleep && highResting) {
-    return "Short night and your resting heart rate is up. Treat today as easy, or move the hard work to tomorrow.";
-  }
-  if (shortSleep) {
-    return "Under six hours of sleep. Run by effort today and let the pace be whatever it is.";
-  }
-  if (highResting) {
-    return `Resting heart rate is ${day.restingHr! - baseline} bpm above your two-week normal. Worth an easy day if it stays there.`;
-  }
-
-  if (load && load.yesterdayMi >= 8) {
-    const raceBit =
-      load.daysToRace !== null && load.daysToRace > 0
-        ? ` With ${load.daysToRace} days to the half, protect the next easy day.`
-        : "";
-    return `You ran ${load.yesterdayMi} mi yesterday${
-      load.yesterdayMin > 0 ? ` in ${load.yesterdayMin} min` : ""
-    }.${raceBit}`;
+    if (shortSleep && highResting) {
+      return "Short night and your resting heart rate is up. Treat today as easy, or move the hard work to tomorrow.";
+    }
+    if (shortSleep) {
+      return "Under six hours of sleep. Run by effort today and let the pace be whatever it is.";
+    }
+    if (highResting) {
+      return `Resting heart rate is ${day.restingHr! - baseline} bpm above your two-week normal. Worth an easy day if it stays there.`;
+    }
   }
 
-  if (load && load.priorWeekMi >= 8 && load.weekMi / load.priorWeekMi >= 1.3) {
-    return `Mileage jumped to ${load.weekMi} mi this week from ${load.priorWeekMi} mi last week. Keep today honest.`;
+  if (!prep) return null;
+
+  if (prep.longestMi < 6 && prep.daysToRace !== null && prep.daysToRace > 30) {
+    const paceBit = prep.avgPaceSecPerMi ? ` at ~${formatPace(prep.avgPaceSecPerMi)}` : "";
+    const hrBit = prep.avgRunHr ? ` · avg run HR ${prep.avgRunHr}` : "";
+    return `Longest so far ${prep.longestMi || 0} mi${paceBit}${hrBit}. Half is ${HALF_MI} — keep growing the long run.`;
   }
 
-  if (load && load.adjustment <= -8 && load.daysToRace !== null && load.daysToRace <= 21) {
-    return `Training load is still high with ${load.daysToRace} days to race. Err easy until it settles.`;
+  if (prep.longestMi < 10 && prep.daysToRace !== null && prep.daysToRace <= 60) {
+    return `Longest ${prep.longestMi} mi with ${prep.daysToRace} days left. Stretch the Saturday long before race week.`;
+  }
+
+  if (prep.yesterdayMi >= 8) {
+    return `You ran ${prep.yesterdayMi} mi yesterday${
+      prep.yesterdayMin > 0 ? ` in ${prep.yesterdayMin} min` : ""
+    }. Protect the next easy day.`;
+  }
+
+  if (prep.priorWeekMi >= 8 && prep.weekMi / prep.priorWeekMi >= 1.3) {
+    return `Mileage jumped to ${prep.weekMi} mi this week from ${prep.priorWeekMi} mi last week. Keep today honest.`;
+  }
+
+  if (prep.daysToRace !== null && prep.longestMi >= TARGET_LONG_MI) {
+    return `Longest ${prep.longestMi} mi · ${prep.daysToRace} days to the half.`;
   }
 
   return null;

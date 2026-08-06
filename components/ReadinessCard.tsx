@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { Ring } from "@/components/Ring";
 import { formatShort, todayISO } from "@/lib/date";
-import { hasVitals, type Recovery } from "@/lib/health/read";
+import { hasReadinessSignal, hasVitals, type Recovery } from "@/lib/health/read";
 
 function hoursMinutes(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -10,9 +10,15 @@ function hoursMinutes(minutes: number): string {
   return h > 0 ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m`;
 }
 
+function formatPace(secPerMi: number): string {
+  const m = Math.floor(secPerMi / 60);
+  const s = Math.round(secPerMi % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 /**
- * Watch data as four glanceable tiles led by one score. Nothing here changes
- * the plan — the coach proposes, you decide.
+ * Race-feel readiness: longest run, weekly miles, run HR / pace, then today's
+ * vitals. Nothing here changes the plan — the coach proposes, you decide.
  */
 export function ReadinessCard({
   recovery,
@@ -22,12 +28,13 @@ export function ReadinessCard({
   /** Calendar day being viewed — keeps copy honest on past days. */
   date: string;
 }) {
-  const { day, score, label, baselineRestingHr, advisory, vitalsDate, lastSyncAt, trainingLoad } =
+  const { day, score, label, baselineRestingHr, advisory, vitalsDate, lastSyncAt, racePrep } =
     recovery;
   const isToday = date === todayISO();
   const stale = Boolean(vitalsDate && vitalsDate !== date);
+  const show = hasReadinessSignal(recovery);
 
-  if (!hasVitals(day)) {
+  if (!show) {
     if (!isToday) {
       return (
         <div className="banner">
@@ -37,7 +44,7 @@ export function ReadinessCard({
           <span className="banner__body">
             <span className="banner__title">No Watch data for this day</span>
             <span className="banner__sub">
-              Sleep, rest HR, and HRV for {formatShort(date)} were not synced.
+              Sleep, rest HR, and runs for {formatShort(date)} were not synced.
             </span>
           </span>
         </div>
@@ -52,7 +59,7 @@ export function ReadinessCard({
         <span className="banner__body">
           {lastSyncAt ? (
             <>
-              <span className="banner__title">Waiting on today&apos;s sleep &amp; rest HR</span>
+              <span className="banner__title">Waiting on today&apos;s sleep &amp; runs</span>
               <span className="banner__sub">
                 Watch is connected — sync again once this morning&apos;s readings land, or log them
                 by hand.
@@ -71,26 +78,29 @@ export function ReadinessCard({
   }
 
   const tone =
-    score === null ? "accent" : score >= 75 ? "good" : score >= 55 ? "accent" : "bad";
+    score === null ? "accent" : score >= 75 ? "good" : score >= 56 ? "accent" : "bad";
   const restingDelta =
-    baselineRestingHr !== null && day!.restingHr !== null
-      ? day!.restingHr - baselineRestingHr
+    baselineRestingHr !== null && day?.restingHr != null
+      ? day.restingHr - baselineRestingHr
       : null;
+
+  const title =
+    score === null
+      ? "Vitals in"
+      : label === "race ready"
+        ? "Race ready"
+        : label === "on track"
+          ? "On track"
+          : "Building";
 
   return (
     <div className="stack">
       <div className="card">
         <div className="row-between">
           <div>
-            <p className="label">{stale ? `Readiness · ${formatShort(vitalsDate!)}` : "Readiness"}</p>
+            <p className="label">{stale ? `Readiness · ${formatShort(vitalsDate!)}` : "Race readiness"}</p>
             <p className="card__title" style={{ marginTop: "0.3rem" }}>
-              {score === null
-                ? "Vitals in"
-                : label === "ready"
-                  ? "Green light"
-                  : label === "steady"
-                    ? "Steady"
-                    : "Hold back"}
+              {title}
             </p>
             {stale && isToday ? (
               <p className="card__sub">
@@ -98,15 +108,13 @@ export function ReadinessCard({
               </p>
             ) : advisory ? (
               <p className="card__sub">{advisory}</p>
-            ) : trainingLoad && trainingLoad.daysToRace !== null && trainingLoad.adjustment !== 0 ? (
+            ) : racePrep ? (
               <p className="card__sub">
-                Training load {trainingLoad.adjustment > 0 ? "+" : ""}
-                {trainingLoad.adjustment}
-                {trainingLoad.weekMi > 0 ? ` · ${trainingLoad.weekMi} mi this week` : ""}
-                {` · ${trainingLoad.daysToRace} days to race`}
+                Longest {racePrep.longestMi || 0} mi
+                {racePrep.avgRunHr ? ` · run HR ${racePrep.avgRunHr}` : ""}
+                {racePrep.avgPaceSecPerMi ? ` · ${formatPace(racePrep.avgPaceSecPerMi)}/mi` : ""}
+                {racePrep.daysToRace !== null ? ` · ${racePrep.daysToRace}d to race` : ""}
               </p>
-            ) : trainingLoad && trainingLoad.daysToRace !== null ? (
-              <p className="card__sub">{trainingLoad.daysToRace} days to the half</p>
             ) : null}
           </div>
           {score !== null ? (
@@ -117,7 +125,7 @@ export function ReadinessCard({
               thickness={7}
               value={score}
               caption="score"
-              label={`Readiness ${score} of 100`}
+              label={`Race readiness ${score} of 100`}
             />
           ) : (
             <span className="row__lead row__lead--accent">
@@ -127,43 +135,72 @@ export function ReadinessCard({
         </div>
       </div>
 
-      <div className="bento bento--3">
-        <Link className="tile cardlink" href="/sleep" style={{ textDecoration: "none", color: "inherit" }}>
-          <p className="tile__label">
-            <Icon name="moon" size={13} />
-            Sleep
-          </p>
-          <p className="tile__value">
-            {day!.asleepMin !== null ? hoursMinutes(day!.asleepMin) : "—"}
-          </p>
-        </Link>
-        <Link className="tile cardlink" href="/rest-hr" style={{ textDecoration: "none", color: "inherit" }}>
-          <p className="tile__label">
-            <Icon name="heart" size={13} />
-            Rest HR
-          </p>
-          <p className="tile__value">
-            {day!.restingHr ?? "—"}
-            {day!.restingHr !== null ? <small>bpm</small> : null}
-          </p>
-          {restingDelta !== null && restingDelta !== 0 ? (
-            <p className="tile__foot">
-              {restingDelta > 0 ? "+" : ""}
-              {restingDelta} vs normal
+      {hasVitals(day) ? (
+        <div className="bento bento--3">
+          <Link className="tile cardlink" href="/sleep" style={{ textDecoration: "none", color: "inherit" }}>
+            <p className="tile__label">
+              <Icon name="moon" size={13} />
+              Sleep
             </p>
-          ) : null}
-        </Link>
-        <Link className="tile cardlink" href="/hrv" style={{ textDecoration: "none", color: "inherit" }}>
-          <p className="tile__label">
-            <Icon name="pulse" size={13} />
-            HRV
-          </p>
-          <p className="tile__value">
-            {day!.hrvMs !== null ? Math.round(day!.hrvMs) : "—"}
-            {day!.hrvMs !== null ? <small>ms</small> : null}
-          </p>
-        </Link>
-      </div>
+            <p className="tile__value">
+              {day!.asleepMin !== null ? hoursMinutes(day!.asleepMin) : "—"}
+            </p>
+          </Link>
+          <Link className="tile cardlink" href="/rest-hr" style={{ textDecoration: "none", color: "inherit" }}>
+            <p className="tile__label">
+              <Icon name="heart" size={13} />
+              Rest HR
+            </p>
+            <p className="tile__value">
+              {day!.restingHr ?? "—"}
+              {day!.restingHr !== null ? <small>bpm</small> : null}
+            </p>
+            {restingDelta !== null && restingDelta !== 0 ? (
+              <p className="tile__foot">
+                {restingDelta > 0 ? "+" : ""}
+                {restingDelta} vs normal
+              </p>
+            ) : null}
+          </Link>
+          <Link className="tile cardlink" href="/hrv" style={{ textDecoration: "none", color: "inherit" }}>
+            <p className="tile__label">
+              <Icon name="pulse" size={13} />
+              HRV
+            </p>
+            <p className="tile__value">
+              {day!.hrvMs !== null ? Math.round(day!.hrvMs) : "—"}
+              {day!.hrvMs !== null ? <small>ms</small> : null}
+            </p>
+          </Link>
+        </div>
+      ) : racePrep ? (
+        <div className="bento bento--3">
+          <div className="tile">
+            <p className="tile__label">Longest</p>
+            <p className="tile__value">
+              {racePrep.longestMi || "—"}
+              {racePrep.longestMi > 0 ? <small>mi</small> : null}
+            </p>
+          </div>
+          <div className="tile">
+            <p className="tile__label">This week</p>
+            <p className="tile__value">
+              {racePrep.weekMi || "—"}
+              {racePrep.weekMi > 0 ? <small>mi</small> : null}
+            </p>
+          </div>
+          <div className="tile">
+            <p className="tile__label">Run HR</p>
+            <p className="tile__value">
+              {racePrep.avgRunHr ?? "—"}
+              {racePrep.avgRunHr !== null ? <small>bpm</small> : null}
+            </p>
+            {racePrep.avgPaceSecPerMi ? (
+              <p className="tile__foot">{formatPace(racePrep.avgPaceSecPerMi)}/mi</p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
