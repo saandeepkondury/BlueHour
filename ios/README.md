@@ -2,7 +2,7 @@
 
 A small native shell: it reads Apple Health, shows the Blue Hour web app, and fires **local notifications** for the morning brief and water reminders. Apple Health has no web API, so a Safari tab can never see your Watch data — this app is the bridge.
 
-It reads and never writes: workouts, sleep, resting heart rate, and HRV from the last 14 days, posted to `/api/health/ingest` every time you open or return to the app. **Settings → Apple Health** also has a Sync button that asks this shell to pull again.
+It reads and never writes: workouts, sleep, resting heart rate, and HRV from the last 14 days, posted to `/api/health/ingest` every time you open or return to the app. **Settings → Apple Health** also has a Sync button that asks this shell to pull again. Siri can log water, read today's plan, sync Health, and open screens without tapping.
 
 ## One-time setup
 
@@ -57,6 +57,19 @@ Open the app (or return to it) to refresh the next few days of copy. Gear → **
 On a locked phone: long-press or pull down the banner to reveal **+ Cup**.
 
 If you denied the prompt: **Settings → Notifications → Blue Hour → Allow**.
+
+## Siri
+
+The shell registers App Intents so you can talk to Blue Hour without opening it:
+
+| Say… | What happens |
+| --- | --- |
+| “Hey Siri, log a cup in Blue Hour” | Posts one cup (8 oz) via `/api/water/log` |
+| “Hey Siri, what's today's plan in Blue Hour” | Speaks today's workout + water snapshot |
+| “Hey Siri, sync Health in Blue Hour” | Pulls Apple Watch data and posts ingest |
+| “Hey Siri, open Water in Blue Hour” | Opens that screen in the WebView |
+
+Connect the app once (address + sync key) before Siri can reach the trainer. Phrases also appear under **Shortcuts → Blue Hour** after the first install/build. Deep links work the same way: `bluehour://water`, `bluehour://coach`, `bluehour://sync`, etc.
 
 ## Daily use
 

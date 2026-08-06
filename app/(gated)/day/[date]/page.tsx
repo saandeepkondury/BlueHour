@@ -33,9 +33,11 @@ export default async function DayPage({
   const back =
     from === "fuel"
       ? `/fuel?w=${weekStart}&d=${date}`
-      : isToday
-        ? "/"
-        : "/plan";
+      : from === "plan"
+        ? `/plan?w=${weekStart}&d=${date}`
+        : isToday
+          ? "/"
+          : "/plan";
   const options = await longRunOptions(startOfWeek(date));
 
   return (

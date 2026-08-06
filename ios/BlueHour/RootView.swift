@@ -83,6 +83,7 @@ final class SyncModel: ObservableObject {
 
 struct RootView: View {
     @StateObject private var model = SyncModel()
+    @ObservedObject private var deepLinks = DeepLinkRouter.shared
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -93,6 +94,8 @@ struct RootView: View {
                     WebView(
                         url: URL(string: Settings.baseURL)!,
                         reloadToken: model.reloadToken,
+                        pathToken: deepLinks.pathToken,
+                        path: deepLinks.webPath,
                         notice: model.notice,
                         onRequestSync: {
                             Task { await model.syncFromWeb() }
@@ -111,10 +114,16 @@ struct RootView: View {
             guard phase == .active else { return }
             Task { await model.syncIfPossible() }
         }
+        .onChange(of: deepLinks.syncToken) { _, _ in
+            Task { await model.syncIfPossible() }
+        }
         .onOpenURL { url in
             guard url.scheme == "bluehour" else { return }
             if url.host == "test-water" {
                 Task { await NotificationScheduler.sendTest() }
+                return
+            }
+            if DeepLinkRouter.shared.handle(url: url) {
                 return
             }
             Task { await model.syncIfPossible() }
@@ -244,7 +253,7 @@ private struct SetupView: View {
                     } header: {
                         Text("Notifications")
                     } footer: {
-                        Text("Morning briefs and water reminders (every 2 hours, 8am–10pm Austin) are scheduled on this phone. Water banners include a + Cup button that logs without opening the app. Open once a day so copy stays current. Pause them in the website Settings if you want silence.")
+                        Text("Morning briefs and water reminders (every 2 hours, 8am–10pm Austin) are scheduled on this phone. Water banners include a + Cup button that logs without opening the app. Siri can also log water, read today's plan, sync Health, or open a screen — try “Hey Siri, log a cup in Blue Hour.” Open once a day so copy stays current. Pause reminders in the website Settings if you want silence.")
                     }
                 }
             }

@@ -55,6 +55,16 @@ struct WaterLogResponse: Decodable {
     let waterOz: Int?
 }
 
+struct SiriTodayResponse: Decodable {
+    let date: String
+    let title: String
+    let summary: String
+    let spoken: String
+    let waterOz: Int
+    let waterTarget: Int
+    let cupsLeft: Int
+}
+
 enum SyncError: LocalizedError {
     case notConfigured
     case timeout
@@ -120,7 +130,25 @@ struct SyncClient {
         request.httpBody = try JSONSerialization.data(withJSONObject: ["date": date, "oz": oz])
 
         do {
-            return try await performWater(request)
+            return try await decode(WaterLogResponse.self, request: request)
+        } catch let error as URLError where error.code == .timedOut {
+            throw SyncError.timeout
+        } catch let error as URLError where Self.unreachableCodes.contains(error.code) {
+            throw SyncError.unreachable
+        }
+    }
+
+    func fetchToday() async throws -> SiriTodayResponse {
+        guard Settings.isConfigured, let url = Settings.siriTodayURL() else {
+            throw SyncError.notConfigured
+        }
+
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(Settings.ingestSecret)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 45
+
+        do {
+            return try await decode(SiriTodayResponse.self, request: request)
         } catch let error as URLError where error.code == .timedOut {
             throw SyncError.timeout
         } catch let error as URLError where Self.unreachableCodes.contains(error.code) {
@@ -137,17 +165,10 @@ struct SyncClient {
     ]
 
     private func perform(_ request: URLRequest) async throws -> IngestResponse {
-        let (data, response) = try await URLSession.shared.data(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-
-        guard (200..<300).contains(status) else {
-            throw SyncError.server(status: status, message: String(data: data, encoding: .utf8) ?? "")
-        }
-
-        return try JSONDecoder().decode(IngestResponse.self, from: data)
+        try await decode(IngestResponse.self, request: request)
     }
 
-    private func performWater(_ request: URLRequest) async throws -> WaterLogResponse {
+    private func decode<T: Decodable>(_ type: T.Type, request: URLRequest) async throws -> T {
         let (data, response) = try await URLSession.shared.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
 
@@ -155,6 +176,6 @@ struct SyncClient {
             throw SyncError.server(status: status, message: String(data: data, encoding: .utf8) ?? "")
         }
 
-        return try JSONDecoder().decode(WaterLogResponse.self, from: data)
+        return try JSONDecoder().decode(type, from: data)
     }
 }

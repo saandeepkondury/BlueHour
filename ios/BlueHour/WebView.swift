@@ -6,6 +6,8 @@ import WebKit
 struct WebView: UIViewRepresentable {
     let url: URL
     let reloadToken: Int
+    let pathToken: Int
+    let path: String
     var notice: SyncNotice?
     var onRequestSync: () -> Void
 
@@ -42,6 +44,12 @@ struct WebView: UIViewRepresentable {
             context.coordinator.lastNoticeId = notice.id
             context.coordinator.notifySync(ok: notice.ok, message: notice.message)
         }
+        if context.coordinator.loadedPathToken != pathToken {
+            context.coordinator.loadedPathToken = pathToken
+            if let page = Settings.pageURL(path: path) {
+                context.coordinator.load(page)
+            }
+        }
         guard context.coordinator.loadedToken != reloadToken else { return }
         context.coordinator.loadedToken = reloadToken
         context.coordinator.reloadWhenIdle()
@@ -53,6 +61,7 @@ struct WebView: UIViewRepresentable {
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var loadedToken = 0
+        var loadedPathToken = 0
         var lastNoticeId: UUID?
         var parentURL: URL
         var onRequestSync: () -> Void

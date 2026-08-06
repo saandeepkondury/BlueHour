@@ -32,6 +32,18 @@ struct Settings {
         return base.appendingPathComponent("api/water/log")
     }
 
+    static func siriTodayURL() -> URL? {
+        guard let base = URL(string: baseURL) else { return nil }
+        return base.appendingPathComponent("api/siri/today")
+    }
+
+    static func pageURL(path: String) -> URL? {
+        guard let base = URL(string: baseURL) else { return nil }
+        if path == "/" || path.isEmpty { return base }
+        let trimmed = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        return base.appendingPathComponent(trimmed)
+    }
+
     private static func keychainQuery() -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
