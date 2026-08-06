@@ -2,7 +2,6 @@ import Link from "next/link";
 import {
   finishStrength,
   reopenStrengthSession,
-  skipStrengthSession,
   toggleStrengthExercise,
 } from "@/app/actions";
 import { Check } from "@/components/Check";
@@ -125,22 +124,18 @@ export function StrengthCard({
                   </label>
                 </div>
                 <label className="field">
-                  <span className="field__label">Loads and notes</span>
-                  <input name="notes" placeholder="Weights, what to bump next time" />
+                  <span className="field__label">Notes</span>
+                  <input
+                    name="notes"
+                    placeholder="Loads, how it felt, or why you are skipping"
+                  />
                 </label>
-                <button className="btn btn--primary btn--block" type="submit">
+                <button className="btn btn--primary btn--block" type="submit" name="intent" value="done">
                   Save session
                 </button>
-              </form>
-
-              <form action={skipStrengthSession} style={{ marginTop: "0.75rem" }}>
-                <input type="hidden" name="date" value={session.date} />
-                <div className="inline-field">
-                  <input name="reason" placeholder="Or skip — legs cooked, no time" />
-                  <button className="btn btn--quiet btn--sm nowrap" type="submit">
-                    Skip
-                  </button>
-                </div>
+                <button className="btn btn--quiet btn--block" type="submit" name="intent" value="skip">
+                  Skip session
+                </button>
               </form>
             </div>
           </details>

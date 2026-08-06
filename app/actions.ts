@@ -304,18 +304,25 @@ export async function saveExerciseLoad(formData: FormData): Promise<void> {
 export async function finishStrength(formData: FormData): Promise<void> {
   const date = str(formData.get("date"));
   if (!date) return;
-  await completeStrength(date, {
-    minutes: num(formData.get("minutes")),
-    rpe: num(formData.get("rpe")),
-    notes: str(formData.get("notes")) || null,
-  });
+  const intent = str(formData.get("intent")) || "done";
+  const notes = str(formData.get("notes")) || null;
+
+  if (intent === "skip") {
+    await skipStrength(date, notes ?? "");
+  } else {
+    await completeStrength(date, {
+      minutes: num(formData.get("minutes")),
+      rpe: num(formData.get("rpe")),
+      notes,
+    });
+  }
   refresh(date);
 }
 
 export async function skipStrengthSession(formData: FormData): Promise<void> {
   const date = str(formData.get("date"));
   if (!date) return;
-  await skipStrength(date, str(formData.get("reason")));
+  await skipStrength(date, str(formData.get("reason")) || str(formData.get("notes")));
   refresh(date);
 }
 

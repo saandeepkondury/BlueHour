@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
 import { strengthChecks, strengthLogs, strengthSessions } from "@/drizzle/schema";
+import { exerciseById } from "@/lib/strength/exercises";
 
 export async function checkedExercises(date: string): Promise<Set<string>> {
   await ready();
@@ -13,12 +14,21 @@ export async function checkedExercises(date: string): Promise<Set<string>> {
 
 export async function toggleExercise(date: string, exerciseId: string, done: boolean): Promise<void> {
   await ready();
+  const existing = await checkFor(date, exerciseId);
+  const exercise = exerciseById(exerciseId);
+
+  // Empty load + marked done ⇒ they did the prescription as written.
+  let load = existing?.load?.trim() || null;
+  if (done && !load && exercise?.prescription) {
+    load = exercise.prescription;
+  }
+
   await db
     .insert(strengthChecks)
-    .values({ date, exerciseId, done: done ? 1 : 0 })
+    .values({ date, exerciseId, done: done ? 1 : 0, load })
     .onConflictDoUpdate({
       target: [strengthChecks.date, strengthChecks.exerciseId],
-      set: { done: done ? 1 : 0 },
+      set: { done: done ? 1 : 0, load },
     });
 }
 
