@@ -1,9 +1,16 @@
 import SwiftUI
 import UserNotifications
+import AppIntents
 
 @main
 struct BlueHourApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
+    init() {
+        // Re-index App Shortcuts after every install/rebuild so they show up
+        // again in the Shortcuts app (debug reinstalls wipe the previous index).
+        BlueHourShortcuts.updateAppShortcutParameters()
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -19,6 +26,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     ) -> Bool {
         NotificationScheduler.registerCategories()
         UNUserNotificationCenter.current().delegate = self
+        BlueHourShortcuts.updateAppShortcutParameters()
         return true
     }
 

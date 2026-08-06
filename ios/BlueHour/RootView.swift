@@ -109,9 +109,13 @@ struct RootView: View {
                 }
             }
         }
-        .task { await model.syncIfPossible() }
+        .task {
+            BlueHourShortcuts.updateAppShortcutParameters()
+            await model.syncIfPossible()
+        }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
+            BlueHourShortcuts.updateAppShortcutParameters()
             Task { await model.syncIfPossible() }
         }
         .onChange(of: deepLinks.syncToken) { _, _ in

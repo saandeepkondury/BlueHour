@@ -136,7 +136,9 @@ enum OpenScreen: String, AppEnum {
     case plan
     case progress
 
-    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Screen")
+    static var typeDisplayRepresentation: TypeDisplayRepresentation {
+        TypeDisplayRepresentation(name: "Screen")
+    }
 
     static var caseDisplayRepresentations: [OpenScreen: DisplayRepresentation] = [
         .today: "Today",
@@ -159,9 +161,23 @@ enum OpenScreen: String, AppEnum {
     }
 }
 
-struct OpenBlueHourIntent: AppIntent {
+/// Parameter-free open so Shortcuts always has a stable “Open Blue Hour” tile
+/// even before parameterized screen variants are indexed.
+struct OpenAppIntent: AppIntent {
     static var title: LocalizedStringResource = "Open Blue Hour"
-    static var description = IntentDescription("Opens a Blue Hour screen.")
+    static var description = IntentDescription("Opens Blue Hour on Today.")
+    static var openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        DeepLinkRouter.shared.open(.today)
+        return .result(dialog: "Opening Blue Hour.")
+    }
+}
+
+struct OpenBlueHourIntent: AppIntent {
+    static var title: LocalizedStringResource = "Open a Blue Hour screen"
+    static var description = IntentDescription("Opens a specific Blue Hour screen.")
     static var openAppWhenRun = true
 
     @Parameter(title: "Screen", default: .today)
@@ -181,6 +197,9 @@ struct OpenBlueHourIntent: AppIntent {
 // MARK: - Shortcuts phrases
 
 struct BlueHourShortcuts: AppShortcutsProvider {
+    static var shortcutTileColor: ShortcutTileColor = .navy
+
+    @AppShortcutsBuilder
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
             intent: LogWaterIntent(),
@@ -215,14 +234,24 @@ struct BlueHourShortcuts: AppShortcutsProvider {
             systemImageName: "heart.fill"
         )
         AppShortcut(
-            intent: OpenBlueHourIntent(),
+            intent: OpenAppIntent(),
             phrases: [
                 "Open \(.applicationName)",
-                "Open \(\.$screen) in \(.applicationName)",
-                "Show \(\.$screen) in \(.applicationName)",
+                "Launch \(.applicationName)",
+                "Start \(.applicationName)",
             ],
             shortTitle: "Open",
             systemImageName: "sunrise.fill"
+        )
+        AppShortcut(
+            intent: OpenBlueHourIntent(),
+            phrases: [
+                "Open \(\.$screen) in \(.applicationName)",
+                "Show \(\.$screen) in \(.applicationName)",
+                "Go to \(\.$screen) in \(.applicationName)",
+            ],
+            shortTitle: "Open screen",
+            systemImageName: "square.grid.2x2"
         )
     }
 }

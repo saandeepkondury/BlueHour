@@ -69,7 +69,11 @@ The shell registers App Intents so you can talk to Blue Hour without opening it:
 | “Hey Siri, sync Health in Blue Hour” | Pulls Apple Watch data and posts ingest |
 | “Hey Siri, open Water in Blue Hour” | Opens that screen in the WebView |
 
-Connect the app once (address + sync key) before Siri can reach the trainer. Phrases also appear under **Shortcuts → Blue Hour** after the first install/build. Deep links work the same way: `bluehour://water`, `bluehour://coach`, `bluehour://sync`, etc.
+Connect the app once (address + sync key) before Siri can reach the trainer. Phrases also appear under **Shortcuts → Apps → Blue Hour**.
+
+**After every Xcode rebuild:** open Blue Hour once on the phone. Launch re-registers the App Shortcuts so they show up again in the Shortcuts app (a debug reinstall clears the previous index). Then force-quit and reopen **Shortcuts** if the list still looks empty.
+
+Deep links work the same way: `bluehour://water`, `bluehour://coach`, `bluehour://sync`, etc.
 
 ## Daily use
 
