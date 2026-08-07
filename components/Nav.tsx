@@ -29,7 +29,8 @@ export function Nav({ pending = 0 }: { pending?: number }) {
               pathname.startsWith("/water") ||
               pathname.startsWith("/sleep") ||
               pathname.startsWith("/rest-hr") ||
-              pathname.startsWith("/hrv")
+              pathname.startsWith("/hrv") ||
+              pathname.startsWith("/runs")
             : pathname.startsWith(tab.href);
         const badge = tab.href === "/coach" && pending > 0;
 

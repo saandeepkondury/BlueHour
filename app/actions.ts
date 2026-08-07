@@ -50,6 +50,7 @@ function refresh(date?: string, exerciseId?: string) {
   revalidatePath("/progress");
   revalidatePath("/core");
   revalidatePath("/coach");
+  revalidatePath("/runs");
   if (date) revalidatePath(`/day/${date}`);
   if (exerciseId) revalidatePath(`/exercise/${exerciseId}`);
 }

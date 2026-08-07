@@ -628,6 +628,13 @@ a.tile__label:active {
   gap: 0.5rem;
 }
 
+/* Miles · Time · Pace · Cal — two-up reads cleaner on iPhone */
+.stats--quad {
+  grid-auto-flow: unset;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem 0.75rem;
+}
+
 .stat__value {
   font-size: 1.375rem;
   font-weight: 700;

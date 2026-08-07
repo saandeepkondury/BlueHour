@@ -15,6 +15,7 @@ const GROUPS: { title: string; links: { href: string; label: string; icon: IconN
     title: "Training",
     links: [
       { href: "/progress", label: "Progress", icon: "chart" },
+      { href: "/runs", label: "Run history", icon: "run" },
       { href: "/core", label: "Body & core", icon: "body" },
     ],
   },

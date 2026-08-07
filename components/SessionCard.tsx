@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { annotateWorkout, completeRestDay, completeWorkout, reopenDay, skipDay } from "@/app/actions";
 import { Icon, type IconName } from "@/components/Icon";
 import { formatDuration, formatMiles, formatPace } from "@/lib/format";
@@ -88,6 +89,29 @@ function LogMeta({ log }: { log: WorkoutLog }) {
   );
 }
 
+function LogStats({ log }: { log: WorkoutLog }) {
+  return (
+    <div className="stats stats--quad">
+      <div>
+        <p className="stat__value">{formatMiles(log.distanceMi)}</p>
+        <p className="stat__label">Miles</p>
+      </div>
+      <div>
+        <p className="stat__value">{formatDuration(log.durationSec)}</p>
+        <p className="stat__label">Time</p>
+      </div>
+      <div>
+        <p className="stat__value">{formatPace(log.durationSec, log.distanceMi)}</p>
+        <p className="stat__label">Pace</p>
+      </div>
+      <div>
+        <p className="stat__value">{log.activeKcal != null ? String(log.activeKcal) : "—"}</p>
+        <p className="stat__label">Cal</p>
+      </div>
+    </div>
+  );
+}
+
 export function SessionCard({
   workout,
   log,
@@ -105,10 +129,10 @@ export function SessionCard({
   const hasLog = Boolean(log && (log.distanceMi > 0 || (log.durationSec ?? 0) > 0));
   const fromWatch = Boolean(hasLog && log?.source === "healthkit");
 
-  // Watch metrics first. Feel form only while the day is open (incl. after Reopen).
   const showWatchFeel = fromWatch && runDay && !done && !skipped;
   const showManualLog = !fromWatch && runDay && !done && !skipped;
-  const showTargets = !done && !skipped && !hasLog && (workout.distanceMi > 0 || Boolean(workout.durationMin));
+  const showTargets =
+    !done && !skipped && !hasLog && (workout.distanceMi > 0 || Boolean(workout.durationMin));
 
   const sourceLine = hasLog
     ? fromWatch
@@ -124,63 +148,62 @@ export function SessionCard({
 
   return (
     <div className="card card--pad-lg">
-      <div className="card__head">
-        <div style={{ minWidth: 0 }}>
-          <span className={`pill ${pillTone}`}>{TYPE_LABEL[type]}</span>
-          <h2 className="card__title" style={{ marginTop: "0.45rem" }}>
-            {type === "race" ? "Austin Half Marathon" : workout.title}
-          </h2>
-          {sourceLine ? <p className="card__sub">{sourceLine}</p> : null}
+      <Link
+        href="/runs"
+        className="cardlink"
+        style={{ display: "block", color: "inherit", textDecoration: "none" }}
+        aria-label="Open run history"
+      >
+        <div className="card__head">
+          <div style={{ minWidth: 0 }}>
+            <span className={`pill ${pillTone}`}>{TYPE_LABEL[type]}</span>
+            <h2 className="card__title" style={{ marginTop: "0.45rem" }}>
+              {type === "race" ? "Austin Half Marathon" : workout.title}
+            </h2>
+            {sourceLine ? <p className="card__sub">{sourceLine}</p> : null}
+          </div>
+          <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+            <span
+              className={`row__lead${done || hasLog ? " row__lead--good" : " row__lead--accent"}`}
+            >
+              <Icon name={hasLog && !runDay ? "run" : TYPE_ICON[type]} size={19} />
+            </span>
+            <Icon name="chevron" size={15} />
+          </span>
         </div>
-        <span className={`row__lead${done || hasLog ? " row__lead--good" : " row__lead--accent"}`}>
-          <Icon name={hasLog && !runDay ? "run" : TYPE_ICON[type]} size={19} />
-        </span>
-      </div>
 
-      {hasLog && log ? (
-        <>
-          <hr className="card__divide" />
-          <div className="stats">
-            <div>
-              <p className="stat__value">{formatMiles(log.distanceMi)}</p>
-              <p className="stat__label">Miles</p>
-            </div>
-            <div>
-              <p className="stat__value">{formatDuration(log.durationSec)}</p>
-              <p className="stat__label">Time</p>
-            </div>
-            <div>
-              <p className="stat__value">{formatPace(log.durationSec, log.distanceMi)}</p>
-              <p className="stat__label">Pace</p>
-            </div>
-          </div>
-          <LogMeta log={log} />
-        </>
-      ) : null}
+        {hasLog && log ? (
+          <>
+            <hr className="card__divide" />
+            <LogStats log={log} />
+            <LogMeta log={log} />
+          </>
+        ) : null}
 
-      {showTargets ? (
-        <>
-          <hr className="card__divide" />
-          <div className="stats">
-            {workout.distanceMi > 0 ? (
-              <div>
-                <p className="stat__value">{formatMiles(workout.distanceMi)}</p>
-                <p className="stat__label">Target miles</p>
-              </div>
-            ) : null}
-            {workout.durationMin ? (
-              <div>
-                <p className="stat__value">{workout.durationMin}</p>
-                <p className="stat__label">Minutes</p>
-              </div>
-            ) : null}
-          </div>
-        </>
-      ) : null}
+        {showTargets ? (
+          <>
+            <hr className="card__divide" />
+            <div className="stats">
+              {workout.distanceMi > 0 ? (
+                <div>
+                  <p className="stat__value">{formatMiles(workout.distanceMi)}</p>
+                  <p className="stat__label">Target miles</p>
+                </div>
+              ) : null}
+              {workout.durationMin ? (
+                <div>
+                  <p className="stat__value">{workout.durationMin}</p>
+                  <p className="stat__label">Minutes</p>
+                </div>
+              ) : null}
+            </div>
+          </>
+        ) : null}
 
-      {skipped && workout.skipReason ? (
-        <p className="card__sub">Reason: {workout.skipReason}</p>
-      ) : null}
+        {skipped && workout.skipReason ? (
+          <p className="card__sub">Reason: {workout.skipReason}</p>
+        ) : null}
+      </Link>
 
       {!done && (workout.purpose || workout.tip) ? (
         <details className="fold" style={{ marginTop: "0.5rem" }}>
