@@ -3,7 +3,7 @@ import { AppBar } from "@/components/AppBar";
 import { Icon, type IconName } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
-import { addDays, formatShort, todayISO, weekdayShort } from "@/lib/date";
+import { addDays, formatWithYear, todayISO, weekdayShort } from "@/lib/date";
 import { pendingCount } from "@/lib/coach/store";
 import {
   formatSleep,
@@ -145,9 +145,9 @@ export async function VitalsTrackerPage({ metric }: { metric: VitalMetric }) {
                       </span>
                       <span className="row__body">
                         <span className="row__title">
-                          {row.date === today ? "Today" : formatShort(row.date)}
+                          {row.date === today ? "Today" : formatWithYear(row.date)}
                         </span>
-                        <span className="row__sub">
+                        <span className="row__sub row__sub--wrap">
                           {metric === "sleep" ? "Asleep" : meta.unit}
                         </span>
                       </span>

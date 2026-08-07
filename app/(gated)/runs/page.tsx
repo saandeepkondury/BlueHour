@@ -3,7 +3,7 @@ import { AppBar } from "@/components/AppBar";
 import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
-import { formatShort, todayISO, weekdayShort } from "@/lib/date";
+import { formatWithYear, todayISO, weekdayShort } from "@/lib/date";
 import { formatDuration, formatMiles, formatPace } from "@/lib/format";
 import { pendingCount } from "@/lib/coach/store";
 import { getAllWorkoutLogs } from "@/lib/store";
@@ -80,7 +80,7 @@ export default async function RunsPage() {
               <div className="tile">
                 <p className="tile__label">Latest</p>
                 <p className="tile__value" style={{ fontSize: "1.05rem" }}>
-                  {logs[0] ? (logs[0].date === today ? "Today" : formatShort(logs[0].date)) : "—"}
+                  {logs[0] ? (logs[0].date === today ? "Today" : formatWithYear(logs[0].date)) : "—"}
                 </p>
               </div>
             </div>
@@ -123,11 +123,11 @@ export default async function RunsPage() {
                       </span>
                       <span className="row__body">
                         <span className="row__title">
-                          {log.date === today ? "Today" : formatShort(log.date)}
+                          {log.date === today ? "Today" : formatWithYear(log.date)}
                         </span>
-                        <span className="row__sub">{detailLine(log)}</span>
+                        <span className="row__sub row__sub--wrap">{detailLine(log)}</span>
                         {meta ? (
-                          <span className="row__sub" style={{ textTransform: "capitalize" }}>
+                          <span className="row__sub row__sub--wrap" style={{ textTransform: "capitalize" }}>
                             {meta}
                           </span>
                         ) : null}

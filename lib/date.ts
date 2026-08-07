@@ -131,6 +131,12 @@ export function formatShort(iso: string): string {
   return `${MONTH_SHORT[d.getUTCMonth()]} ${d.getUTCDate()}`;
 }
 
+/** Month day + year — for historic lists that can span years. */
+export function formatWithYear(iso: string): string {
+  const d = parseISO(iso);
+  return `${MONTH_SHORT[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+}
+
 export function formatLong(iso: string): string {
   const d = parseISO(iso);
   return `${WEEKDAY_SHORT[d.getUTCDay()]}, ${MONTH_SHORT[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;

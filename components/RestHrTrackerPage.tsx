@@ -3,7 +3,7 @@ import { AppBar } from "@/components/AppBar";
 import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
-import { formatShort, todayISO, weekdayShort } from "@/lib/date";
+import { formatWithYear, todayISO, weekdayShort } from "@/lib/date";
 import { pendingCount } from "@/lib/coach/store";
 import { getRestHrSummary } from "@/lib/health/read";
 
@@ -145,9 +145,9 @@ export async function RestHrTrackerPage() {
                       </span>
                       <span className="row__body">
                         <span className="row__title">
-                          {row.date === today ? "Today" : formatShort(row.date)}
+                          {row.date === today ? "Today" : formatWithYear(row.date)}
                         </span>
-                        <span className="row__sub">{detailLine(row)}</span>
+                        <span className="row__sub row__sub--wrap">{detailLine(row)}</span>
                       </span>
                       <span className="row__meta">{row.restingHr ?? "—"}</span>
                     </Link>
