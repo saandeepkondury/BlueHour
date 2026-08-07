@@ -3,9 +3,9 @@ import { NextResponse } from "next/server";
 import { getSetting, KEYS } from "@/lib/settings";
 
 /**
- * Shared gate for anything the iPhone shell calls: Health ingest, the
- * local-notification schedule, and Siri today snapshot. Same key as
- * HEALTH_INGEST_SECRET.
+ * Shared gate for anything the iPhone shell (or trusted agents) call:
+ * Health ingest, day snapshot read, local-notification schedule, and
+ * Siri today. Same key as HEALTH_INGEST_SECRET.
  */
 
 export async function ingestSecrets(): Promise<string[]> {

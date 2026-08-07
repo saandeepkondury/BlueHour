@@ -63,6 +63,8 @@ environment, which takes precedence.
 ## Apple Watch
 
 The iPhone app in `ios/` reads HealthKit and posts to `/api/health/ingest` every time you open it.
+Trusted agents can read a compact day snapshot from `GET /api/health/day?date=YYYY-MM-DD`
+(same Bearer `HEALTH_INGEST_SECRET` as ingest).
 **Settings → Apple Health** has a Sync button for an on-demand pull. A posted run auto-completes
 the planned run for that day. There is a manual entry form for mornings the Watch has not landed yet.
 
