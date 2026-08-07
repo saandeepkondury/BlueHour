@@ -502,6 +502,7 @@ export async function ingestHealth(payload: HealthPayload): Promise<IngestResult
   let workoutsWritten = 0;
   for (const [date, session] of sessions) {
     if (manualDates.has(date)) continue;
+    // Feel / effort / notes are runner-entered — never clear them on re-sync.
     const values = {
       date,
       distanceMi: session.distanceMi ?? 0,

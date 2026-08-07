@@ -23,6 +23,7 @@ import { sendPush } from "@/lib/notify/push";
 import {
   addFoodLog,
   addWater,
+  annotateWorkoutLog,
   deleteFoodLog,
   ensureWeekMeals,
   getProfile,
@@ -82,6 +83,23 @@ export async function completeWorkout(formData: FormData): Promise<void> {
     feel: str(formData.get("feel")) || null,
     notes: str(formData.get("notes")) || null,
   });
+  await markDone(date);
+  refresh(date);
+}
+
+/** Felt / effort / notes for a run already pulled from Apple Watch. */
+export async function annotateWorkout(formData: FormData): Promise<void> {
+  const date = str(formData.get("date"));
+  if (!date) return;
+
+  const ok = await annotateWorkoutLog({
+    date,
+    rpe: num(formData.get("rpe")),
+    feel: str(formData.get("feel")) || null,
+    notes: str(formData.get("notes")) || null,
+  });
+  if (!ok) return;
+
   await markDone(date);
   refresh(date);
 }

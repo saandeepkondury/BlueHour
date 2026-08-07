@@ -207,8 +207,35 @@ export async function saveWorkoutLog(entry: {
         rpe: entry.rpe,
         feel: entry.feel,
         notes: entry.notes,
+        source: "manual",
       },
     });
+}
+
+/**
+ * Felt / effort / notes on top of an Apple Watch (or other) log without
+ * touching miles, time, HR, or source.
+ */
+export async function annotateWorkoutLog(entry: {
+  date: string;
+  rpe: number | null;
+  feel: string | null;
+  notes: string | null;
+}): Promise<boolean> {
+  await ready();
+  const existing = await getWorkoutLog(entry.date);
+  if (!existing) return false;
+  if (!(existing.distanceMi > 0 || (existing.durationSec ?? 0) > 0)) return false;
+
+  await db
+    .update(workoutLogs)
+    .set({
+      rpe: entry.rpe,
+      feel: entry.feel,
+      notes: entry.notes,
+    })
+    .where(eq(workoutLogs.date, entry.date));
+  return true;
 }
 
 // ---------- nutrition ----------

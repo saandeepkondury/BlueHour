@@ -1,4 +1,4 @@
-import { completeRestDay, completeWorkout, reopenDay, skipDay } from "@/app/actions";
+import { annotateWorkout, completeRestDay, completeWorkout, reopenDay, skipDay } from "@/app/actions";
 import { Icon, type IconName } from "@/components/Icon";
 import { formatDuration, formatMiles, formatPace } from "@/lib/format";
 import { TYPE_LABEL, isRun, type WorkoutType } from "@/lib/plan/types";
@@ -18,12 +18,64 @@ const TYPE_ICON: Record<WorkoutType, IconName> = {
 const FEELINGS = ["strong", "steady", "flat", "rough"];
 
 function logCaption(log: WorkoutLog, runDay: boolean, done: boolean): string | null {
-  if (done && runDay) return null;
+  if (done && runDay && log.source !== "healthkit") return null;
   if (log.source === "healthkit") {
-    return runDay ? "From Apple Health" : "From Apple Health · outside the plan";
+    return runDay ? "From Apple Watch" : "From Apple Watch · outside the plan";
   }
   if (!runDay) return "Logged · outside the plan";
   return "Logged";
+}
+
+function hasSubjective(log: WorkoutLog): boolean {
+  return Boolean(log.feel || log.rpe || (log.notes && log.notes.trim()));
+}
+
+function FeelEffortNotesFields({
+  feelDefault,
+  rpeDefault,
+  notesDefault,
+}: {
+  feelDefault?: string | null;
+  rpeDefault?: number | null;
+  notesDefault?: string | null;
+}) {
+  const feel = feelDefault && FEELINGS.includes(feelDefault) ? feelDefault : "steady";
+  return (
+    <>
+      <div>
+        <p className="field__label">Felt</p>
+        <div className="chiprow">
+          {FEELINGS.map((name) => (
+            <label className="chip" key={name}>
+              <input type="radio" name="feel" value={name} defaultChecked={name === feel} />
+              {name}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className="field__label">Effort</p>
+        <div className="chiprow">
+          {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+            <label className="chip" key={n}>
+              <input type="radio" name="rpe" value={n} defaultChecked={rpeDefault === n} />
+              {n}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <label className="field">
+        <span className="field__label">Notes</span>
+        <input
+          name="notes"
+          placeholder="Shoes, weather, how it went"
+          defaultValue={notesDefault ?? ""}
+        />
+      </label>
+    </>
+  );
 }
 
 export function SessionCard({
@@ -41,7 +93,10 @@ export function SessionCard({
   const done = workout.status === "done";
   const skipped = workout.status === "skipped";
   const hasLog = Boolean(log && (log.distanceMi > 0 || (log.durationSec ?? 0) > 0));
+  const fromWatch = Boolean(hasLog && log?.source === "healthkit");
   const caption = log && hasLog ? logCaption(log, runDay, done) : null;
+  const needsFeel = fromWatch && runDay && !skipped;
+  const openFeelFold = needsFeel && !hasSubjective(log!);
 
   return (
     <div className="card card--pad-lg">
@@ -56,7 +111,7 @@ export function SessionCard({
             {done ? <span className="pill pill--good">Done</span> : null}
             {skipped ? <span className="pill pill--warn">Skipped</span> : null}
             {!done && !skipped && hasLog ? (
-              <span className="pill pill--good">Workout logged</span>
+              <span className="pill pill--good">{fromWatch ? "From Watch" : "Workout logged"}</span>
             ) : null}
           </div>
           <h2 className="card__title" style={{ marginTop: "0.5rem" }}>
@@ -91,6 +146,14 @@ export function SessionCard({
               <p className="stat__value">{formatPace(log.durationSec, log.distanceMi)}</p>
               <p className="stat__label">Pace</p>
             </div>
+            {log.feel ? (
+              <div>
+                <p className="stat__value" style={{ textTransform: "capitalize" }}>
+                  {log.feel}
+                </p>
+                <p className="stat__label">Felt</p>
+              </div>
+            ) : null}
             {log.rpe ? (
               <div>
                 <p className="stat__value">{log.rpe}</p>
@@ -140,9 +203,45 @@ export function SessionCard({
         </details>
       ) : null}
 
-      {/* ---- actions ---- */}
+      {/* Watch-synced run: miles/time already in — only Felt / effort / notes */}
+      {needsFeel ? (
+        <>
+          <hr className="card__divide" />
+          <details className="fold fold--cta" defaultOpen={openFeelFold}>
+            <summary>
+              <Icon name="check" size={17} strokeWidth={2.2} />
+              {hasSubjective(log!) ? "Edit how it felt" : "How did it feel?"}
+            </summary>
+            <div className="fold__body">
+              <form action={annotateWorkout} className="stack">
+                <input type="hidden" name="date" value={date} />
+                <FeelEffortNotesFields
+                  feelDefault={log?.feel}
+                  rpeDefault={log?.rpe}
+                  notesDefault={log?.notes}
+                />
+                <button className="btn btn--primary btn--block" type="submit">
+                  {hasSubjective(log!) ? "Update" : "Save"}
+                </button>
+              </form>
+              {!done ? (
+                <form action={skipDay} style={{ marginTop: "0.75rem" }}>
+                  <input type="hidden" name="date" value={date} />
+                  <div className="inline-field">
+                    <input name="reason" placeholder="Or skip — what got in the way?" />
+                    <button className="btn btn--quiet btn--sm nowrap" type="submit">
+                      Skip
+                    </button>
+                  </div>
+                </form>
+              ) : null}
+            </div>
+          </details>
+        </>
+      ) : null}
 
-      {!done && !skipped && runDay ? (
+      {/* Manual log when nothing came from the Watch yet */}
+      {!done && !skipped && runDay && !fromWatch ? (
         <>
           <hr className="card__divide" />
           <details className="fold fold--cta">
@@ -200,34 +299,7 @@ export function SessionCard({
                   </label>
                 </div>
 
-                <div>
-                  <p className="field__label">Felt</p>
-                  <div className="chiprow">
-                    {FEELINGS.map((feel, index) => (
-                      <label className="chip" key={feel}>
-                        <input type="radio" name="feel" value={feel} defaultChecked={index === 1} />
-                        {feel}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="field__label">Effort</p>
-                  <div className="chiprow">
-                    {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                      <label className="chip" key={n}>
-                        <input type="radio" name="rpe" value={n} />
-                        {n}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <label className="field">
-                  <span className="field__label">Notes</span>
-                  <input name="notes" placeholder="Shoes, weather, how it went" />
-                </label>
+                <FeelEffortNotesFields />
 
                 <button className="btn btn--primary btn--block" type="submit">
                   Save run
