@@ -32,6 +32,7 @@ const GROUPS: { title: string; links: { href: string; label: string; icon: IconN
     title: "Fuel",
     links: [
       { href: "/fuel/grocery", label: "Grocery list", icon: "cart" },
+      { href: "/meals", label: "Meal history", icon: "fuel" },
       { href: "/fuel/supplements", label: "Supplements", icon: "pill" },
       { href: "/fuel/race", label: "Race-day playbook", icon: "flag" },
     ],

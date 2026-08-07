@@ -457,6 +457,53 @@ export async function getFoodLogs(date: string) {
   return db.select().from(foodLogs).where(eq(foodLogs.date, date)).orderBy(desc(foodLogs.id));
 }
 
+/** Days with eaten meals or extra foods logged, newest first. No day cap. */
+export interface MealHistoryDay {
+  date: string;
+  meals: number;
+  extras: number;
+  calories: number;
+  protein: number;
+}
+
+export async function getMealHistory(): Promise<MealHistoryDay[]> {
+  await ready();
+  const [eaten, extras] = await Promise.all([
+    db.select().from(mealPlans).where(eq(mealPlans.eaten, 1)).orderBy(desc(mealPlans.date)),
+    db.select().from(foodLogs).orderBy(desc(foodLogs.date)),
+  ]);
+
+  const byDate = new Map<string, MealHistoryDay>();
+  for (const meal of eaten) {
+    const row = byDate.get(meal.date) ?? {
+      date: meal.date,
+      meals: 0,
+      extras: 0,
+      calories: 0,
+      protein: 0,
+    };
+    row.meals += 1;
+    row.calories += meal.calories;
+    row.protein += meal.protein;
+    byDate.set(meal.date, row);
+  }
+  for (const food of extras) {
+    const row = byDate.get(food.date) ?? {
+      date: food.date,
+      meals: 0,
+      extras: 0,
+      calories: 0,
+      protein: 0,
+    };
+    row.extras += 1;
+    row.calories += food.calories;
+    row.protein += food.protein;
+    byDate.set(food.date, row);
+  }
+
+  return [...byDate.values()].sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
 export async function addFoodLog(entry: {
   date: string;
   name: string;

@@ -33,6 +33,9 @@ export async function POST(request: Request) {
     revalidatePath("/core");
     revalidatePath("/coach");
     revalidatePath("/runs");
+    revalidatePath("/sleep");
+    revalidatePath("/rest-hr");
+    revalidatePath("/hrv");
 
     // Coach refresh is useful but must not block the phone — a cold Next compile
     // plus rules can exceed the iOS URLSession timeout and look like a failed sync.

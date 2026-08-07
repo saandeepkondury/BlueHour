@@ -1,11 +1,14 @@
 import Foundation
 import HealthKit
 
-/// Reads the last two weeks of Watch data. Everything here is read-only —
+/// Reads Watch data and posts it to Blue Hour. Everything here is read-only —
 /// Blue Hour never writes back into Apple Health.
+///
+/// Workouts, sleep, and vitals come back with no date floor — everything
+/// HealthKit still has lands in the database and stays there. Server upserts
+/// by date, so re-syncing full history is safe and idempotent.
 struct HealthBridge {
     private let store = HKHealthStore()
-    private let lookbackDays = 14
 
     /// A gap this long means a separate sleep block rather than the same night.
     private let nightGap: TimeInterval = 3 * 3600
@@ -39,15 +42,15 @@ struct HealthBridge {
     }
 
     func collect() async throws -> HealthPayload {
-        let start = Calendar.current.date(byAdding: .day, value: -lookbackDays, to: Date())!
         let bpm = HKUnit.count().unitDivided(by: .minute())
 
-        async let workouts = loadWorkouts(since: start)
-        async let sleep = loadSleep(since: start)
-        async let resting = loadVitals(HKQuantityType(.restingHeartRate), unit: bpm, since: start)
-        async let walking = loadVitals(HKQuantityType(.walkingHeartRateAverage), unit: bpm, since: start)
-        async let hrv = loadVitals(HKQuantityType(.heartRateVariabilitySDNN), unit: .secondUnit(with: .milli), since: start)
-        async let ranges = loadDailyHeartRanges(since: start)
+        // nil start = every sample HealthKit still has.
+        async let workouts = loadWorkouts(since: nil)
+        async let sleep = loadSleep(since: nil)
+        async let resting = loadVitals(HKQuantityType(.restingHeartRate), unit: bpm, since: nil)
+        async let walking = loadVitals(HKQuantityType(.walkingHeartRateAverage), unit: bpm, since: nil)
+        async let hrv = loadVitals(HKQuantityType(.heartRateVariabilitySDNN), unit: .secondUnit(with: .milli), since: nil)
+        async let ranges = loadDailyHeartRanges(since: nil)
 
         var vitals: [VitalSample] = []
         for sample in try await resting {
@@ -91,7 +94,7 @@ struct HealthBridge {
 
     // MARK: - Workouts
 
-    private func loadWorkouts(since start: Date) async throws -> [WorkoutSample] {
+    private func loadWorkouts(since start: Date?) async throws -> [WorkoutSample] {
         let predicate = HKQuery.predicateForSamples(withStart: start, end: Date())
         let samples = try await runQuery(sampleType: HKObjectType.workoutType(), predicate: predicate)
         guard let workouts = samples as? [HKWorkout] else { return [] }
@@ -163,7 +166,7 @@ struct HealthBridge {
 
     // MARK: - Sleep
 
-    private func loadSleep(since start: Date) async throws -> [SleepSample] {
+    private func loadSleep(since start: Date?) async throws -> [SleepSample] {
         let predicate = HKQuery.predicateForSamples(withStart: start, end: Date())
         let samples = try await runQuery(sampleType: HKCategoryType(.sleepAnalysis), predicate: predicate)
         guard let entries = (samples as? [HKCategorySample])?.sorted(by: { $0.startDate < $1.startDate }),
@@ -294,7 +297,7 @@ struct HealthBridge {
     private func loadVitals(
         _ type: HKQuantityType,
         unit: HKUnit,
-        since start: Date
+        since start: Date?
     ) async throws -> [(date: Date, value: Double)] {
         let predicate = HKQuery.predicateForSamples(withStart: start, end: Date())
         let samples = try await runQuery(sampleType: type, predicate: predicate)
@@ -304,12 +307,14 @@ struct HealthBridge {
 
     /// Min / avg / max heart rate for each calendar day from continuous Watch samples.
     private func loadDailyHeartRanges(
-        since start: Date
+        since start: Date?
     ) async throws -> [(date: Date, min: Double, average: Double, max: Double)] {
         let type = HKQuantityType(.heartRate)
         let unit = HKUnit.count().unitDivided(by: .minute())
         let calendar = Calendar.current
-        let anchor = calendar.startOfDay(for: start)
+        // Anchor needs a concrete day even when the predicate has no floor.
+        let queryStart = start ?? Date(timeIntervalSince1970: 0)
+        let anchor = calendar.startOfDay(for: queryStart)
         let interval = DateComponents(day: 1)
 
         return try await withCheckedThrowingContinuation { continuation in
@@ -331,7 +336,7 @@ struct HealthBridge {
                 }
 
                 var out: [(date: Date, min: Double, average: Double, max: Double)] = []
-                collection.enumerateStatistics(from: start, to: Date()) { stats, _ in
+                collection.enumerateStatistics(from: queryStart, to: Date()) { stats, _ in
                     guard let minQ = stats.minimumQuantity(),
                           let avgQ = stats.averageQuantity(),
                           let maxQ = stats.maximumQuantity() else { return }

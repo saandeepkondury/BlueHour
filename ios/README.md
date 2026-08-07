@@ -2,7 +2,7 @@
 
 A small native shell: it reads Apple Health, shows the Blue Hour web app, and fires **local notifications** for the morning brief and water reminders. Apple Health has no web API, so a Safari tab can never see your Watch data — this app is the bridge.
 
-It reads and never writes: workouts, sleep, resting heart rate, and HRV from the last 14 days, posted to `/api/health/ingest` every time you open or return to the app. **Settings → Apple Health** also has a Sync button that asks this shell to pull again. Siri can log water, read today's plan, sync Health, and open screens without tapping.
+It reads and never writes: every workout, sleep night, resting HR, walking HR, HRV, and daytime heart-rate range HealthKit still has (no day cap — history accumulates in your database), posted to `/api/health/ingest` every time you open or return to the app. **Settings → Apple Health** also has a Sync button that asks this shell to pull again. Siri can log water, read today's plan, sync Health, and open screens without tapping.
 
 ## One-time setup
 

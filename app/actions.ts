@@ -51,6 +51,11 @@ function refresh(date?: string, exerciseId?: string) {
   revalidatePath("/core");
   revalidatePath("/coach");
   revalidatePath("/runs");
+  revalidatePath("/meals");
+  revalidatePath("/water");
+  revalidatePath("/sleep");
+  revalidatePath("/rest-hr");
+  revalidatePath("/hrv");
   if (date) revalidatePath(`/day/${date}`);
   if (exerciseId) revalidatePath(`/exercise/${exerciseId}`);
 }
