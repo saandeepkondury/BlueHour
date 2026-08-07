@@ -207,7 +207,7 @@ export function SessionCard({
       {needsFeel ? (
         <>
           <hr className="card__divide" />
-          <details className="fold fold--cta" defaultOpen={openFeelFold}>
+          <details className="fold fold--cta" open={openFeelFold || undefined}>
             <summary>
               <Icon name="check" size={17} strokeWidth={2.2} />
               {hasSubjective(log!) ? "Edit how it felt" : "How did it feel?"}
