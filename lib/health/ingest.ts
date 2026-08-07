@@ -493,16 +493,10 @@ export async function ingestHealth(payload: HealthPayload): Promise<IngestResult
   const sessions = bestWorkoutPerDay(payload.workouts ?? []);
   const dates = [...sessions.keys()];
 
-  // A hand-written log is the runner's own account of the day; never overwrite it.
-  const existing = dates.length
-    ? await db.select().from(workoutLogs).where(inArray(workoutLogs.date, dates))
-    : [];
-  const manualDates = new Set(existing.filter((log) => log.source === "manual").map((log) => log.date));
-
   let workoutsWritten = 0;
   for (const [date, session] of sessions) {
-    if (manualDates.has(date)) continue;
-    // Feel / effort / notes are runner-entered — never clear them on re-sync.
+    // Watch distance / time / HR win over a typed estimate. Feel / effort /
+    // notes are runner-entered and are not in `values`, so re-sync keeps them.
     const values = {
       date,
       distanceMi: session.distanceMi ?? 0,
