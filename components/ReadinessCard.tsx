@@ -61,8 +61,7 @@ export function ReadinessCard({
             <>
               <span className="banner__title">Waiting on today&apos;s sleep &amp; runs</span>
               <span className="banner__sub">
-                Watch is connected — sync again once this morning&apos;s readings land, or log them
-                by hand.
+                Watch is connected — sync again once this morning&apos;s readings land.
               </span>
             </>
           ) : (

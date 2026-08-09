@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { annotateWorkout, completeRestDay, completeWorkout, reopenDay, skipDay } from "@/app/actions";
 import { Icon, type IconName } from "@/components/Icon";
+import { WatchSyncControl } from "@/components/WatchSyncControl";
 import { formatDuration, formatMiles, formatPace } from "@/lib/format";
 import { TYPE_LABEL, isRun, type WorkoutType } from "@/lib/plan/types";
 import type { Workout, WorkoutLog } from "@/drizzle/schema";
@@ -89,7 +90,7 @@ function LogMeta({ log }: { log: WorkoutLog }) {
   );
 }
 
-function LogStats({ log }: { log: WorkoutLog }) {
+function RecordedStats({ log }: { log: WorkoutLog }) {
   return (
     <div className="stats stats--quad">
       <div>
@@ -112,6 +113,65 @@ function LogStats({ log }: { log: WorkoutLog }) {
   );
 }
 
+function GoalStrip({ workout }: { workout: Workout }) {
+  const type = workout.type as WorkoutType;
+
+  if (type === "rest") {
+    return (
+      <div className="session-goal">
+        <p className="label">Today&apos;s plan</p>
+        <p className="session-goal__value">Rest</p>
+        <p className="card__sub" style={{ marginTop: "0.25rem" }}>
+          No run on the calendar. Honor the day — or do strength if it&apos;s scheduled.
+        </p>
+      </div>
+    );
+  }
+
+  if (type === "cross") {
+    return (
+      <div className="session-goal">
+        <p className="label">Today&apos;s plan</p>
+        <p className="session-goal__value">Cross-train</p>
+        {workout.durationMin ? (
+          <p className="card__sub" style={{ marginTop: "0.25rem" }}>
+            About {workout.durationMin} min · keep it easy on the legs
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  const bits: string[] = [];
+  if (workout.distanceMi > 0) bits.push(`${formatMiles(workout.distanceMi)} mi`);
+  if (workout.durationMin) bits.push(`${workout.durationMin} min`);
+
+  return (
+    <div className="session-goal">
+      <p className="label">Today&apos;s goal</p>
+      <p className="session-goal__value">
+        {bits.length > 0 ? bits.join(" · ") : TYPE_LABEL[type]}
+      </p>
+    </div>
+  );
+}
+
+function ProgressLine({
+  workout,
+  log,
+}: {
+  workout: Workout;
+  log: WorkoutLog;
+}) {
+  if (workout.distanceMi <= 0 || log.distanceMi <= 0) return null;
+  const pct = Math.min(999, Math.round((log.distanceMi / workout.distanceMi) * 100));
+  return (
+    <p className="small muted" style={{ marginTop: "0.45rem" }}>
+      {formatMiles(log.distanceMi)} of {formatMiles(workout.distanceMi)} mi goal · {pct}%
+    </p>
+  );
+}
+
 export function SessionCard({
   workout,
   log,
@@ -126,92 +186,138 @@ export function SessionCard({
   const date = workout.date;
   const done = workout.status === "done";
   const skipped = workout.status === "skipped";
+  const open = !done && !skipped;
+
   const hasLog = Boolean(log && (log.distanceMi > 0 || (log.durationSec ?? 0) > 0));
   const fromWatch = Boolean(hasLog && log?.source === "healthkit");
+  const fromManual = Boolean(hasLog && log && log.source !== "healthkit");
 
-  const showWatchFeel = fromWatch && runDay && !done && !skipped;
-  const showManualLog = !fromWatch && runDay && !done && !skipped;
-  const showTargets =
-    !done && !skipped && !hasLog && (workout.distanceMi > 0 || Boolean(workout.durationMin));
-
-  const sourceLine = hasLog
-    ? fromWatch
-      ? runDay
-        ? "From Apple Watch"
-        : "From Apple Watch · outside the plan"
-      : runDay
-        ? null
-        : "Logged · outside the plan"
-    : null;
+  const waitingForWatch = runDay && open && !hasLog;
+  const showFeelForm = fromWatch && runDay && open;
+  const showFeelFold = fromWatch && runDay && done && !(log?.feel || log?.rpe || log?.notes);
+  const showRestHonor = open && !runDay;
 
   const pillTone = done ? "pill--good" : skipped ? "pill--warn" : "pill--accent";
+  const statusPill = done ? "Done" : skipped ? "Skipped" : null;
+
+  const heading =
+    type === "race"
+      ? "Austin Half Marathon"
+      : type === "rest"
+        ? "Rest day"
+        : workout.title;
 
   return (
     <div className="card card--pad-lg">
-      <Link
-        href="/runs"
-        className="cardlink"
-        style={{ display: "block", color: "inherit", textDecoration: "none" }}
-        aria-label="Open run history"
-      >
-        <div className="card__head">
-          <div style={{ minWidth: 0 }}>
+      <div className="card__head">
+        <div style={{ minWidth: 0 }}>
+          <div className="btnrow" style={{ gap: "0.35rem" }}>
             <span className={`pill ${pillTone}`}>{TYPE_LABEL[type]}</span>
-            <h2 className="card__title" style={{ marginTop: "0.45rem" }}>
-              {type === "race" ? "Austin Half Marathon" : workout.title}
-            </h2>
-            {sourceLine ? <p className="card__sub">{sourceLine}</p> : null}
+            {statusPill ? (
+              <span className={`pill ${done ? "pill--good" : "pill--warn"}`}>{statusPill}</span>
+            ) : null}
           </div>
-          <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-            <span
-              className={`row__lead${done || hasLog ? " row__lead--good" : " row__lead--accent"}`}
-            >
-              <Icon name={hasLog && !runDay ? "run" : TYPE_ICON[type]} size={19} />
-            </span>
-            <Icon name="chevron" size={15} />
-          </span>
+          <h2 className="card__title" style={{ marginTop: "0.45rem" }}>
+            {heading}
+          </h2>
         </div>
+        <Link
+          href="/runs"
+          className="cardlink"
+          style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "inherit" }}
+          aria-label="Open run history"
+        >
+          <span
+            className={`row__lead${done || fromWatch ? " row__lead--good" : " row__lead--accent"}`}
+          >
+            <Icon name={fromWatch ? "watch" : TYPE_ICON[type]} size={19} />
+          </span>
+          <Icon name="chevron" size={15} />
+        </Link>
+      </div>
 
-        {hasLog && log ? (
-          <>
-            <hr className="card__divide" />
-            <LogStats log={log} />
-            <LogMeta log={log} />
-          </>
-        ) : null}
+      <hr className="card__divide" />
+      <GoalStrip workout={workout} />
 
-        {showTargets ? (
-          <>
-            <hr className="card__divide" />
-            <div className="stats">
-              {workout.distanceMi > 0 ? (
-                <div>
-                  <p className="stat__value">{formatMiles(workout.distanceMi)}</p>
-                  <p className="stat__label">Target miles</p>
-                </div>
-              ) : null}
-              {workout.durationMin ? (
-                <div>
-                  <p className="stat__value">{workout.durationMin}</p>
-                  <p className="stat__label">Minutes</p>
-                </div>
+      {fromWatch && log ? (
+        <>
+          <hr className="card__divide" />
+          <div className="session-recorded">
+            <div className="row-between" style={{ marginBottom: "0.55rem" }}>
+              <p className="label" style={{ margin: 0 }}>
+                From Apple Watch
+              </p>
+              {log.avgHr ? (
+                <p className="small muted" style={{ margin: 0 }}>
+                  Avg HR {log.avgHr}
+                  {log.maxHr ? ` · max ${log.maxHr}` : ""}
+                </p>
               ) : null}
             </div>
-          </>
-        ) : null}
+            <RecordedStats log={log} />
+            {runDay ? <ProgressLine workout={workout} log={log} /> : null}
+            {!runDay ? (
+              <p className="card__sub" style={{ marginTop: "0.45rem" }}>
+                Recorded · outside the plan
+              </p>
+            ) : null}
+            <LogMeta log={log} />
+          </div>
+        </>
+      ) : null}
 
-        {skipped && workout.skipReason ? (
-          <p className="card__sub">Reason: {workout.skipReason}</p>
-        ) : null}
-      </Link>
+      {fromManual && log && !fromWatch ? (
+        <>
+          <hr className="card__divide" />
+          <div className="session-recorded">
+            <p className="label" style={{ marginBottom: "0.55rem" }}>
+              Logged by hand
+            </p>
+            <RecordedStats log={log} />
+            {runDay ? <ProgressLine workout={workout} log={log} /> : null}
+            <LogMeta log={log} />
+            <div style={{ marginTop: "0.75rem" }}>
+              <p className="small muted" style={{ marginBottom: "0.5rem" }}>
+                Prefer the Watch numbers? Sync to replace this log.
+              </p>
+              <WatchSyncControl label="Replace with Apple Health" />
+            </div>
+          </div>
+        </>
+      ) : null}
 
-      {!done && (workout.purpose || workout.tip) ? (
-        <details className="fold" style={{ marginTop: "0.5rem" }}>
+      {waitingForWatch ? (
+        <>
+          <hr className="card__divide" />
+          <div className="banner" style={{ marginBottom: "0.75rem" }}>
+            <span className="row__lead row__lead--accent">
+              <Icon name="watch" size={18} />
+            </span>
+            <span className="banner__body">
+              <span className="banner__title">Waiting on Apple Watch</span>
+              <span className="banner__sub">
+                Start Outdoor Walk or Run on the Watch. Miles, time, pace, and calories land here
+                automatically after sync.
+              </span>
+            </span>
+          </div>
+          <WatchSyncControl label="Pull from Apple Health" />
+        </>
+      ) : null}
+
+      {skipped && workout.skipReason ? (
+        <p className="card__sub" style={{ marginTop: "0.75rem" }}>
+          Reason: {workout.skipReason}
+        </p>
+      ) : null}
+
+      {open && (workout.purpose || workout.tip) && type !== "rest" ? (
+        <details className="fold" style={{ marginTop: "0.75rem" }}>
           <summary>Why this session</summary>
           <div className="fold__body">
-            <p className="small sub">{workout.purpose}</p>
+            {workout.purpose ? <p className="small sub">{workout.purpose}</p> : null}
             {workout.tip ? (
-              <p className="small muted" style={{ marginTop: "0.5rem" }}>
+              <p className="small muted" style={{ marginTop: workout.purpose ? "0.5rem" : 0 }}>
                 {workout.tip}
               </p>
             ) : null}
@@ -219,123 +325,123 @@ export function SessionCard({
         </details>
       ) : null}
 
-      {showWatchFeel ? (
+      {showFeelForm && log ? (
         <>
           <hr className="card__divide" />
           <form action={annotateWorkout} className="stack">
             <input type="hidden" name="date" value={date} />
             <p className="label">How did it feel?</p>
             <FeelEffortNotesFields
-              feelDefault={log?.feel}
-              rpeDefault={log?.rpe}
-              notesDefault={log?.notes}
+              feelDefault={log.feel}
+              rpeDefault={log.rpe}
+              notesDefault={log.notes}
             />
             <button className="btn btn--primary btn--block" type="submit">
-              Save
+              Save &amp; close day
             </button>
           </form>
-          <form action={skipDay} style={{ marginTop: "0.75rem" }}>
-            <input type="hidden" name="date" value={date} />
-            <div className="inline-field">
-              <input name="reason" placeholder="Or skip — what got in the way?" />
-              <button className="btn btn--quiet btn--sm nowrap" type="submit">
-                Skip
+        </>
+      ) : null}
+
+      {showFeelFold && log ? (
+        <details className="fold" style={{ marginTop: "0.75rem" }}>
+          <summary>How did it feel?</summary>
+          <div className="fold__body">
+            <form action={annotateWorkout} className="stack">
+              <input type="hidden" name="date" value={date} />
+              <FeelEffortNotesFields
+                feelDefault={log.feel}
+                rpeDefault={log.rpe}
+                notesDefault={log.notes}
+              />
+              <button className="btn btn--ghost btn--block" type="submit">
+                Save notes
               </button>
-            </div>
-          </form>
-        </>
+            </form>
+          </div>
+        </details>
       ) : null}
 
-      {showManualLog ? (
-        <>
-          <hr className="card__divide" />
-          <details className="fold fold--cta">
-            <summary>
-              <Icon name="check" size={17} strokeWidth={2.2} />
-              Log this run
-            </summary>
-            <div className="fold__body">
-              <form action={completeWorkout} className="stack">
-                <input type="hidden" name="date" value={date} />
-                <div className="grid3">
-                  <label className="field">
-                    <span className="field__label">Miles</span>
-                    <input
-                      name="distanceMi"
-                      type="number"
-                      step="any"
-                      min="0"
-                      inputMode="decimal"
-                      defaultValue={log?.distanceMi || workout.distanceMi || ""}
-                    />
-                  </label>
-                  <label className="field">
-                    <span className="field__label">Min</span>
-                    <input
-                      name="minutes"
-                      type="number"
-                      min="0"
-                      inputMode="numeric"
-                      placeholder={
-                        log?.durationSec
-                          ? String(Math.floor(log.durationSec / 60))
-                          : workout.durationMin
-                            ? String(workout.durationMin)
-                            : "0"
-                      }
-                      defaultValue={
-                        log?.durationSec ? String(Math.floor(log.durationSec / 60)) : undefined
-                      }
-                    />
-                  </label>
-                  <label className="field">
-                    <span className="field__label">Sec</span>
-                    <input
-                      name="seconds"
-                      type="number"
-                      min="0"
-                      max="59"
-                      inputMode="numeric"
-                      placeholder="00"
-                      defaultValue={
-                        log?.durationSec ? String(log.durationSec % 60) : undefined
-                      }
-                    />
-                  </label>
-                </div>
-
-                <FeelEffortNotesFields
-                  feelDefault={log?.feel}
-                  rpeDefault={log?.rpe}
-                  notesDefault={log?.notes}
-                />
-
-                <button className="btn btn--primary btn--block" type="submit">
-                  Save run
-                </button>
-              </form>
-
-              <form action={skipDay} style={{ marginTop: "0.75rem" }}>
-                <input type="hidden" name="date" value={date} />
-                <div className="inline-field">
-                  <input name="reason" placeholder="Or skip — what got in the way?" />
-                  <button className="btn btn--quiet btn--sm nowrap" type="submit">
-                    Skip
-                  </button>
-                </div>
-              </form>
-            </div>
-          </details>
-        </>
+      {waitingForWatch ? (
+        <form action={skipDay} style={{ marginTop: "0.75rem" }}>
+          <input type="hidden" name="date" value={date} />
+          <div className="inline-field">
+            <input name="reason" placeholder="Skip — what got in the way?" />
+            <button className="btn btn--quiet btn--sm nowrap" type="submit">
+              Skip
+            </button>
+          </div>
+        </form>
       ) : null}
 
-      {!done && !skipped && !runDay ? (
+      {waitingForWatch ? (
+        <details className="fold" style={{ marginTop: "0.75rem" }}>
+          <summary>No Watch data? Log by hand</summary>
+          <div className="fold__body">
+            <form action={completeWorkout} className="stack">
+              <input type="hidden" name="date" value={date} />
+              <div className="grid3">
+                <label className="field">
+                  <span className="field__label">Miles</span>
+                  <input
+                    name="distanceMi"
+                    type="number"
+                    step="any"
+                    min="0"
+                    inputMode="decimal"
+                    defaultValue={workout.distanceMi || ""}
+                  />
+                </label>
+                <label className="field">
+                  <span className="field__label">Min</span>
+                  <input
+                    name="minutes"
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    placeholder={workout.durationMin ? String(workout.durationMin) : "0"}
+                  />
+                </label>
+                <label className="field">
+                  <span className="field__label">Sec</span>
+                  <input
+                    name="seconds"
+                    type="number"
+                    min="0"
+                    max="59"
+                    inputMode="numeric"
+                    placeholder="00"
+                  />
+                </label>
+              </div>
+              <FeelEffortNotesFields />
+              <button className="btn btn--ghost btn--block" type="submit">
+                Save run
+              </button>
+            </form>
+          </div>
+        </details>
+      ) : null}
+
+      {showRestHonor ? (
         <form action={completeRestDay} style={{ marginTop: "1rem" }}>
           <input type="hidden" name="date" value={date} />
           <button className="btn btn--ghost btn--block" type="submit">
             <Icon name="check" size={17} strokeWidth={2.2} />
             {hasStrength ? "No run today — honored" : "Rest honored"}
           </button>
+        </form>
+      ) : null}
+
+      {showFeelForm ? (
+        <form action={skipDay} style={{ marginTop: "0.75rem" }}>
+          <input type="hidden" name="date" value={date} />
+          <div className="inline-field">
+            <input name="reason" placeholder="Or skip — what got in the way?" />
+            <button className="btn btn--quiet btn--sm nowrap" type="submit">
+              Skip
+            </button>
+          </div>
         </form>
       ) : null}
 
