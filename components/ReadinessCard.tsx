@@ -94,7 +94,12 @@ export function ReadinessCard({
 
   return (
     <div className="stack">
-      <div className="card">
+      <Link
+        href="/readiness"
+        className="card cardlink"
+        style={{ display: "block", color: "inherit", textDecoration: "none" }}
+        aria-label="Open race readiness history"
+      >
         <div className="row-between">
           <div>
             <p className="label">{stale ? `Readiness · ${formatShort(vitalsDate!)}` : "Race readiness"}</p>
@@ -116,23 +121,26 @@ export function ReadinessCard({
               </p>
             ) : null}
           </div>
-          {score !== null ? (
-            <Ring
-              pct={score}
-              tone={tone}
-              size={72}
-              thickness={7}
-              value={score}
-              caption="score"
-              label={`Race readiness ${score} of 100`}
-            />
-          ) : (
-            <span className="row__lead row__lead--accent">
-              <Icon name="watch" size={19} />
-            </span>
-          )}
+          <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+            {score !== null ? (
+              <Ring
+                pct={score}
+                tone={tone}
+                size={72}
+                thickness={7}
+                value={score}
+                caption="score"
+                label={`Race readiness ${score} of 100`}
+              />
+            ) : (
+              <span className="row__lead row__lead--accent">
+                <Icon name="watch" size={19} />
+              </span>
+            )}
+            <Icon name="chevron" size={15} />
+          </span>
         </div>
-      </div>
+      </Link>
 
       {hasVitals(day) ? (
         <div className="bento bento--3">
