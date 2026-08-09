@@ -14,10 +14,15 @@ export function formatDuration(seconds: number | null | undefined): string {
 
 export function formatPace(seconds: number | null | undefined, miles: number): string {
   if (!seconds || seconds <= 0 || miles <= 0) return "—";
-  const perMile = Math.round(seconds / miles);
+  return `${formatPacePerMi(seconds / miles)} /mi`;
+}
+
+/** Format a pace already expressed as seconds per mile. */
+export function formatPacePerMi(secPerMi: number): string {
+  const perMile = Math.round(secPerMi);
   const mins = Math.floor(perMile / 60);
   const secs = perMile % 60;
-  return `${mins}:${String(secs).padStart(2, "0")} /mi`;
+  return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 
 export function kgToLb(kg: number | null): number | null {

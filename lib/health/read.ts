@@ -85,11 +85,17 @@ export function hasReadinessSignal(recovery: Recovery): boolean {
 export async function recoveryFor(date: string): Promise<Recovery> {
   await ready();
 
+  const startDate = await trainingStartDate();
+  if (startDate) await pruneHealthDaysBefore(startDate);
+
   const [todayRow] = await db.select().from(healthDays).where(eq(healthDays.date, date));
+  const baselineFrom = addDays(date, -14);
+  const historyFrom =
+    startDate && baselineFrom < startDate ? startDate : baselineFrom;
   const history = await db
     .select()
     .from(healthDays)
-    .where(and(gte(healthDays.date, addDays(date, -14)), lt(healthDays.date, date)));
+    .where(and(gte(healthDays.date, historyFrom), lt(healthDays.date, date)));
 
   const restingSamples = history
     .map((row) => row.restingHr)
@@ -109,10 +115,13 @@ export async function recoveryFor(date: string): Promise<Recovery> {
   // Only the live Today screen borrows a recent morning reading when Watch sync lags.
   // Opening a past/future day stays locked to that calendar date.
   if (!vitalsDate && date === todayISO()) {
+    const fallbackFrom = addDays(date, -VITALS_FALLBACK_DAYS);
+    const recentFrom =
+      startDate && fallbackFrom < startDate ? startDate : fallbackFrom;
     const recent = await db
       .select()
       .from(healthDays)
-      .where(and(gte(healthDays.date, addDays(date, -VITALS_FALLBACK_DAYS)), lte(healthDays.date, date)))
+      .where(and(gte(healthDays.date, recentFrom), lte(healthDays.date, date)))
       .orderBy(desc(healthDays.date));
     const hit = recent.find((row) => hasVitals(row));
     if (hit) {
@@ -147,8 +156,7 @@ export async function recoveryFor(date: string): Promise<Recovery> {
     baselineHrvMs,
     advisory: advisoryFor(day, baselineRestingHr, racePrep, vitalsDate === date),
     score,
-    label:
-      score === null ? null : score >= 75 ? "race ready" : score >= 56 ? "on track" : "building",
+    label: labelFor(score),
     lastSyncAt: sync?.at ?? null,
     racePrep,
     trainingLoad,
@@ -191,24 +199,31 @@ function scoreFor(prep: RacePrep | null): number | null {
   return Math.max(5, Math.min(100, Math.round(score)));
 }
 
-async function racePrepFor(
+function labelFor(
+  score: number | null,
+): "building" | "on track" | "race ready" | null {
+  if (score === null) return null;
+  if (score >= 75) return "race ready";
+  if (score >= 56) return "on track";
+  return "building";
+}
+
+function racePrepFromData(
   date: string,
+  raceDate: string | null,
+  trainingStart: string,
+  allRuns: WorkoutLog[],
   day: HealthDay | null,
   restingBaseline: number | null,
   hrvBaseline: number | null,
-): Promise<RacePrep | null> {
-  const [row] = await db.select({ raceDate: profile.raceDate }).from(profile).where(eq(profile.id, 1));
-  const daysToRace = row ? Math.max(0, daysBetween(date, row.raceDate)) : null;
-
-  // Look back far enough to find the true longest, not just this week's easy miles.
-  const historyFrom = addDays(date, -120);
+): RacePrep | null {
+  const daysToRace = raceDate ? Math.max(0, daysBetween(date, raceDate)) : null;
+  const lookback = addDays(date, -120);
+  const historyFrom = lookback < trainingStart ? trainingStart : lookback;
   const before = addDays(date, -1);
-  const logs = await db
-    .select()
-    .from(workoutLogs)
-    .where(and(gte(workoutLogs.date, historyFrom), lte(workoutLogs.date, before)));
-
-  const runs = logs.filter((log) => (log.distanceMi ?? 0) > 0.2);
+  const runs = allRuns.filter(
+    (log) => log.date >= historyFrom && log.date <= before && (log.distanceMi ?? 0) > 0.2,
+  );
 
   const yesterday = addDays(date, -1);
   const weekFrom = addDays(date, -7);
@@ -255,23 +270,17 @@ async function racePrepFor(
       ? null
       : Math.round(withHr.reduce((sum, log) => sum + log.avgHr!, 0) / withHr.length);
 
-  // --- Endurance (0–40): proof you can go long ---
   const endurancePts = Math.round(Math.min(40, (longestMi / TARGET_LONG_MI) * 40));
-
-  // --- Volume (0–20): recent weekly miles ---
   const volumePts = Math.round(Math.min(20, (weekMi / TARGET_WEEK_MI) * 20));
 
-  // --- Aerobic (0–20): can you cover ground without redlining? ---
   let aerobicPts = 0;
   if (avgRunHr !== null) {
-    // Easy aerobic work usually sits well under ~145 for this block.
     if (avgRunHr <= 125) aerobicPts += 12;
     else if (avgRunHr <= 135) aerobicPts += 9;
     else if (avgRunHr <= 145) aerobicPts += 5;
     else if (avgRunHr <= 155) aerobicPts += 2;
   }
   if (avgPaceSecPerMi !== null && longestMi >= 3) {
-    // Time-on-feet credit: finishing miles matters more than speed this early.
     const minPerMi = avgPaceSecPerMi / 60;
     if (minPerMi <= 12) aerobicPts += 8;
     else if (minPerMi <= 14) aerobicPts += 6;
@@ -280,16 +289,13 @@ async function racePrepFor(
   } else if (longestMin >= 60) {
     aerobicPts += 4;
   }
-  // High HR on short runs is a "not ready for long" signal.
   if (avgRunHr !== null && avgRunHr >= 150 && longestMi < 6) {
     aerobicPts = Math.max(0, aerobicPts - 4);
   }
   aerobicPts = Math.min(20, aerobicPts);
 
-  // --- Consistency (0–10) ---
   const consistencyPts = Math.min(10, runsLast14 * 2);
 
-  // --- Recovery (±15): sleep / RHR / HRV / yesterday's fatigue ---
   let recoveryPts = 0;
   if (day?.asleepMin !== null && day?.asleepMin !== undefined) {
     const hours = day.asleepMin / 60;
@@ -320,11 +326,7 @@ async function racePrepFor(
 
   recoveryPts = Math.max(-15, Math.min(12, recoveryPts));
 
-  if (
-    runs.length === 0 &&
-    !hasVitals(day) &&
-    recoveryPts === 0
-  ) {
+  if (runs.length === 0 && !hasVitals(day) && recoveryPts === 0) {
     return {
       daysToRace,
       longestMi: 0,
@@ -361,6 +363,138 @@ async function racePrepFor(
     consistencyPts,
     recoveryPts,
   };
+}
+
+async function racePrepFor(
+  date: string,
+  day: HealthDay | null,
+  restingBaseline: number | null,
+  hrvBaseline: number | null,
+): Promise<RacePrep | null> {
+  const [row] = await db
+    .select({ raceDate: profile.raceDate, startDate: profile.startDate })
+    .from(profile)
+    .where(eq(profile.id, 1));
+  const trainingStart = row?.startDate ?? addDays(date, -120);
+  const lookback = addDays(date, -120);
+  const historyFrom = lookback < trainingStart ? trainingStart : lookback;
+  const before = addDays(date, -1);
+  const logs = await db
+    .select()
+    .from(workoutLogs)
+    .where(and(gte(workoutLogs.date, historyFrom), lte(workoutLogs.date, before)));
+
+  return racePrepFromData(
+    date,
+    row?.raceDate ?? null,
+    trainingStart,
+    logs,
+    day,
+    restingBaseline,
+    hrvBaseline,
+  );
+}
+
+export interface ReadinessDay {
+  date: string;
+  score: number | null;
+  label: "building" | "on track" | "race ready" | null;
+  longestMi: number;
+  weekMi: number;
+  daysToRace: number | null;
+}
+
+export interface ReadinessHistory {
+  startDate: string;
+  today: ReadinessDay | null;
+  days: ReadinessDay[];
+  high: number | null;
+  low: number | null;
+  avg: number | null;
+  delta: number | null;
+}
+
+/** Daily race-readiness scores from training start through today. */
+export async function getReadinessHistory(): Promise<ReadinessHistory> {
+  await ready();
+
+  const [row] = await db
+    .select({ raceDate: profile.raceDate, startDate: profile.startDate })
+    .from(profile)
+    .where(eq(profile.id, 1));
+  const today = todayISO();
+  const startDate = row?.startDate && row.startDate <= today ? row.startDate : today;
+  const raceDate = row?.raceDate ?? null;
+
+  await pruneHealthDaysBefore(startDate);
+  await db.delete(workoutLogs).where(lt(workoutLogs.date, startDate));
+
+  const [logs, vitalRows] = await Promise.all([
+    db
+      .select()
+      .from(workoutLogs)
+      .where(and(gte(workoutLogs.date, startDate), lte(workoutLogs.date, today))),
+    db
+      .select()
+      .from(healthDays)
+      .where(and(gte(healthDays.date, startDate), lte(healthDays.date, today))),
+  ]);
+
+  const vitalsByDate = new Map(vitalRows.map((day) => [day.date, day]));
+  const days: ReadinessDay[] = [];
+
+  for (let date = startDate; date <= today; date = addDays(date, 1)) {
+    const day = vitalsByDate.get(date) ?? null;
+    const baselineFrom = addDays(date, -14);
+    const histFrom = baselineFrom < startDate ? startDate : baselineFrom;
+    const priorVitals = vitalRows.filter((row) => row.date >= histFrom && row.date < date);
+
+    const restingSamples = priorVitals
+      .map((row) => row.restingHr)
+      .filter((value): value is number => value !== null);
+    const restingBaseline =
+      restingSamples.length >= BASELINE_MIN_SAMPLES ? median(restingSamples) : null;
+
+    const hrvSamples = priorVitals
+      .map((row) => row.hrvMs)
+      .filter((value): value is number => value !== null);
+    const hrvBaseline =
+      hrvSamples.length >= BASELINE_MIN_SAMPLES ? median(hrvSamples) : null;
+
+    const prep = racePrepFromData(
+      date,
+      raceDate,
+      startDate,
+      logs,
+      day,
+      restingBaseline,
+      hrvBaseline,
+    );
+    const score = scoreFor(prep);
+    days.push({
+      date,
+      score,
+      label: labelFor(score),
+      longestMi: prep?.longestMi ?? 0,
+      weekMi: prep?.weekMi ?? 0,
+      daysToRace: prep?.daysToRace ?? null,
+    });
+  }
+
+  const scored = days.filter((day) => day.score !== null) as Array<ReadinessDay & { score: number }>;
+  const high = scored.length ? Math.max(...scored.map((day) => day.score)) : null;
+  const low = scored.length ? Math.min(...scored.map((day) => day.score)) : null;
+  const avg =
+    scored.length === 0
+      ? null
+      : Math.round(scored.reduce((sum, day) => sum + day.score, 0) / scored.length);
+
+  const todayEntry = days.find((day) => day.date === today) ?? null;
+  const priorScored = [...scored].reverse().find((day) => day.date < today) ?? null;
+  const delta =
+    todayEntry?.score != null && priorScored ? todayEntry.score - priorScored.score : null;
+
+  return { startDate, today: todayEntry, days: days.reverse(), high, low, avg, delta };
 }
 
 function round1(value: number): number {
@@ -444,9 +578,26 @@ export async function lastSync(): Promise<{ at: string; device: string | null } 
 
 export type VitalMetric = "sleep" | "rest_hr" | "hrv";
 
-/** Days that have the requested vital, newest first. */
+/** Drop sleep / HR / HRV day rows from before the training block started. */
+export async function pruneHealthDaysBefore(startDate: string): Promise<number> {
+  await ready();
+  const removed = await db.delete(healthDays).where(lt(healthDays.date, startDate)).returning({
+    date: healthDays.date,
+  });
+  return removed.length;
+}
+
+async function trainingStartDate(): Promise<string | null> {
+  const [row] = await db.select({ startDate: profile.startDate }).from(profile).where(eq(profile.id, 1));
+  return row?.startDate ?? null;
+}
+
+/** Days that have the requested vital, newest first — only since training start. */
 export async function getVitalsHistory(metric: VitalMetric): Promise<HealthDay[]> {
   await ready();
+  const startDate = await trainingStartDate();
+  if (startDate) await pruneHealthDaysBefore(startDate);
+
   const column =
     metric === "sleep"
       ? healthDays.asleepMin
@@ -454,11 +605,11 @@ export async function getVitalsHistory(metric: VitalMetric): Promise<HealthDay[]
         ? healthDays.restingHr
         : healthDays.hrvMs;
 
-  return db
-    .select()
-    .from(healthDays)
-    .where(isNotNull(column))
-    .orderBy(desc(healthDays.date));
+  const filters = startDate
+    ? and(isNotNull(column), gte(healthDays.date, startDate))
+    : isNotNull(column);
+
+  return db.select().from(healthDays).where(filters).orderBy(desc(healthDays.date));
 }
 
 export function formatSleep(minutes: number): string {

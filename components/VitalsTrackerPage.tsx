@@ -30,7 +30,8 @@ const META: Record<
     title: "Sleep",
     icon: "moon",
     unit: "asleep",
-    empty: "Sleep from Apple Health shows up here once the Watch syncs a night.",
+    empty:
+      "Sleep from Apple Health shows up here once the Watch syncs — only nights since this training block started.",
     historyLabel: "Nights",
     value: (row) => row.asleepMin ?? 0,
     display: (value) => formatSleep(value),
@@ -40,7 +41,8 @@ const META: Record<
     title: "Resting HR",
     icon: "heart",
     unit: "bpm",
-    empty: "Resting heart rate lands here from Apple Health after a sync.",
+    empty:
+      "Resting heart rate lands here from Apple Health after sync — only days since this training block started.",
     historyLabel: "Days",
     value: (row) => row.restingHr ?? 0,
     display: (value) => String(value),
@@ -50,7 +52,8 @@ const META: Record<
     title: "HRV",
     icon: "pulse",
     unit: "ms",
-    empty: "Heart-rate variability from your Watch shows up here after a sync.",
+    empty:
+      "Heart-rate variability from your Watch shows up here after sync — only days since this training block started.",
     historyLabel: "Days",
     value: (row) => (row.hrvMs === null ? 0 : Math.round(row.hrvMs)),
     display: (value) => String(Math.round(value)),
@@ -102,7 +105,7 @@ export async function VitalsTrackerPage({ metric }: { metric: VitalMetric }) {
                 <p className="tile__foot">{meta.weekLabel}</p>
               </div>
               <div className="tile">
-                <p className="tile__label">All-time avg</p>
+                <p className="tile__label">Block avg</p>
                 <p className="tile__value">
                   {allAvg !== null ? meta.display(allAvg) : "—"}
                   {allAvg !== null && metric !== "sleep" ? <small>{meta.unit}</small> : null}
@@ -111,6 +114,7 @@ export async function VitalsTrackerPage({ metric }: { metric: VitalMetric }) {
               <div className="tile">
                 <p className="tile__label">Days logged</p>
                 <p className="tile__value">{history.length}</p>
+                <p className="tile__foot">Since start</p>
               </div>
             </div>
           </div>

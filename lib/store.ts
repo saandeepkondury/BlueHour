@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
 import {
   dayLogs,
@@ -184,7 +184,33 @@ export async function getWorkoutLogs(from: string, to: string): Promise<WorkoutL
 
 export async function getAllWorkoutLogs(): Promise<WorkoutLog[]> {
   await ready();
+  const [row] = await db.select({ startDate: profile.startDate }).from(profile).where(eq(profile.id, 1));
+  if (row?.startDate) {
+    await pruneWorkoutLogsBefore(row.startDate);
+    return db
+      .select()
+      .from(workoutLogs)
+      .where(gte(workoutLogs.date, row.startDate))
+      .orderBy(asc(workoutLogs.date));
+  }
   return db.select().from(workoutLogs).orderBy(asc(workoutLogs.date));
+}
+
+/**
+ * Drop Watch / manual run logs from before the training block started.
+ * HealthKit can still send older workouts; we do not keep them in the app.
+ */
+export async function pruneWorkoutLogsBefore(startDate: string): Promise<number> {
+  await ready();
+  const removed = await db.delete(workoutLogs).where(lt(workoutLogs.date, startDate)).returning({
+    date: workoutLogs.date,
+  });
+  return removed.length;
+}
+
+/** Logged runs on or after the profile start date, oldest first. */
+export async function getTrainingWorkoutLogs(): Promise<WorkoutLog[]> {
+  return getAllWorkoutLogs();
 }
 
 export async function saveWorkoutLog(entry: {

@@ -57,6 +57,7 @@ export async function SleepTrackerPage() {
               <div className="tile">
                 <p className="tile__label">Days logged</p>
                 <p className="tile__value">{daysLogged}</p>
+                <p className="tile__foot">Since start</p>
               </div>
               <div className="tile">
                 <p className="tile__label">Sleep HR</p>
@@ -100,8 +101,8 @@ export async function SleepTrackerPage() {
                   <Icon name="moon" size={20} />
                 </span>
                 <p className="small sub">
-                  Sleep from Apple Health shows up here once the Watch syncs — nights and naps,
-                  with stages when available.
+                  Sleep from Apple Health shows up here once the Watch syncs — only nights since
+                  this training block started.
                 </p>
                 <Link className="btn btn--ghost btn--sm" href="/settings/watch">
                   Apple Health sync

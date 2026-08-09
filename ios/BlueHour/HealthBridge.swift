@@ -4,9 +4,9 @@ import HealthKit
 /// Reads Watch data and posts it to Blue Hour. Everything here is read-only —
 /// Blue Hour never writes back into Apple Health.
 ///
-/// Workouts, sleep, and vitals come back with no date floor — everything
-/// HealthKit still has lands in the database and stays there. Server upserts
-/// by date, so re-syncing full history is safe and idempotent.
+/// Sleep, vitals, and workouts are read from HealthKit in full, but the
+/// server only keeps samples on or after the training start date so pre-app
+/// history does not crowd Sleep, Rest HR, HRV, or Runs.
 struct HealthBridge {
     private let store = HKHealthStore()
 

@@ -648,6 +648,89 @@ a.tile__label:active {
   min-width: 0;
 }
 
+/* Race readiness history chart */
+.readiness-chart {
+  margin-top: 0.25rem;
+}
+
+.readiness-chart--empty {
+  display: grid;
+  place-items: center;
+  min-height: 8rem;
+  padding: 1rem;
+  text-align: center;
+  background: var(--surface-sunk);
+  border-radius: var(--r-tile);
+}
+
+.readiness-chart__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.readiness-chart__guide {
+  stroke: var(--hair-2);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+
+.readiness-chart__guide--good {
+  stroke: var(--good);
+  stroke-opacity: 0.45;
+}
+
+.readiness-chart__guide-label {
+  fill: var(--ink-3);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.readiness-chart__dot {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 1.75;
+}
+
+.readiness-chart__dot--now {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.readiness-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.1rem;
+  margin-top: 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+.readiness-chart__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.readiness-chart__swatch {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--hair-2);
+}
+
+.readiness-chart__swatch--band {
+  background: var(--accent);
+  opacity: 0.55;
+}
+
+.readiness-chart__swatch--good {
+  background: var(--good);
+}
+
 .stat__value {
   font-size: 1.375rem;
   font-weight: 700;

@@ -1,6 +1,6 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, lt } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
-import { healthDays, healthSync, workoutLogs, workouts } from "@/drizzle/schema";
+import { healthDays, healthSync, profile, workoutLogs, workouts } from "@/drizzle/schema";
 import { isoInTimeZone, todayISO } from "@/lib/date";
 import { isRun, type WorkoutType } from "@/lib/plan/types";
 
@@ -421,8 +421,20 @@ export async function ingestHealth(payload: HealthPayload): Promise<IngestResult
   await ready();
   const now = new Date().toISOString();
 
+  // Only keep Health / run history from the training block start onward —
+  // older HealthKit samples crowd Sleep, Rest HR, HRV, and Runs.
+  const [profileRow] = await db
+    .select({ startDate: profile.startDate })
+    .from(profile)
+    .where(eq(profile.id, 1));
+  const trainingStart = profileRow?.startDate ?? todayISO();
+  await db.delete(healthDays).where(lt(healthDays.date, trainingStart));
+  await db.delete(workoutLogs).where(lt(workoutLogs.date, trainingStart));
+
   const days = collectDays(payload);
+  let daysWritten = 0;
   for (const [date, day] of days) {
+    if (date < trainingStart) continue;
     if (Object.keys(day).length === 0) continue;
     await db
       .insert(healthDays)
@@ -488,13 +500,16 @@ export async function ingestHealth(payload: HealthPayload): Promise<IngestResult
           updatedAt: now,
         },
       });
+    daysWritten += 1;
   }
 
   const sessions = bestWorkoutPerDay(payload.workouts ?? []);
-  const dates = [...sessions.keys()];
+  const dates: string[] = [];
 
   let workoutsWritten = 0;
   for (const [date, session] of sessions) {
+    if (date < trainingStart) continue;
+
     // Watch distance / time / HR win over a typed estimate. Feel / effort /
     // notes are runner-entered and are not in `values`, so re-sync keeps them.
     const values = {
@@ -514,6 +529,7 @@ export async function ingestHealth(payload: HealthPayload): Promise<IngestResult
       .values({ ...values, createdAt: now })
       .onConflictDoUpdate({ target: workoutLogs.date, set: values });
     workoutsWritten += 1;
+    dates.push(date);
   }
 
   const markedDone = await markRunsDone(dates);
@@ -524,7 +540,7 @@ export async function ingestHealth(payload: HealthPayload): Promise<IngestResult
       id: 1,
       lastSyncAt: now,
       device: payload.device ?? null,
-      daysSeen: days.size,
+      daysSeen: daysWritten,
       workoutsSeen: sessions.size,
     })
     .onConflictDoUpdate({
@@ -532,12 +548,12 @@ export async function ingestHealth(payload: HealthPayload): Promise<IngestResult
       set: {
         lastSyncAt: now,
         device: payload.device ?? null,
-        daysSeen: days.size,
+        daysSeen: daysWritten,
         workoutsSeen: sessions.size,
       },
     });
 
-  return { daysWritten: days.size, workoutsWritten, markedDone };
+  return { daysWritten, workoutsWritten, markedDone };
 }
 
 /**

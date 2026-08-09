@@ -75,6 +75,7 @@ export async function RestHrTrackerPage() {
               <div className="tile">
                 <p className="tile__label">Days logged</p>
                 <p className="tile__value">{daysLogged}</p>
+                <p className="tile__foot">Since start</p>
               </div>
               <div className="tile">
                 <p className="tile__label">Baseline</p>
@@ -126,8 +127,8 @@ export async function RestHrTrackerPage() {
                   <Icon name="heart" size={20} />
                 </span>
                 <p className="small sub">
-                  Resting heart rate, walking average, and daytime range land here after an Apple
-                  Health sync.
+                  Resting heart rate, walking average, and daytime range land here after sync —
+                  only days since this training block started.
                 </p>
                 <Link className="btn btn--ghost btn--sm" href="/settings/watch">
                   Apple Health sync
