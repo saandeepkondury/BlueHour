@@ -14,8 +14,7 @@ export interface IngredientIdentity {
 /** Synonym groups → one shopping-list line. First entry is the preferred label. */
 const ALIAS_GROUPS: readonly (readonly string[])[] = [
   // Produce
-  ["Onion", "shallot", "red onion", "white onion", "yellow onion", "purple onion", "onion (small)"],
-  ["Green onion", "spring onion", "spring onions", "scallion", "scallions", "scallion greens"],
+  ["Onion", "shallot", "red onion", "white onion", "yellow onion", "purple onion", "onion (small)", "green onion", "spring onion", "spring onions", "scallion", "scallions", "scallion greens"],
   ["Bell pepper", "bell peppers", "bell peppers (mixed)", "capsicum", "capsicum (bell pepper)", "red bell pepper"],
   ["Sprouts", "steamed sprouts", "bean sprouts"],
   ["Cilantro", "coriander", "fresh coriander", "fresh cilantro"],
