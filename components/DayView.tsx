@@ -188,22 +188,15 @@ export async function DayView({
 
         <div className="stack">
           <div className="card">
-            <CanCookNow
-              date={date}
-              weekStart={weekStart}
-              pantryCount={pantry.size}
-              recipes={cookNow}
-              meals={meals}
-            />
-          </div>
-
-          <div className="card">
-            <div className="row-between" style={{ marginBottom: "0.75rem" }}>
+            <div className="row-between" style={{ marginBottom: "0.35rem" }}>
               <div>
-                <p className="label">Today</p>
+                <p className="label">
+                  {weekdayShort(date)} {formatShort(date)}
+                  {isToday ? " · today" : ""}
+                </p>
                 <p className="tile__value" style={{ marginTop: "0.25rem" }}>
                   {Math.round(consumed.calories)}
-                  <small>/ {targets.calories}</small>
+                  <small>/ {targets.calories} kcal</small>
                 </p>
               </div>
               <Ring
@@ -233,6 +226,17 @@ export async function DayView({
               meals={meals}
               catalog={catalog}
               showEaten
+            />
+
+            <hr className="card__divide" />
+
+            <CanCookNow
+              date={date}
+              weekStart={weekStart}
+              pantryCount={pantry.size}
+              recipes={cookNow}
+              meals={meals}
+              compact
             />
 
             {extras.length > 0 ? (

@@ -10,26 +10,22 @@ import { SLOT_LABEL, type Slot } from "@/lib/nutrition/recipes";
 type DayMeal = {
   slot: string;
   recipeId: string | null;
+  name?: string;
 };
 
 function missingCount(recipe: BrowseRecipe): number {
   return Math.max(0, recipe.total - recipe.have);
 }
 
-function rowMeta(recipe: BrowseRecipe): string {
-  const bits = [SLOT_LABEL[recipe.slot], `${recipe.protein}g`, `${recipe.minutes}m`];
+function needLine(recipe: BrowseRecipe): string | null {
   const missing = missingCount(recipe);
-  if (missing > 0 && recipe.mains.length > 0) {
-    const lack = recipe.mains.filter((name) => !recipe.mainsHave.includes(name)).slice(0, 2);
-    if (lack.length > 0) bits.push(`need ${lack.join(", ")}`);
-  } else if (recipe.mainsHave.length > 0) {
-    bits.push(recipe.mainsHave.slice(0, 2).join(", "));
-  }
-  return bits.join(" · ");
+  if (missing <= 0) return null;
+  const lack = recipe.mains.filter((name) => !recipe.mainsHave.includes(name)).slice(0, 2);
+  return lack.length > 0 ? `Need ${lack.join(", ")}` : null;
 }
 
 /**
- * Pantry-first cook recommendations for Today.
+ * Pantry-first cook recommendations.
  * Ready = all mains at home; Almost = missing ≤2 mains.
  */
 export function CanCookNow({
@@ -38,12 +34,15 @@ export function CanCookNow({
   pantryCount,
   recipes,
   meals,
+  compact = false,
 }: {
   date: string;
   weekStart: string;
   pantryCount: number;
   recipes: BrowseRecipe[];
   meals: DayMeal[];
+  /** Quieter header when nested inside the Fuel day card. */
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -59,49 +58,49 @@ export function CanCookNow({
     });
   }
 
-  function slotFilled(slot: Slot): boolean {
-    return meals.some((meal) => meal.slot === slot && Boolean(meal.recipeId));
+  function mealInSlot(slot: Slot): DayMeal | undefined {
+    return meals.find((meal) => meal.slot === slot && Boolean(meal.recipeId));
   }
 
   const ready = recipes.filter((recipe) => recipe.pct >= 100);
   const almost = recipes.filter((recipe) => recipe.pct < 100 && missingCount(recipe) <= 2);
+  const picks = [...ready, ...almost];
 
   return (
     <div className="cook-rec" style={{ opacity: pending ? 0.7 : 1 }}>
       <div className="cook-rec__head">
         <div>
-          <p className="label">Cook</p>
-          <p className="cook-rec__title">From your pantry</p>
+          <p className="label">{compact ? "Cook from pantry" : "Cook"}</p>
+          {!compact ? <p className="cook-rec__title">From your pantry</p> : null}
         </div>
         <div className="cook-rec__links">
           <Link className="pill pill--good" href="/fuel/grocery">
             {pantryCount} home
           </Link>
           <Link className="block__link" href="/fuel/recipes">
-            All
+            Recipes
           </Link>
         </div>
       </div>
 
       {pantryCount === 0 ? (
         <div className="cook-rec__empty">
-          <p className="small sub">Mark what’s at home to get dish ideas.</p>
+          <p className="small muted">Mark what’s at home on Grocery.</p>
           <Link className="btn btn--primary btn--sm" href="/fuel/grocery">
-            Open Grocery
-          </Link>
-        </div>
-      ) : ready.length === 0 && almost.length === 0 ? (
-        <div className="cook-rec__empty">
-          <p className="small sub">Nothing close yet — add a few more mains on Grocery.</p>
-          <Link className="btn btn--ghost btn--sm" href="/fuel/grocery">
             Grocery
           </Link>
         </div>
+      ) : picks.length === 0 ? (
+        <p className="small muted">Nothing close yet — add a few more mains on Grocery.</p>
       ) : (
         <div className="rows">
-          {[...ready, ...almost].map((recipe) => {
-            const filled = slotFilled(recipe.slot);
+          {picks.map((recipe) => {
+            const current = mealInSlot(recipe.slot);
             const readyNow = recipe.pct >= 100;
+            const slotLabel = SLOT_LABEL[recipe.slot];
+            const need = needLine(recipe);
+            const actionLabel = current ? `Replace ${slotLabel}` : `→ ${slotLabel}`;
+
             return (
               <div className="row cook-rec__row" key={recipe.id}>
                 <Link
@@ -116,22 +115,27 @@ export function CanCookNow({
                       <span className={readyNow ? "pill pill--good" : "pill pill--accent"}>
                         {readyNow ? "Ready" : "Almost"}
                       </span>
-                      <span className="muted"> · {rowMeta(recipe)}</span>
+                      <span className="muted">
+                        {" "}
+                        · {slotLabel} · {recipe.protein}g · {recipe.minutes}m
+                        {need ? ` · ${need}` : ""}
+                        {current?.name ? ` · now ${current.name}` : ""}
+                      </span>
                     </span>
                   </span>
                 </Link>
                 <button
                   type="button"
-                  className="btn btn--primary btn--sm nowrap"
+                  className={`btn btn--sm nowrap${current ? " btn--ghost" : " btn--primary"}`}
                   disabled={pending}
                   onClick={() => assign(recipe)}
                   aria-label={
-                    filled
-                      ? `Swap ${SLOT_LABEL[recipe.slot]} with ${recipe.name}`
-                      : `Cook ${recipe.name} for ${SLOT_LABEL[recipe.slot]}`
+                    current
+                      ? `Replace ${slotLabel} (${current.name ?? "current meal"}) with ${recipe.name}`
+                      : `Add ${recipe.name} to ${slotLabel}`
                   }
                 >
-                  {filled ? "Swap" : "Cook"}
+                  {actionLabel}
                 </button>
               </div>
             );

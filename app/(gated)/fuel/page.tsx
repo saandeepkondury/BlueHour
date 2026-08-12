@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CanCookNow } from "@/components/CanCookNow";
 import { DayMealSlots } from "@/components/DayMealSlots";
 import { Icon } from "@/components/Icon";
 import { MacroBars } from "@/components/MacroBars";
@@ -11,7 +12,7 @@ import {
   todayISO,
   weekdayShort,
 } from "@/lib/date";
-import { buildBrowseCatalog } from "@/lib/nutrition/grocery";
+import { buildBrowseCatalog, readyToCook } from "@/lib/nutrition/grocery";
 import {
   candidatesFor,
   MEAL_SLOTS,
@@ -72,6 +73,7 @@ export default async function FuelWeekPage({
     ALL_SLOTS.flatMap((s) => candidatesFor(s, diet, allergies)).map((r) => r.id),
   );
   const catalog = buildBrowseCatalog(pantry, (recipe) => allowedIds.has(recipe.id));
+  const cookNow = readyToCook(catalog, { minPct: 50, limit: 8 });
 
   const byDate = new Map<string, typeof meals>();
   for (const meal of meals) {
@@ -301,6 +303,12 @@ export default async function FuelWeekPage({
 
       {selectedWorkout && selectedTargets ? (
         <section className="block block--tight">
+          <div className="block__head">
+            <h2 className="block__title">Day</h2>
+            <Link className="block__link" href="/fuel/recipes">
+              Recipes
+            </Link>
+          </div>
           <div className="card">
             <div className="row-between" style={{ marginBottom: "0.35rem" }}>
               <div>
@@ -313,16 +321,21 @@ export default async function FuelWeekPage({
                   <small>/ {selectedTargets.calories} kcal</small>
                 </p>
               </div>
-              <Link className="btn btn--ghost btn--sm" href={dayHref} prefetch={false}>
-                Open day
-                <Icon name="chevron" size={15} />
-              </Link>
+              <div className="btnrow" style={{ gap: "0.5rem", alignItems: "center" }}>
+                <Ring
+                  pct={caloriePct}
+                  tone={caloriePct > 108 ? "warn" : caloriePct >= 92 ? "good" : "accent"}
+                  size={56}
+                  thickness={5}
+                  value={`${Math.min(999, Math.round(caloriePct))}%`}
+                  label={`${dayCalories} of ${selectedTargets.calories} calories from meals`}
+                />
+                <Link className="btn btn--ghost btn--sm" href={dayHref} prefetch={false}>
+                  Open
+                  <Icon name="chevron" size={15} />
+                </Link>
+              </div>
             </div>
-
-            <p className="small sub" style={{ marginBottom: "0.75rem" }}>
-              Macros from meals on this day vs your target. Tap a meal for the recipe · shuffle to
-              change it.
-            </p>
 
             <MacroBars
               rows={[
@@ -340,6 +353,17 @@ export default async function FuelWeekPage({
               weekday={`${weekdayShort(selectedDate)} ${formatShort(selectedDate)}`}
               meals={selectedMeals}
               catalog={catalog}
+            />
+
+            <hr className="card__divide" />
+
+            <CanCookNow
+              date={selectedDate}
+              weekStart={weekStart}
+              pantryCount={pantry.size}
+              recipes={cookNow}
+              meals={selectedMeals}
+              compact
             />
           </div>
         </section>

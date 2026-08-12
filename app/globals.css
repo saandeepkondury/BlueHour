@@ -1401,7 +1401,7 @@ a.tile__label:active {
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 0.85rem;
+  margin-bottom: 0.65rem;
 }
 
 .cook-rec__title {
@@ -1429,6 +1429,15 @@ a.tile__label:active {
 
 .cook-rec__row {
   align-items: center;
+  gap: 0.65rem;
+}
+
+.cook-rec__row .btn {
+  flex: 0 0 auto;
+  max-width: 8.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .can-cook {
