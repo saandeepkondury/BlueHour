@@ -12,19 +12,25 @@ type DayMeal = {
   recipeId: string | null;
 };
 
-function mainsSummary(recipe: BrowseRecipe): string {
-  if (recipe.mainsHave.length > 0) {
-    return recipe.mainsHave.slice(0, 4).join(" · ");
+function missingCount(recipe: BrowseRecipe): number {
+  return Math.max(0, recipe.total - recipe.have);
+}
+
+function rowMeta(recipe: BrowseRecipe): string {
+  const bits = [SLOT_LABEL[recipe.slot], `${recipe.protein}g`, `${recipe.minutes}m`];
+  const missing = missingCount(recipe);
+  if (missing > 0 && recipe.mains.length > 0) {
+    const lack = recipe.mains.filter((name) => !recipe.mainsHave.includes(name)).slice(0, 2);
+    if (lack.length > 0) bits.push(`need ${lack.join(", ")}`);
+  } else if (recipe.mainsHave.length > 0) {
+    bits.push(recipe.mainsHave.slice(0, 2).join(", "));
   }
-  if (recipe.mains.length > 0) {
-    return recipe.mains.slice(0, 4).join(" · ");
-  }
-  return `${recipe.minutes} min`;
+  return bits.join(" · ");
 }
 
 /**
- * Compact pantry-ready strip for Today's Fuel.
- * Ready = all main ingredients at home (seasonings/garnishes ignored).
+ * Pantry-first cook recommendations for Today.
+ * Ready = all mains at home; Almost = missing ≤2 mains.
  */
 export function CanCookNow({
   date,
@@ -57,91 +63,81 @@ export function CanCookNow({
     return meals.some((meal) => meal.slot === slot && Boolean(meal.recipeId));
   }
 
-  if (pantryCount === 0) {
-    return (
-      <div className="can-cook">
-        <div className="can-cook__head">
-          <p className="label">Can cook now</p>
-          <Link className="block__link" href="/fuel/grocery">
+  const ready = recipes.filter((recipe) => recipe.pct >= 100);
+  const almost = recipes.filter((recipe) => recipe.pct < 100 && missingCount(recipe) <= 2);
+
+  return (
+    <div className="cook-rec" style={{ opacity: pending ? 0.7 : 1 }}>
+      <div className="cook-rec__head">
+        <div>
+          <p className="label">Cook</p>
+          <p className="cook-rec__title">From your pantry</p>
+        </div>
+        <div className="cook-rec__links">
+          <Link className="pill pill--good" href="/fuel/grocery">
+            {pantryCount} home
+          </Link>
+          <Link className="block__link" href="/fuel/recipes">
+            All
+          </Link>
+        </div>
+      </div>
+
+      {pantryCount === 0 ? (
+        <div className="cook-rec__empty">
+          <p className="small sub">Mark what’s at home to get dish ideas.</p>
+          <Link className="btn btn--primary btn--sm" href="/fuel/grocery">
+            Open Grocery
+          </Link>
+        </div>
+      ) : ready.length === 0 && almost.length === 0 ? (
+        <div className="cook-rec__empty">
+          <p className="small sub">Nothing close yet — add a few more mains on Grocery.</p>
+          <Link className="btn btn--ghost btn--sm" href="/fuel/grocery">
             Grocery
           </Link>
         </div>
-        <p className="small sub">
-          Mark mains you have — chicken, rice, paneer — on Grocery to unlock dishes.
-        </p>
-      </div>
-    );
-  }
-
-  if (recipes.length === 0) {
-    return (
-      <div className="can-cook">
-        <div className="can-cook__head">
-          <p className="label">Can cook now</p>
-          <Link className="pill pill--accent" href="/fuel/grocery">
-            {pantryCount} at home
-          </Link>
-        </div>
-        <p className="small sub">
-          No dish has all its main ingredients yet — seasonings don&apos;t count. Shuffle a
-          meal to see almost-there options.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="can-cook" style={{ opacity: pending ? 0.7 : 1 }}>
-      <div className="can-cook__head">
-        <div>
-          <p className="label">Can cook now</p>
-          <p className="small sub" style={{ marginTop: "0.15rem" }}>
-            Based on mains — not sauces or garnish
-          </p>
-        </div>
-        <Link className="pill pill--good" href="/fuel/grocery">
-          {pantryCount} at home
-        </Link>
-      </div>
-      <div className="rows">
-        {recipes.map((recipe) => {
-          const filled = slotFilled(recipe.slot);
-          return (
-            <div className="row" key={recipe.id}>
-              <Link
-                className="row__hit"
-                href={`/recipe/${recipe.id}?week=${weekStart}&date=${date}&slot=${recipe.slot}`}
-                prefetch={false}
-                aria-label={`Open ${recipe.name} recipe`}
-              >
-                <span className="row__body">
-                  <span className="row__title">{recipe.name}</span>
-                  <span className="row__sub row__sub--wrap">
-                    <span className="pill pill--good">Mains ready</span>
-                    <span className="muted">
-                      {" "}
-                      · {SLOT_LABEL[recipe.slot]} · {mainsSummary(recipe)}
+      ) : (
+        <div className="rows">
+          {[...ready, ...almost].map((recipe) => {
+            const filled = slotFilled(recipe.slot);
+            const readyNow = recipe.pct >= 100;
+            return (
+              <div className="row cook-rec__row" key={recipe.id}>
+                <Link
+                  className="row__hit"
+                  href={`/recipe/${recipe.id}?week=${weekStart}&date=${date}&slot=${recipe.slot}`}
+                  prefetch={false}
+                  aria-label={`Open ${recipe.name}`}
+                >
+                  <span className="row__body">
+                    <span className="row__title">{recipe.name}</span>
+                    <span className="row__sub row__sub--wrap">
+                      <span className={readyNow ? "pill pill--good" : "pill pill--accent"}>
+                        {readyNow ? "Ready" : "Almost"}
+                      </span>
+                      <span className="muted"> · {rowMeta(recipe)}</span>
                     </span>
                   </span>
-                </span>
-              </Link>
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm nowrap"
-                disabled={pending}
-                onClick={() => assign(recipe)}
-                aria-label={
-                  filled
-                    ? `Swap ${SLOT_LABEL[recipe.slot]} with ${recipe.name}`
-                    : `Assign ${recipe.name} to ${SLOT_LABEL[recipe.slot]}`
-                }
-              >
-                {filled ? "Swap" : "Assign"}
-              </button>
-            </div>
-          );
-        })}
-      </div>
+                </Link>
+                <button
+                  type="button"
+                  className="btn btn--primary btn--sm nowrap"
+                  disabled={pending}
+                  onClick={() => assign(recipe)}
+                  aria-label={
+                    filled
+                      ? `Swap ${SLOT_LABEL[recipe.slot]} with ${recipe.name}`
+                      : `Cook ${recipe.name} for ${SLOT_LABEL[recipe.slot]}`
+                  }
+                >
+                  {filled ? "Swap" : "Cook"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

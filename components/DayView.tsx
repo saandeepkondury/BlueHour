@@ -83,7 +83,7 @@ export async function DayView({
     CATALOG_SLOTS.flatMap((slot) => candidatesFor(slot, diet, allergies)).map((recipe) => recipe.id),
   );
   const catalog = buildBrowseCatalog(pantry, (recipe) => allowedIds.has(recipe.id));
-  const cookNow = readyToCook(catalog, { minPct: 100, limit: 6 });
+  const cookNow = readyToCook(catalog, { minPct: 50, limit: 8 });
 
   return (
     <>
@@ -181,37 +181,40 @@ export async function DayView({
       <section className="block">
         <div className="block__head">
           <h2 className="block__title">Fuel</h2>
-          <Link className="block__link" href="/fuel">
-            Week
+          <Link className="block__link" href="/fuel/recipes">
+            Recipes
           </Link>
         </div>
 
         <div className="stack">
           <div className="card">
-            <div className="row-between" style={{ marginBottom: "0.35rem" }}>
+            <CanCookNow
+              date={date}
+              weekStart={weekStart}
+              pantryCount={pantry.size}
+              recipes={cookNow}
+              meals={meals}
+            />
+          </div>
+
+          <div className="card">
+            <div className="row-between" style={{ marginBottom: "0.75rem" }}>
               <div>
-                <p className="label">
-                  {weekdayShort(date)} {formatShort(date)}
-                  {isToday ? " · today" : ""}
-                </p>
+                <p className="label">Today</p>
                 <p className="tile__value" style={{ marginTop: "0.25rem" }}>
                   {Math.round(consumed.calories)}
-                  <small>/ {targets.calories} kcal</small>
+                  <small>/ {targets.calories}</small>
                 </p>
               </div>
               <Ring
                 pct={caloriePct}
                 tone={caloriePct > 108 ? "warn" : caloriePct >= 92 ? "good" : "accent"}
-                size={64}
-                thickness={6}
+                size={56}
+                thickness={5}
                 value={`${Math.min(999, Math.round(caloriePct))}%`}
                 label={`${Math.round(consumed.calories)} of ${targets.calories} calories`}
               />
             </div>
-
-            <p className="small sub" style={{ marginBottom: "0.75rem" }}>
-              Assign from Can cook now · check off what you ate · tap a meal for the recipe.
-            </p>
 
             <MacroBars
               rows={[
@@ -219,21 +222,6 @@ export async function DayView({
                 { label: "Carbs", value: consumed.carbs, target: targets.carbs, unit: "g" },
                 { label: "Fat", value: consumed.fat, target: targets.fat, unit: "g" },
               ]}
-            />
-            {targets.estimated ? (
-              <p className="card__sub" style={{ marginTop: "0.75rem" }}>
-                Estimated from an average build. <Link href="/settings">Add your stats</Link>.
-              </p>
-            ) : null}
-
-            <hr className="card__divide" />
-
-            <CanCookNow
-              date={date}
-              weekStart={weekStart}
-              pantryCount={pantry.size}
-              recipes={cookNow}
-              meals={meals}
             />
 
             <hr className="card__divide" />
@@ -261,7 +249,7 @@ export async function DayView({
                       <div className="row__body">
                         <span className="row__title">{extra.name}</span>
                         <span className="row__sub">
-                          Added · {extra.protein}p / {extra.carbs}c / {extra.fat}f
+                          {extra.protein}p · {extra.carbs}c · {extra.fat}f
                         </span>
                       </div>
                       <span className="row__meta">{extra.calories}</span>

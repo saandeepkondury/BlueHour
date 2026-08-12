@@ -7,6 +7,22 @@ import { MEAL_SLOTS, SLOT_LABEL, type Slot } from "@/lib/nutrition/recipes";
 
 const RUN_SLOTS: Slot[] = ["fuel_pre", "fuel_during", "fuel_post"];
 
+function missingCount(recipe: BrowseRecipe): number {
+  return Math.max(0, recipe.total - recipe.have);
+}
+
+function cookMeta(recipe: BrowseRecipe): string {
+  const bits = [SLOT_LABEL[recipe.slot], `${recipe.protein}g`, `${recipe.minutes}m`];
+  const missing = missingCount(recipe);
+  if (missing > 0) {
+    const lack = recipe.mains.filter((name) => !recipe.mainsHave.includes(name)).slice(0, 2);
+    if (lack.length > 0) bits.push(`need ${lack.join(", ")}`);
+  } else if (recipe.mainsHave.length > 0) {
+    bits.push(recipe.mainsHave.slice(0, 2).join(", "));
+  }
+  return bits.join(" · ");
+}
+
 export function RecipeBrowser({
   weekStart,
   today,
@@ -37,29 +53,71 @@ export function RecipeBrowser({
     ].filter((group) => group.recipes.length > 0);
   }, [list]);
 
-  const readyNow = useMemo(
-    () => readyToCook(catalog, { minPct: 100, limit: 6 }),
-    [catalog],
-  );
-
-  const readyGroups = useMemo(() => {
-    const veg = readyNow.filter(isVegRecipe);
-    const nonVeg = readyNow.filter((recipe) => !isVegRecipe(recipe));
-    return [
-      { key: "veg", label: "Vegetarian", recipes: veg },
-      { key: "non-veg", label: "Non-veg", recipes: nonVeg },
-    ].filter((group) => group.recipes.length > 0);
-  }, [readyNow]);
+  const pantryPicks = useMemo(() => {
+    const picks = readyToCook(catalog, { minPct: 50, limit: 10 });
+    const ready = picks.filter((recipe) => recipe.pct >= 100);
+    const almost = picks.filter(
+      (recipe) => recipe.pct < 100 && missingCount(recipe) <= 2,
+    );
+    return [...ready, ...almost];
+  }, [catalog]);
 
   return (
     <>
       <section className="block block--tight">
         <div className="card">
-          <p className="label" style={{ marginBottom: "0.35rem" }}>
+          <div className="cook-rec__head" style={{ marginBottom: "0.85rem" }}>
+            <div>
+              <p className="label">Cook</p>
+              <p className="cook-rec__title">From your pantry</p>
+            </div>
+            <Link className="pill pill--good" href="/fuel/grocery">
+              Grocery
+            </Link>
+          </div>
+
+          {!hasPantry ? (
+            <div className="cook-rec__empty">
+              <p className="small sub">Mark what’s at home to unlock dishes.</p>
+              <Link className="btn btn--primary btn--sm" href="/fuel/grocery">
+                Open Grocery
+              </Link>
+            </div>
+          ) : pantryPicks.length === 0 ? (
+            <p className="small muted">Nothing close yet — add a few more mains on Grocery.</p>
+          ) : (
+            <div className="rows">
+              {pantryPicks.map((recipe) => {
+                const readyNow = recipe.pct >= 100;
+                return (
+                  <Link
+                    className="row cook-rec__row"
+                    key={recipe.id}
+                    href={`/recipe/${recipe.id}?week=${weekStart}&date=${today}&slot=${recipe.slot}`}
+                    prefetch={false}
+                    style={{ color: "inherit", textDecoration: "none" }}
+                  >
+                    <span className="row__body">
+                      <span className="row__title">{recipe.name}</span>
+                      <span className="row__sub row__sub--wrap">
+                        <span className={readyNow ? "pill pill--good" : "pill pill--accent"}>
+                          {readyNow ? "Ready" : "Almost"}
+                        </span>
+                        <span className="muted"> · {cookMeta(recipe)}</span>
+                      </span>
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="block block--tight">
+        <div className="card">
+          <p className="label" style={{ marginBottom: "0.65rem" }}>
             All recipes
-          </p>
-          <p className="small sub" style={{ marginBottom: "0.75rem" }}>
-            Open a dish for instructions. Add it to a day from the Week tab.
           </p>
           <div className="seg" role="tablist" aria-label="Meal type" style={{ marginBottom: "0.5rem" }}>
             {MEAL_SLOTS.map((s) => (
@@ -108,8 +166,7 @@ export function RecipeBrowser({
                           <span className="row__body">
                             <span className="row__title">{recipe.name}</span>
                             <span className="row__sub">
-                              {recipe.calories} kcal · {recipe.protein}g protein ·{" "}
-                              {recipe.minutes} min
+                              {recipe.calories} kcal · {recipe.protein}g · {recipe.minutes}m
                             </span>
                           </span>
                         </Link>
@@ -122,61 +179,6 @@ export function RecipeBrowser({
           </div>
         </div>
       </section>
-
-      {readyNow.length > 0 ? (
-        <section className="block block--tight">
-          <div className="card">
-            <p className="label" style={{ marginBottom: "0.35rem" }}>
-              Ready from your pantry
-            </p>
-            <p className="small sub" style={{ marginBottom: "0.75rem" }}>
-              Dishes where the mains are at home — seasonings and garnish don&apos;t count.
-            </p>
-            <div className="meal-groups">
-              {readyGroups.map((group) => (
-                <div className="meal-group" key={group.key}>
-                  <p className="label meal-group__label">{group.label}</p>
-                  <div className="rows">
-                    {group.recipes.map((recipe) => (
-                      <Link
-                        className="row"
-                        key={recipe.id}
-                        href={`/recipe/${recipe.id}?week=${weekStart}&date=${today}&slot=${recipe.slot}`}
-                        prefetch={false}
-                        style={{ color: "inherit", textDecoration: "none" }}
-                      >
-                        <span className="row__body">
-                          <span className="row__title">{recipe.name}</span>
-                          <span className="row__sub">
-                            <span className="pill pill--good">Mains ready</span>
-                            <span className="muted">
-                              {" "}
-                              · {SLOT_LABEL[recipe.slot]} ·{" "}
-                              {recipe.mainsHave.length > 0
-                                ? recipe.mainsHave.slice(0, 4).join(" · ")
-                                : `${recipe.have}/${recipe.total} mains`}
-                            </span>
-                          </span>
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : !hasPantry ? (
-        <section className="block block--tight">
-          <div className="card">
-            <p className="small sub">
-              Mark mains you have — chicken, rice, paneer — on{" "}
-              <Link href="/fuel/grocery">Grocery</Link> to unlock dishes you
-              can cook.
-            </p>
-          </div>
-        </section>
-      ) : null}
     </>
   );
 }

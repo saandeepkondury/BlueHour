@@ -242,7 +242,7 @@ export function DayMealSlots({
                 >
                   <span className="row__body">
                     <span className="row__title">{slotLabel}</span>
-                    <span className="row__sub">Pick from Can cook now</span>
+                    <span className="row__sub">Add</span>
                   </span>
                 </button>
               )}
