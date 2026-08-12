@@ -6,37 +6,46 @@ export const RACE_DISTANCE_MI = 13.1;
 /**
  * Long-run mileage keyed by weeks-to-race. Built backward from race day so a
  * shorter or longer runway simply trims the front of the block.
- * Cutback weeks (4, 8, 12, 16, 20, 24) intentionally dip.
+ *
+ * Shape follows the researched beginner/intermediate consensus (Hal Higdon
+ * Intermediate peak of 12 mi; evidence-based 80/20 plans peaking 11–12):
+ *   - Long run grows ~0.5–1 mi per week, never a multi-mile leap into race day
+ *   - Cutback every 4th week (~25–30% dip) so tissue can catch up
+ *   - Peak long is 12 mi three weeks out — you do NOT need 13.1 in training;
+ *     taper + race-day adrenaline cover the last mile
+ *   - Two-week taper (volume down ~40%), then race
+ *
+ * Cutback weeks: 4, 8, 12, 16, 20, 24.
  */
 const LONG_BY_WEEKS_TO_RACE: Record<number, number> = {
-  0: RACE_DISTANCE_MI,
-  1: 5.5,
-  2: 8,
-  3: 12,
-  4: 8,
+  0: RACE_DISTANCE_MI, // race day — the only 13.1
+  1: 5, // final tune-up Saturday before race week
+  2: 8, // taper
+  3: 12, // peak confidence run
+  4: 9, // cutback into the peak
   5: 11,
   6: 10.5,
-  7: 10,
-  8: 7,
+  7: 9.5, // +1.5 after cutback — keeps the 10% rule honest
+  8: 8, // cutback
   9: 9.5,
   10: 9,
   11: 8.5,
-  12: 6,
-  13: 7.5,
-  14: 7,
-  15: 6.5,
-  16: 5,
+  12: 7, // cutback — soft landing before the 8–12 climb
+  13: 8,
+  14: 7.5,
+  15: 7,
+  16: 5.5, // cutback
   17: 6.5,
   18: 6,
   19: 5.5,
-  20: 4,
-  21: 4.5,
-  22: 4,
-  23: 3.5,
-  24: 2.5,
-  25: 3,
-  26: 2.5,
-  27: 2,
+  20: 4.5, // cutback
+  21: 5,
+  22: 4.5,
+  23: 4,
+  24: 3, // cutback
+  25: 3.5,
+  26: 3,
+  27: 2.5,
 };
 
 const BASE_LONG_CEILING = 2;
@@ -238,6 +247,9 @@ function austinTip(date: string, type: WorkoutType, phase: Phase, long: number, 
   if (type === "long") {
     if (month === 8 || month === 9) {
       return "Austin in the heat: start before 7 AM, take the shaded stretch of the Ann and Roy Butler trail, and add 30–60 sec/mile. Effort matters, pace does not.";
+    }
+    if (weeksToRace === 3) {
+      return "Peak long run. Easy conversational pace the whole way — finish knowing 13.1 on race day is just one more easy mile plus crowd energy.";
     }
     if (weeksToRace >= 5 && weeksToRace <= 7) {
       return "Last 2–3 miles at goal half-marathon pace. Race rehearsal — breakfast, gel, and the pace you want on Congress.";

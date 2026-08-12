@@ -36,8 +36,8 @@ export const PHASE_BLURB: Record<Phase, string> = {
   base: "Consistency and tissue. Easy running, strength, and abs — walk breaks early are part of the plan.",
   build: "Four run days. The long run grows, strides appear, and light tempo starts to teach pace.",
   specific: "This is how you get faster. One quality Tuesday, race-pace endings on long runs, strength held not built.",
-  peak: "The biggest week of the block. Twelve miles on Saturday, then we start coming down.",
-  taper: "Volume comes down, a little sharpness stays. Resist the urge to add miles.",
+  peak: "The biggest week of the block. Twelve miles on Saturday — that is enough; race day covers the rest.",
+  taper: "Volume comes down ~40%, a little sharpness stays. Resist the urge to add miles.",
   race: "Nothing new. Sleep, carbs, and Congress Avenue.",
 };
 
