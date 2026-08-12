@@ -16,6 +16,12 @@ export type GroceryInventoryItem = GroceryLine & {
   bucket: GroceryBucket;
 };
 
+export type GroceryRecipeOption = {
+  id: string;
+  name: string;
+  ingredientKeys: string[];
+};
+
 function itemStatus(item: GroceryLine): string | undefined {
   if (item.dishes.length === 0) return undefined;
   return item.dishes.length === 1
@@ -123,35 +129,124 @@ function FoldableAisles({
   );
 }
 
+function BucketSections({
+  items,
+  forceOpen,
+}: {
+  items: GroceryInventoryItem[];
+  forceOpen: boolean;
+}) {
+  const shopping = items.filter((item) => item.bucket === "shopping");
+  const missing = items.filter((item) => item.bucket === "missing");
+  const atHome = items.filter((item) => item.bucket === "home");
+
+  return (
+    <>
+      {shopping.length > 0 ? (
+        <section className="block block--tight">
+          <div className="card">
+            <p className="label" style={{ marginBottom: "0.15rem" }}>
+              Shopping · {shopping.length}
+            </p>
+            <p className="small sub" style={{ marginBottom: "0.5rem" }}>
+              At the store — mark Bought when it&apos;s in the cart.
+            </p>
+            <FoldableAisles items={shopping} keyPrefix="shop" forceOpen={forceOpen} />
+          </div>
+        </section>
+      ) : null}
+
+      {missing.length > 0 ? (
+        <section className="block block--tight">
+          <div className="card">
+            <p className="label" style={{ marginBottom: "0.15rem" }}>
+              Not at home · {missing.length}
+            </p>
+            <p className="small sub" style={{ marginBottom: "0.5rem" }}>
+              Add to shopping, or mark Have if it&apos;s already in the kitchen.
+            </p>
+            <FoldableAisles items={missing} keyPrefix="miss" forceOpen={forceOpen} />
+          </div>
+        </section>
+      ) : null}
+
+      {atHome.length > 0 ? (
+        <section className="block block--tight">
+          <div className="card">
+            <p className="label" style={{ marginBottom: "0.15rem" }}>
+              At home · {atHome.length}
+            </p>
+            <FoldableAisles items={atHome} keyPrefix="home" forceOpen={forceOpen} />
+          </div>
+        </section>
+      ) : null}
+    </>
+  );
+}
+
 /**
- * Persistent pantry UI with search and foldable aisle sections.
+ * Persistent pantry UI with ingredient search, recipe focus, and foldable aisles.
  */
 export function GroceryInventory({
   items,
+  recipes,
   covered,
   total,
 }: {
   items: GroceryInventoryItem[];
+  recipes: GroceryRecipeOption[];
   covered: number;
   total: number;
 }) {
-  const [query, setQuery] = useState("");
+  const [ingredientQuery, setIngredientQuery] = useState("");
+  const [recipeQuery, setRecipeQuery] = useState("");
+  const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const pct = total > 0 ? (covered / total) * 100 : 0;
 
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
+  const selectedRecipe = useMemo(
+    () => recipes.find((recipe) => recipe.id === selectedRecipeId) ?? null,
+    [recipes, selectedRecipeId],
+  );
+
+  const recipeMatches = useMemo(() => {
+    if (selectedRecipe) return [];
+    const needle = recipeQuery.trim().toLowerCase();
+    if (needle.length < 1) return [];
+    return recipes
+      .filter((recipe) => recipe.name.toLowerCase().includes(needle))
+      .slice(0, 8);
+  }, [recipes, recipeQuery, selectedRecipe]);
+
+  const recipeFocusItems = useMemo(() => {
+    if (!selectedRecipe) return [];
+    const keys = new Set(selectedRecipe.ingredientKeys);
+    return items.filter((item) => keys.has(item.key));
+  }, [items, selectedRecipe]);
+
+  const ingredientFiltered = useMemo(() => {
+    const needle = ingredientQuery.trim().toLowerCase();
     if (!needle) return items;
     return items.filter(
       (item) =>
         item.item.toLowerCase().includes(needle) ||
         item.dishes.some((dish) => dish.toLowerCase().includes(needle)),
     );
-  }, [items, query]);
+  }, [items, ingredientQuery]);
 
-  const shopping = filtered.filter((item) => item.bucket === "shopping");
-  const missing = filtered.filter((item) => item.bucket === "missing");
-  const atHome = filtered.filter((item) => item.bucket === "home");
-  const searching = query.trim().length > 0;
+  const focusingRecipe = selectedRecipe !== null;
+  const searchingIngredients = ingredientQuery.trim().length > 0;
+  const showFullInventory = !focusingRecipe;
+
+  function clearRecipeFocus() {
+    setSelectedRecipeId(null);
+    setRecipeQuery("");
+  }
+
+  function pickRecipe(recipe: GroceryRecipeOption) {
+    setSelectedRecipeId(recipe.id);
+    setRecipeQuery(recipe.name);
+    setIngredientQuery("");
+  }
 
   return (
     <>
@@ -178,61 +273,105 @@ export function GroceryInventory({
             />
           </div>
 
-          <label className="field grocery-search" style={{ marginTop: "0.875rem" }}>
-            <span className="sr-only">Search pantry</span>
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search ingredients"
-              autoComplete="off"
-              enterKeyHint="search"
-              inputMode="search"
-            />
-          </label>
+          <div className="grocery-searches">
+            <label className="field grocery-search">
+              <span className="sr-only">Search ingredients</span>
+              <input
+                type="search"
+                value={ingredientQuery}
+                onChange={(event) => {
+                  setIngredientQuery(event.target.value);
+                  if (event.target.value.trim()) clearRecipeFocus();
+                }}
+                placeholder="Search ingredients"
+                autoComplete="off"
+                enterKeyHint="search"
+                inputMode="search"
+                disabled={focusingRecipe}
+              />
+            </label>
+
+            <label className="field grocery-search">
+              <span className="sr-only">Search recipes</span>
+              <input
+                type="search"
+                value={recipeQuery}
+                onChange={(event) => {
+                  setRecipeQuery(event.target.value);
+                  setSelectedRecipeId(null);
+                }}
+                placeholder="Search recipes"
+                autoComplete="off"
+                enterKeyHint="search"
+                inputMode="search"
+              />
+            </label>
+          </div>
+
+          {recipeMatches.length > 0 ? (
+            <div className="grocery-recipe-hits" role="listbox" aria-label="Matching recipes">
+              {recipeMatches.map((recipe) => (
+                <button
+                  key={recipe.id}
+                  type="button"
+                  className="grocery-recipe-hit"
+                  role="option"
+                  onClick={() => pickRecipe(recipe)}
+                >
+                  <span className="grocery-recipe-hit__name">{recipe.name}</span>
+                  <span className="grocery-recipe-hit__meta">
+                    {recipe.ingredientKeys.length} ingredients
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       </section>
 
-      {shopping.length > 0 ? (
-        <section className="block block--tight">
-          <div className="card">
-            <p className="label" style={{ marginBottom: "0.15rem" }}>
-              Shopping · {shopping.length}
-            </p>
-            <p className="small sub" style={{ marginBottom: "0.5rem" }}>
-              At the store — mark Bought when it&apos;s in the cart.
-            </p>
-            <FoldableAisles items={shopping} keyPrefix="shop" forceOpen={searching} />
-          </div>
-        </section>
+      {focusingRecipe && selectedRecipe ? (
+        <>
+          <section className="block block--tight">
+            <div className="card">
+              <div className="row-between" style={{ gap: "0.75rem" }}>
+                <div style={{ minWidth: 0 }}>
+                  <p className="label" style={{ marginBottom: "0.15rem" }}>
+                    For this recipe
+                  </p>
+                  <p className="card__title" style={{ margin: 0 }}>
+                    {selectedRecipe.name}
+                  </p>
+                  <p className="small sub" style={{ marginTop: "0.25rem" }}>
+                    {recipeFocusItems.filter((item) => item.bucket === "home").length}/
+                    {recipeFocusItems.length} at home · rest of pantry hidden
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm nowrap"
+                  onClick={clearRecipeFocus}
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          </section>
+          <BucketSections items={recipeFocusItems} forceOpen />
+          {recipeFocusItems.length === 0 ? (
+            <section className="block block--tight">
+              <div className="card">
+                <p className="small muted">No pantry ingredients mapped for this recipe.</p>
+              </div>
+            </section>
+          ) : null}
+        </>
       ) : null}
 
-      {missing.length > 0 ? (
-        <section className="block block--tight">
-          <div className="card">
-            <p className="label" style={{ marginBottom: "0.15rem" }}>
-              Not at home · {missing.length}
-            </p>
-            <p className="small sub" style={{ marginBottom: "0.5rem" }}>
-              Add to shopping, or mark Have if it&apos;s already in the kitchen.
-            </p>
-            <FoldableAisles items={missing} keyPrefix="miss" forceOpen={searching} />
-          </div>
-        </section>
+      {showFullInventory ? (
+        <BucketSections items={ingredientFiltered} forceOpen={searchingIngredients} />
       ) : null}
 
-      {atHome.length > 0 ? (
-        <section className="block block--tight">
-          <div className="card">
-            <p className="label" style={{ marginBottom: "0.15rem" }}>
-              At home · {atHome.length}
-            </p>
-            <FoldableAisles items={atHome} keyPrefix="home" forceOpen={searching} />
-          </div>
-        </section>
-      ) : null}
-
-      {filtered.length === 0 && total > 0 ? (
+      {showFullInventory && ingredientFiltered.length === 0 && total > 0 ? (
         <section className="block block--tight">
           <div className="card">
             <div className="empty">
@@ -241,6 +380,20 @@ export function GroceryInventory({
               </span>
               <p className="card__title">No matches</p>
               <p className="small sub">Try a different ingredient name.</p>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {!focusingRecipe && recipeQuery.trim() && recipeMatches.length === 0 ? (
+        <section className="block block--tight">
+          <div className="card">
+            <div className="empty">
+              <span className="empty__icon">
+                <Icon name="cart" size={20} />
+              </span>
+              <p className="card__title">No recipes found</p>
+              <p className="small sub">Try another dish name.</p>
             </div>
           </div>
         </section>
