@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { isVegRecipe, type BrowseRecipe } from "@/lib/nutrition/grocery";
+import { isVegRecipe, readyToCook, type BrowseRecipe } from "@/lib/nutrition/grocery";
 import { MEAL_SLOTS, SLOT_LABEL, type Slot } from "@/lib/nutrition/recipes";
 
 const RUN_SLOTS: Slot[] = ["fuel_pre", "fuel_during", "fuel_post"];
@@ -38,12 +38,7 @@ export function RecipeBrowser({
   }, [list]);
 
   const readyNow = useMemo(
-    () =>
-      catalog
-        .filter(
-          (recipe) => MEAL_SLOTS.includes(recipe.slot) && recipe.total > 0 && recipe.pct >= 50,
-        )
-        .slice(0, 6),
+    () => readyToCook(catalog, { minPct: 100, limit: 6 }),
     [catalog],
   );
 
@@ -150,7 +145,11 @@ export function RecipeBrowser({
                         <span className="row__body">
                           <span className="row__title">{recipe.name}</span>
                           <span className="row__sub">
-                            {SLOT_LABEL[recipe.slot]} · {recipe.have}/{recipe.total} at home
+                            <span className="pill pill--good">Ready</span>
+                            <span className="muted">
+                              {" "}
+                              · {SLOT_LABEL[recipe.slot]} · {recipe.have}/{recipe.total} at home
+                            </span>
                           </span>
                         </span>
                       </Link>

@@ -8,6 +8,7 @@ import {
   toggleSupplement,
 } from "@/app/actions";
 import { AddExtraFood, type ExtraFoodOption } from "@/components/AddExtraFood";
+import { CanCookNow } from "@/components/CanCookNow";
 import { Check } from "@/components/Check";
 import { DayMealSlots } from "@/components/DayMealSlots";
 import { Icon } from "@/components/Icon";
@@ -18,7 +19,7 @@ import { SessionCard } from "@/components/SessionCard";
 import { StrengthCard } from "@/components/StrengthCard";
 import { WaterCard } from "@/components/WaterCard";
 import { dayOfWeek, formatShort, startOfWeek, weekdayShort } from "@/lib/date";
-import { buildBrowseCatalog } from "@/lib/nutrition/grocery";
+import { buildBrowseCatalog, readyToCook } from "@/lib/nutrition/grocery";
 import {
   candidatesFor,
   MEAL_SLOTS,
@@ -82,6 +83,7 @@ export async function DayView({
     CATALOG_SLOTS.flatMap((slot) => candidatesFor(slot, diet, allergies)).map((recipe) => recipe.id),
   );
   const catalog = buildBrowseCatalog(pantry, (recipe) => allowedIds.has(recipe.id));
+  const cookNow = readyToCook(catalog, { minPct: 100, limit: 6 });
 
   return (
     <>
@@ -223,6 +225,16 @@ export async function DayView({
                 Estimated from an average build. <Link href="/settings">Add your stats</Link>.
               </p>
             ) : null}
+
+            <hr className="card__divide" />
+
+            <CanCookNow
+              date={date}
+              weekStart={weekStart}
+              pantryCount={pantry.size}
+              recipes={cookNow}
+              meals={meals}
+            />
 
             <hr className="card__divide" />
 

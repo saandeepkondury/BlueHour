@@ -6,7 +6,12 @@ import { useRouter } from "next/navigation";
 import { addRecipeToDay, clearDayMeal, toggleMeal } from "@/app/actions";
 import { Check } from "@/components/Check";
 import { Icon } from "@/components/Icon";
-import { isVegRecipe, type BrowseRecipe } from "@/lib/nutrition/grocery";
+import {
+  isVegRecipe,
+  readinessBand,
+  type BrowseRecipe,
+  type ReadyBand,
+} from "@/lib/nutrition/grocery";
 import { MEAL_SLOTS, SLOT_LABEL, type Slot } from "@/lib/nutrition/recipes";
 
 type DayMeal = {
@@ -29,20 +34,38 @@ const CATALOG_SLOT_ORDER: Slot[] = [
   "fuel_post",
 ];
 
+const READY_BANDS: { key: ReadyBand; label: string }[] = [
+  { key: "ready", label: "Ready" },
+  { key: "almost", label: "Almost" },
+  { key: "need", label: "Need more" },
+];
+
 type DietGroup = {
   key: "veg" | "non-veg";
   label: string;
   recipes: BrowseRecipe[];
 };
 
-type SlotGroup = {
-  slot: Slot;
+type BandGroup = {
+  key: ReadyBand;
   label: string;
   diets: DietGroup[];
 };
 
+type SlotGroup = {
+  slot: Slot;
+  label: string;
+  bands: BandGroup[];
+};
+
+function sortByReadiness(recipes: BrowseRecipe[]): BrowseRecipe[] {
+  return [...recipes].sort(
+    (a, b) => b.pct - a.pct || b.protein - a.protein || a.name.localeCompare(b.name),
+  );
+}
+
 function dietGroups(recipes: BrowseRecipe[]): DietGroup[] {
-  const sorted = [...recipes].sort((a, b) => a.name.localeCompare(b.name));
+  const sorted = sortByReadiness(recipes);
   return [
     {
       key: "veg" as const,
@@ -55,6 +78,26 @@ function dietGroups(recipes: BrowseRecipe[]): DietGroup[] {
       recipes: sorted.filter((recipe) => !isVegRecipe(recipe)),
     },
   ].filter((group) => group.recipes.length > 0);
+}
+
+function bandGroups(recipes: BrowseRecipe[]): BandGroup[] {
+  return READY_BANDS.map((band) => {
+    const inBand = recipes.filter((recipe) => readinessBand(recipe) === band.key);
+    const diets = dietGroups(inBand);
+    if (diets.length === 0) return null;
+    return { key: band.key, label: band.label, diets };
+  }).filter((group): group is BandGroup => group !== null);
+}
+
+function readinessSubtitle(recipe: BrowseRecipe): string {
+  const missing = Math.max(0, recipe.total - recipe.have);
+  const pantry =
+    recipe.total > 0
+      ? missing === 0
+        ? `${recipe.have}/${recipe.total} at home`
+        : `${recipe.have}/${recipe.total} at home · missing ${missing}`
+      : "No ingredients listed";
+  return `${pantry} · ${recipe.calories} kcal · ${recipe.protein}g protein`;
 }
 
 export function DayMealSlots({
@@ -99,12 +142,12 @@ export function DayMealSlots({
     return slotOrder
       .map((slot) => {
         const recipes = matches.filter((recipe) => recipe.slot === slot);
-        const diets = dietGroups(recipes);
-        if (diets.length === 0) return null;
+        const bands = bandGroups(recipes);
+        if (bands.length === 0) return null;
         return {
           slot,
           label: slot === picking ? `${SLOT_LABEL[slot]} · this meal` : SLOT_LABEL[slot],
-          diets,
+          bands,
         };
       })
       .filter((group): group is SlotGroup => group !== null);
@@ -271,46 +314,58 @@ export function DayMealSlots({
                   {catalogGroups.map((group) => (
                     <div className="meal-group" key={group.slot}>
                       <p className="label meal-group__label">{group.label}</p>
-                      {group.diets.map((diet) => (
-                        <div className="meal-group meal-group--diet" key={diet.key}>
-                          <p className="label meal-group__label meal-group__label--diet">
-                            {diet.label}
+                      {group.bands.map((band) => (
+                        <div className="meal-group meal-group--band" key={band.key}>
+                          <p className="label meal-group__label meal-group__label--band">
+                            {band.label}
                           </p>
-                          <div className="rows">
-                            {diet.recipes.map((recipe) => {
-                              const selected =
-                                mealBySlot.get(picking)?.recipeId === recipe.id;
-                              return (
-                                <div
-                                  className={selected ? "row row--done" : "row"}
-                                  key={recipe.id}
-                                >
-                                  <button
-                                    type="button"
-                                    className="row__hit"
-                                    disabled={pending}
-                                    onClick={() => pick(picking, recipe.id)}
-                                  >
-                                    <span className="row__body">
-                                      <span className="row__title">{recipe.name}</span>
-                                      <span className="row__sub">
-                                        {recipe.calories} kcal · {recipe.protein}g protein
-                                      </span>
-                                    </span>
-                                    {selected ? <Icon name="check" size={18} /> : null}
-                                  </button>
-                                  <Link
-                                    href={`/recipe/${recipe.id}?week=${weekStart}&date=${date}&slot=${picking}`}
-                                    prefetch={false}
-                                    className="iconbtn"
-                                    aria-label={`Open ${recipe.name} recipe`}
-                                  >
-                                    <Icon name="chevron" size={16} />
-                                  </Link>
-                                </div>
-                              );
-                            })}
-                          </div>
+                          {band.diets.map((diet) => (
+                            <div className="meal-group meal-group--diet" key={diet.key}>
+                              <p className="label meal-group__label meal-group__label--diet">
+                                {diet.label}
+                              </p>
+                              <div className="rows">
+                                {diet.recipes.map((recipe) => {
+                                  const selected =
+                                    mealBySlot.get(picking)?.recipeId === recipe.id;
+                                  const status = readinessBand(recipe);
+                                  return (
+                                    <div
+                                      className={selected ? "row row--done" : "row"}
+                                      key={recipe.id}
+                                    >
+                                      <button
+                                        type="button"
+                                        className="row__hit"
+                                        disabled={pending}
+                                        onClick={() => pick(picking, recipe.id)}
+                                      >
+                                        <span className="row__body">
+                                          <span className="row__title">{recipe.name}</span>
+                                          <span className="row__sub">{readinessSubtitle(recipe)}</span>
+                                        </span>
+                                        {selected ? (
+                                          <Icon name="check" size={18} />
+                                        ) : status === "ready" ? (
+                                          <span className="pill pill--good">Ready</span>
+                                        ) : status === "almost" ? (
+                                          <span className="pill pill--accent">Almost</span>
+                                        ) : null}
+                                      </button>
+                                      <Link
+                                        href={`/recipe/${recipe.id}?week=${weekStart}&date=${date}&slot=${picking}`}
+                                        prefetch={false}
+                                        className="iconbtn"
+                                        aria-label={`Open ${recipe.name} recipe`}
+                                      >
+                                        <Icon name="chevron" size={16} />
+                                      </Link>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
