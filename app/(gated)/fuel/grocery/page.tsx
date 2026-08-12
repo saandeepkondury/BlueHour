@@ -7,6 +7,7 @@ import { addDays, formatRange, startOfWeek, todayISO } from "@/lib/date";
 import {
   buildGroceryListDetailed,
   mergeGroceryWithBuyList,
+  normalizeGroceryKey,
 } from "@/lib/nutrition/grocery";
 import {
   ensureWeekMeals,
@@ -33,14 +34,16 @@ export default async function GroceryPage({
     getPantryHaveKeys(),
   ]);
   const weekItems = buildGroceryListDetailed(recipeIds).flatMap((aisle) => aisle.items);
-  const allItems = mergeGroceryWithBuyList(weekItems, onBuyList);
+  const pantryKeys = new Set([...pantry].map(normalizeGroceryKey));
+  const buyKeys = new Set([...onBuyList].map(normalizeGroceryKey));
+  const allItems = mergeGroceryWithBuyList(weekItems, buyKeys);
 
-  const atHome = allItems.filter((item) => pantry.has(item.key));
+  const atHome = allItems.filter((item) => pantryKeys.has(item.key));
   const missing = allItems.filter(
-    (item) => !pantry.has(item.key) && !onBuyList.has(item.key),
+    (item) => !pantryKeys.has(item.key) && !buyKeys.has(item.key),
   );
   const shopping = allItems.filter(
-    (item) => onBuyList.has(item.key) && !pantry.has(item.key),
+    (item) => buyKeys.has(item.key) && !pantryKeys.has(item.key),
   );
 
   const total = allItems.length;

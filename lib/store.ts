@@ -22,6 +22,7 @@ import { addDays, startOfWeek, todayISO } from "@/lib/date";
 import { generatePlan } from "@/lib/plan/generate";
 import type { WorkoutType } from "@/lib/plan/types";
 import { buildDayPlan, sumMacros, type PlannedMeal } from "@/lib/nutrition/meal-plan";
+import { normalizeGroceryKey } from "@/lib/nutrition/grocery";
 import { candidatesFor, parseAllergies, recipeById, type Diet, type Slot } from "@/lib/nutrition/recipes";
 import {
   computeTargets,
@@ -589,7 +590,7 @@ export async function getGroceryChecks(weekStart: string): Promise<Set<string>> 
     .select()
     .from(groceryChecks)
     .where(and(eq(groceryChecks.weekStart, weekStart), eq(groceryChecks.checked, 1)));
-  return new Set(rows.map((row) => row.itemKey));
+  return new Set(rows.map((row) => normalizeGroceryKey(row.itemKey)));
 }
 
 /** Marks an item on this week's shopping list. Does not touch the pantry. */
@@ -599,9 +600,26 @@ export async function toggleGroceryCheck(
   checked: boolean,
 ): Promise<void> {
   await ready();
+  const key = normalizeGroceryKey(itemKey);
+
+  // Drop legacy alias / `name|unit` rows for the same identity so checks stay unique.
+  const weekRows = await db
+    .select()
+    .from(groceryChecks)
+    .where(eq(groceryChecks.weekStart, weekStart));
+  for (const row of weekRows) {
+    if (row.itemKey !== key && normalizeGroceryKey(row.itemKey) === key) {
+      await db
+        .delete(groceryChecks)
+        .where(
+          and(eq(groceryChecks.weekStart, weekStart), eq(groceryChecks.itemKey, row.itemKey)),
+        );
+    }
+  }
+
   await db
     .insert(groceryChecks)
-    .values({ weekStart, itemKey, checked: checked ? 1 : 0 })
+    .values({ weekStart, itemKey: key, checked: checked ? 1 : 0 })
     .onConflictDoUpdate({
       target: [groceryChecks.weekStart, groceryChecks.itemKey],
       set: { checked: checked ? 1 : 0 },
@@ -618,19 +636,27 @@ export async function resetGroceryChecks(weekStart: string): Promise<void> {
 export async function getPantryHaveKeys(): Promise<Set<string>> {
   await ready();
   const rows = await db.select().from(pantryItems).where(eq(pantryItems.haveAtHome, 1));
-  return new Set(rows.map((row) => row.itemKey));
+  return new Set(rows.map((row) => normalizeGroceryKey(row.itemKey)));
 }
 
 export async function setPantryHave(itemKey: string, have: boolean): Promise<void> {
   await ready();
+  const key = normalizeGroceryKey(itemKey);
   const updatedAt = new Date().toISOString();
-  if (!have) {
-    await db.delete(pantryItems).where(eq(pantryItems.itemKey, itemKey));
-    return;
+
+  // Clear every stored spelling / legacy unit key for this identity.
+  const rows = await db.select().from(pantryItems);
+  for (const row of rows) {
+    if (row.itemKey === key || normalizeGroceryKey(row.itemKey) === key) {
+      await db.delete(pantryItems).where(eq(pantryItems.itemKey, row.itemKey));
+    }
   }
+
+  if (!have) return;
+
   await db
     .insert(pantryItems)
-    .values({ itemKey, haveAtHome: 1, updatedAt })
+    .values({ itemKey: key, haveAtHome: 1, updatedAt })
     .onConflictDoUpdate({
       target: pantryItems.itemKey,
       set: { haveAtHome: 1, updatedAt },
