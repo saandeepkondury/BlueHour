@@ -8,7 +8,6 @@ const TABS = [
   { href: "/fuel/recipes", label: "Recipes" },
   { href: "/fuel/grocery", label: "Grocery" },
   { href: "/fuel/supplements", label: "Supplements" },
-  { href: "/fuel/race", label: "Race day" },
 ];
 
 export function FuelTabs() {
