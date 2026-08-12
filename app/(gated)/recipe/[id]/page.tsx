@@ -47,7 +47,7 @@ export default async function RecipePage({
 
   const [haveKeys, onBuyList] = await Promise.all([
     getPantryHaveKeys(),
-    getGroceryChecks(weekStart),
+    getGroceryChecks(),
   ]);
   const ready = recipeReadiness(recipe, haveKeys);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -143,7 +143,7 @@ export default async function RecipePage({
                 Ingredients
               </p>
               <p className="small sub" style={{ marginBottom: "0.5rem" }}>
-                Add missing items to this week&apos;s shopping list, or mark Bought / Missing.
+                Add missing items to your shopping list, or mark Bought / Missing.
               </p>
               <div className="grocery-lines">
                 {ingredientLines.map((item) => {
@@ -171,7 +171,6 @@ export default async function RecipePage({
                     status = "On shopping list";
                     action = (
                       <form action={markGroceryBought}>
-                        <input type="hidden" name="weekStart" value={weekStart} />
                         <input type="hidden" name="itemKey" value={item.key} />
                         <button className="btn btn--primary btn--sm nowrap" type="submit">
                           Bought
@@ -179,10 +178,9 @@ export default async function RecipePage({
                       </form>
                     );
                   } else {
-                    status = "Missing at home";
+                    status = "Not at home";
                     action = (
                       <form action={toggleGroceryItem}>
-                        <input type="hidden" name="weekStart" value={weekStart} />
                         <input type="hidden" name="itemKey" value={item.key} />
                         <input type="hidden" name="checked" value="1" />
                         <button className="btn btn--ghost btn--sm nowrap" type="submit">

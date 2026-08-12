@@ -62,7 +62,7 @@ export function CanCookNow({
       <div className="can-cook">
         <div className="can-cook__head">
           <p className="label">Can cook now</p>
-          <Link className="block__link" href={`/fuel/grocery?week=${weekStart}`}>
+          <Link className="block__link" href="/fuel/grocery">
             Grocery
           </Link>
         </div>
@@ -78,7 +78,7 @@ export function CanCookNow({
       <div className="can-cook">
         <div className="can-cook__head">
           <p className="label">Can cook now</p>
-          <Link className="pill pill--accent" href={`/fuel/grocery?week=${weekStart}`}>
+          <Link className="pill pill--accent" href="/fuel/grocery">
             {pantryCount} at home
           </Link>
         </div>
@@ -99,7 +99,7 @@ export function CanCookNow({
             Based on mains — not sauces or garnish
           </p>
         </div>
-        <Link className="pill pill--good" href={`/fuel/grocery?week=${weekStart}`}>
+        <Link className="pill pill--good" href="/fuel/grocery">
           {pantryCount} at home
         </Link>
       </div>

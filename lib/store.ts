@@ -530,53 +530,60 @@ export async function getWaterHistory() {
     .orderBy(desc(dayLogs.date));
 }
 
-// ---------- grocery ----------
+// ---------- grocery (global buy list) ----------
 
-export async function getGroceryChecks(weekStart: string): Promise<Set<string>> {
+/** Sentinel weekStart so shopping checks persist across weeks. */
+export const GLOBAL_GROCERY_WEEK = "global";
+
+/**
+ * Items on the persistent shopping list.
+ * Merges the global sentinel row with any legacy week-scoped checks.
+ */
+export async function getGroceryChecks(_weekStart?: string): Promise<Set<string>> {
   await ready();
+  void _weekStart;
   const rows = await db
     .select()
     .from(groceryChecks)
-    .where(and(eq(groceryChecks.weekStart, weekStart), eq(groceryChecks.checked, 1)));
+    .where(eq(groceryChecks.checked, 1));
   return new Set(rows.map((row) => normalizeGroceryKey(row.itemKey)));
 }
 
-/** Marks an item on this week's shopping list. Does not touch the pantry. */
+/** Marks an item on the persistent shopping list. Does not touch the pantry. */
 export async function toggleGroceryCheck(
-  weekStart: string,
+  _weekStart: string | undefined,
   itemKey: string,
   checked: boolean,
 ): Promise<void> {
   await ready();
   const key = normalizeGroceryKey(itemKey);
+  void _weekStart;
 
-  // Drop legacy alias / `name|unit` rows for the same identity so checks stay unique.
-  const weekRows = await db
-    .select()
-    .from(groceryChecks)
-    .where(eq(groceryChecks.weekStart, weekStart));
-  for (const row of weekRows) {
-    if (row.itemKey !== key && normalizeGroceryKey(row.itemKey) === key) {
+  // Collapse legacy week rows + alias keys for this identity into the global list.
+  const allRows = await db.select().from(groceryChecks);
+  for (const row of allRows) {
+    if (normalizeGroceryKey(row.itemKey) === key) {
       await db
         .delete(groceryChecks)
         .where(
-          and(eq(groceryChecks.weekStart, weekStart), eq(groceryChecks.itemKey, row.itemKey)),
+          and(eq(groceryChecks.weekStart, row.weekStart), eq(groceryChecks.itemKey, row.itemKey)),
         );
     }
   }
 
   await db
     .insert(groceryChecks)
-    .values({ weekStart, itemKey: key, checked: checked ? 1 : 0 })
+    .values({ weekStart: GLOBAL_GROCERY_WEEK, itemKey: key, checked: checked ? 1 : 0 })
     .onConflictDoUpdate({
       target: [groceryChecks.weekStart, groceryChecks.itemKey],
       set: { checked: checked ? 1 : 0 },
     });
 }
 
-export async function resetGroceryChecks(weekStart: string): Promise<void> {
+export async function resetGroceryChecks(_weekStart?: string): Promise<void> {
   await ready();
-  await db.delete(groceryChecks).where(eq(groceryChecks.weekStart, weekStart));
+  void _weekStart;
+  await db.delete(groceryChecks);
 }
 
 // ---------- pantry (at home) ----------

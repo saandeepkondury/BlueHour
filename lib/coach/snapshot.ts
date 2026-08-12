@@ -185,7 +185,7 @@ export async function buildSnapshot(current: Profile, today: string): Promise<Sn
       .select()
       .from(strengthSessions)
       .where(and(gte(strengthSessions.date, today), lte(strengthSessions.date, aheadEnd))),
-    db.select().from(groceryChecks).where(eq(groceryChecks.weekStart, weekStart)),
+    db.select().from(groceryChecks).where(eq(groceryChecks.checked, 1)),
     db.select().from(fuelChecks).where(and(gte(fuelChecks.date, from), lte(fuelChecks.date, today))),
     db.select().from(supplementLogs).where(and(gte(supplementLogs.date, from), lte(supplementLogs.date, today))),
     db

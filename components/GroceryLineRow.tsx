@@ -1,12 +1,13 @@
 import type { GroceryLine } from "@/lib/nutrition/grocery";
 import { formatQty } from "@/lib/nutrition/grocery";
 
-/** One grocery line: name, optional qty, and every dish that needs it. */
+/** One grocery line: name, optional qty, and dishes that use it. */
 export function GroceryLineRow({
   item,
   action,
   status,
   showQty = true,
+  showDishes = true,
 }: {
   item: GroceryLine;
   action: React.ReactNode;
@@ -14,6 +15,8 @@ export function GroceryLineRow({
   status?: string;
   /** Shopping list hides amounts; recipe pages can keep them. */
   showQty?: boolean;
+  /** Inventory list can hide the long “used in” dish dump. */
+  showDishes?: boolean;
 }) {
   return (
     <div className="grocery-line">
@@ -24,16 +27,23 @@ export function GroceryLineRow({
         </div>
         {status ? (
           <p className="grocery-line__for">{status}</p>
-        ) : item.dishes.length > 0 ? (
+        ) : showDishes && item.dishes.length > 0 ? (
           <div className="grocery-line__dishes">
             <p className="grocery-line__for">
-              {item.dishes.length === 1 ? "For" : `For ${item.dishes.length} meals`}
+              {item.dishes.length === 1
+                ? `Used in ${item.dishes[0]}`
+                : `Used in ${item.dishes.length} recipes`}
             </p>
-            <ul className="grocery-line__list">
-              {item.dishes.map((dish) => (
-                <li key={dish}>{dish}</li>
-              ))}
-            </ul>
+            {item.dishes.length > 1 ? (
+              <ul className="grocery-line__list">
+                {item.dishes.slice(0, 4).map((dish) => (
+                  <li key={dish}>{dish}</li>
+                ))}
+                {item.dishes.length > 4 ? (
+                  <li key="more">+{item.dishes.length - 4} more</li>
+                ) : null}
+              </ul>
+            ) : null}
           </div>
         ) : null}
       </div>

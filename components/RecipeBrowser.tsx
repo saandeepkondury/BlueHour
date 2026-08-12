@@ -170,8 +170,8 @@ export function RecipeBrowser({
         <section className="block block--tight">
           <div className="card">
             <p className="small sub">
-              Mark what you have on{" "}
-              <Link href={`/fuel/grocery?week=${weekStart}`}>Grocery</Link> to highlight dishes you
+              Mark mains you have — chicken, rice, paneer — on{" "}
+              <Link href="/fuel/grocery">Grocery</Link> to unlock dishes you
               can cook.
             </p>
           </div>

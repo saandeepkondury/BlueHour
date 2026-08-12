@@ -217,6 +217,7 @@ export async function togglePantryItem(formData: FormData): Promise<void> {
   const have = str(formData.get("have")) === "1";
   if (!itemKey) return;
   await setPantryHave(itemKey, have);
+  revalidatePath("/");
   revalidatePath("/fuel");
   revalidatePath("/fuel/grocery");
   revalidatePath("/fuel/recipes");
@@ -282,34 +283,32 @@ export async function setSupplementPref(formData: FormData): Promise<void> {
 }
 
 export async function toggleGroceryItem(formData: FormData): Promise<void> {
-  const weekStart = str(formData.get("weekStart"));
   const itemKey = str(formData.get("itemKey"));
   const checked = str(formData.get("checked")) === "1";
-  if (!weekStart || !itemKey) return;
-  await toggleGroceryCheck(weekStart, itemKey, checked);
+  if (!itemKey) return;
+  await toggleGroceryCheck(undefined, itemKey, checked);
   revalidatePath("/fuel/grocery");
   revalidatePath("/fuel");
   revalidatePath("/fuel/recipes");
+  revalidatePath("/");
   revalidatePath("/recipe", "layout");
 }
 
 /** Checked off at the store: stock pantry and remove from the buy list. */
 export async function markGroceryBought(formData: FormData): Promise<void> {
-  const weekStart = str(formData.get("weekStart"));
   const itemKey = str(formData.get("itemKey"));
-  if (!weekStart || !itemKey) return;
+  if (!itemKey) return;
   await setPantryHave(itemKey, true);
-  await toggleGroceryCheck(weekStart, itemKey, false);
+  await toggleGroceryCheck(undefined, itemKey, false);
   revalidatePath("/fuel/grocery");
   revalidatePath("/fuel");
   revalidatePath("/fuel/recipes");
+  revalidatePath("/");
   revalidatePath("/recipe", "layout");
 }
 
-export async function clearGrocery(formData: FormData): Promise<void> {
-  const weekStart = str(formData.get("weekStart"));
-  if (!weekStart) return;
-  await resetGroceryChecks(weekStart);
+export async function clearGrocery(_formData: FormData): Promise<void> {
+  await resetGroceryChecks();
   revalidatePath("/fuel/grocery");
 }
 
@@ -319,7 +318,6 @@ export async function reshuffleWeek(formData: FormData): Promise<void> {
   if (!weekStart) return;
   await ensureWeekMeals(weekStart);
   await reshuffleWeekMeals(weekStart);
-  await resetGroceryChecks(weekStart);
   refresh();
 }
 

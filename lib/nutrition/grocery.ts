@@ -31,7 +31,7 @@ export interface GroceryItem {
 }
 
 export interface GroceryLine extends GroceryItem {
-  /** Recipe names that need this ingredient this week. */
+  /** Recipe names that use this ingredient (catalog context). */
   dishes: string[];
 }
 
@@ -123,6 +123,63 @@ function finalizeAmounts(amounts: QtyAmount[]): Pick<GroceryItem, "qty" | "unit"
   }
   const primary = primaryAmount(cleaned);
   return { qty: primary.qty, unit: primary.unit, amounts: cleaned };
+}
+
+/**
+ * Constant pantry inventory: one line per deduped ingredient identity across
+ * the full recipe catalog. Membership does not depend on the week plan.
+ */
+export function buildPantryInventory(): GroceryLine[] {
+  const merged = new Map<
+    string,
+    {
+      key: string;
+      item: string;
+      aisle: Aisle;
+      dishes: string[];
+    }
+  >();
+
+  for (const recipe of RECIPES) {
+    for (const ingredient of recipe.ingredients) {
+      const identity = resolveIngredientIdentity(ingredient.item);
+      const existing = merged.get(identity.key);
+      if (existing) {
+        if (!existing.dishes.includes(recipe.name)) existing.dishes.push(recipe.name);
+      } else {
+        merged.set(identity.key, {
+          key: identity.key,
+          item: identity.label,
+          aisle: ingredient.aisle,
+          dishes: [recipe.name],
+        });
+      }
+    }
+  }
+
+  return [...merged.values()]
+    .map((item) => ({
+      key: item.key,
+      item: item.item,
+      qty: 0,
+      unit: "ea",
+      aisle: item.aisle,
+      dishes: [...item.dishes].sort((a, b) => a.localeCompare(b)),
+    }))
+    .sort((a, b) => {
+      const aisleDiff = AISLE_ORDER.indexOf(a.aisle) - AISLE_ORDER.indexOf(b.aisle);
+      if (aisleDiff !== 0) return aisleDiff;
+      return a.item.localeCompare(b.item);
+    });
+}
+
+/** Group inventory lines by aisle for sectioned lists. */
+export function groupGroceryByAisle(items: GroceryLine[]): GroceryAisleDetailed[] {
+  return AISLE_ORDER.map((aisle) => ({
+    aisle,
+    label: AISLE_LABEL[aisle],
+    items: items.filter((item) => item.aisle === aisle),
+  })).filter((group) => group.items.length > 0);
 }
 
 /** Rolls a week of planned recipes into one shopping list, merged by item identity. */
