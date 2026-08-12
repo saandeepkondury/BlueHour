@@ -8,8 +8,9 @@ import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { Shell } from "@/components/Shell";
 import { TodayHero } from "@/components/TodayHero";
 import { formatShort, startOfWeek, todayISO } from "@/lib/date";
+import { personalBestPace } from "@/lib/format";
 import { closeOutMissedDays, longRunOptions } from "@/lib/plan/adapt";
-import { getAllWorkouts, getDayBundle, getProfile } from "@/lib/store";
+import { getAllWorkouts, getDayBundle, getProfile, getTrainingWorkoutLogs } from "@/lib/store";
 import { pendingSuggestions, refreshCoach } from "@/lib/coach/store";
 import type { Phase } from "@/lib/plan/types";
 
@@ -23,9 +24,14 @@ export default async function TodayPage() {
   // Guardrails are cheap. The model runs at most once a day, from cron or Coach.
   await refreshCoach(current, { skipModel: true });
 
-  const [bundle, pending] = await Promise.all([getDayBundle(today), pendingSuggestions()]);
+  const [bundle, pending, runLogs] = await Promise.all([
+    getDayBundle(today),
+    pendingSuggestions(),
+    getTrainingWorkoutLogs(),
+  ]);
   const all = await getAllWorkouts();
   const totalWeeks = all.length > 0 ? Math.max(...all.map((day) => day.week)) : 0;
+  const bestPace = personalBestPace(runLogs);
 
   if (!bundle) {
     const first = all[0];
@@ -40,6 +46,7 @@ export default async function TodayPage() {
             phase="base"
             week={0}
             totalWeeks={totalWeeks}
+            bestPace={bestPace}
           />
           <section className="block">
             <div className="card">
@@ -84,6 +91,7 @@ export default async function TodayPage() {
           phase={bundle.workout.phase as Phase}
           week={bundle.workout.week}
           totalWeeks={totalWeeks}
+          bestPace={bestPace}
         />
 
         {pending.length > 0 ? (

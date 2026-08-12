@@ -1,6 +1,12 @@
 import { BrandMark } from "@/components/Brand";
 import { Ring } from "@/components/Ring";
 import { daysBetween, formatShort } from "@/lib/date";
+import {
+  formatDuration,
+  formatMiles,
+  formatPacePerMi,
+  type PersonalBestPace,
+} from "@/lib/format";
 import { PHASE_LABEL, type Phase } from "@/lib/plan/types";
 
 /** The one drawing in the app: a Hill Country ridge, flat and thin. */
@@ -30,6 +36,7 @@ export function TodayHero({
   phase,
   week,
   totalWeeks,
+  bestPace = null,
 }: {
   today: string;
   raceDate: string;
@@ -37,6 +44,7 @@ export function TodayHero({
   phase: Phase;
   week: number;
   totalWeeks: number;
+  bestPace?: PersonalBestPace | null;
 }) {
   const days = daysBetween(today, raceDate);
   const isRaceDay = days === 0;
@@ -57,6 +65,21 @@ export function TodayHero({
             {past ? "13.1" : days}
             <span>{past ? "miles done" : isRaceDay ? "go" : days === 1 ? "day" : "days"}</span>
           </p>
+          {bestPace ? (
+            <p
+              className="hero__best"
+              aria-label={`Personal best pace ${formatPacePerMi(bestPace.paceSecPerMi)} per mile, ${formatMiles(bestPace.distanceMi)} miles in ${formatDuration(bestPace.durationSec)}`}
+            >
+              <span className="label">Personal best</span>
+              <span className="hero__best-pace">
+                {formatPacePerMi(bestPace.paceSecPerMi)}
+                <span>/mi</span>
+              </span>
+              <span className="hero__best-detail">
+                {formatMiles(bestPace.distanceMi)} mi · {formatDuration(bestPace.durationSec)}
+              </span>
+            </p>
+          ) : null}
           <p className="hero__meta">
             {raceName} · {formatShort(raceDate)} · 7:00 AM
           </p>
