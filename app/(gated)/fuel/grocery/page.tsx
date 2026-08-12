@@ -3,6 +3,7 @@ import {
   type GroceryInventoryItem,
   type GroceryRecipeOption,
 } from "@/components/GroceryInventory";
+import { groceryBucketFor } from "@/components/GroceryItemControls";
 import {
   buildPantryInventory,
   ingredientKey,
@@ -19,13 +20,10 @@ export default async function GroceryPage() {
   const pantryKeys = new Set([...pantry].map(normalizeGroceryKey));
   const buyKeys = new Set([...onBuyList].map(normalizeGroceryKey));
 
-  const items: GroceryInventoryItem[] = inventory.map((item) => {
-    let bucket: GroceryInventoryItem["bucket"];
-    if (pantryKeys.has(item.key)) bucket = "home";
-    else if (buyKeys.has(item.key)) bucket = "shopping";
-    else bucket = "missing";
-    return { ...item, bucket };
-  });
+  const items: GroceryInventoryItem[] = inventory.map((item) => ({
+    ...item,
+    bucket: groceryBucketFor(pantryKeys.has(item.key), buyKeys.has(item.key)),
+  }));
 
   const recipes: GroceryRecipeOption[] = RECIPES.map((recipe) => ({
     id: recipe.id,

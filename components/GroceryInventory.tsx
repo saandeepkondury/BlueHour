@@ -1,7 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { markGroceryBought, toggleGroceryItem, togglePantryItem } from "@/app/actions";
+import {
+  GroceryItemActions,
+  type GroceryBucket,
+} from "@/components/GroceryItemControls";
 import { GroceryLineRow } from "@/components/GroceryLineRow";
 import { Icon } from "@/components/Icon";
 import { Ring } from "@/components/Ring";
@@ -10,8 +13,7 @@ import {
   type GroceryLine,
 } from "@/lib/nutrition/grocery";
 
-export type GroceryBucket = "shopping" | "missing" | "home";
-
+export type { GroceryBucket };
 export type GroceryInventoryItem = GroceryLine & {
   bucket: GroceryBucket;
 };
@@ -30,50 +32,12 @@ function itemStatus(item: GroceryLine): string | undefined {
 }
 
 function ItemActions({ item }: { item: GroceryInventoryItem }) {
-  if (item.bucket === "shopping") {
-    return (
-      <form action={markGroceryBought}>
-        <input type="hidden" name="itemKey" value={item.key} />
-        <button className="btn btn--primary btn--sm nowrap" type="submit">
-          Bought
-        </button>
-      </form>
-    );
-  }
-
-  if (item.bucket === "missing") {
-    return (
-      <div className="btnrow" style={{ gap: "0.35rem" }}>
-        <form action={togglePantryItem}>
-          <input type="hidden" name="itemKey" value={item.key} />
-          <input type="hidden" name="have" value="1" />
-          <button className="btn btn--quiet btn--sm nowrap" type="submit">
-            Have
-          </button>
-        </form>
-        <form action={toggleGroceryItem}>
-          <input type="hidden" name="itemKey" value={item.key} />
-          <input type="hidden" name="checked" value="1" />
-          <button className="btn btn--ghost btn--sm nowrap" type="submit">
-            Add
-          </button>
-        </form>
-      </div>
-    );
-  }
-
   return (
-    <form action={togglePantryItem}>
-      <input type="hidden" name="itemKey" value={item.key} />
-      <input type="hidden" name="have" value="0" />
-      <button
-        className="btn btn--quiet btn--sm nowrap"
-        type="submit"
-        aria-label={`Mark ${item.item} as missing`}
-      >
-        Missing
-      </button>
-    </form>
+    <GroceryItemActions
+      bucket={item.bucket}
+      itemKey={item.key}
+      itemName={item.item}
+    />
   );
 }
 
