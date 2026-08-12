@@ -1,6 +1,7 @@
 import {
   addCompatibleQty,
   canonicalizeStoredItemKey,
+  ingredientRole,
   normalizeUnit,
   resolveIngredientIdentity,
 } from "./ingredient-identity";
@@ -293,15 +294,38 @@ export function mergeGroceryWithBuyList(
   return [...byKey.values()];
 }
 
-/** How many of a recipe's ingredients are already at home. */
+/** Unique main (non-seasoning) ingredients for a recipe, in display order. */
+export function mainIngredientLines(
+  recipe: Recipe,
+): { key: string; label: string }[] {
+  const seen = new Map<string, string>();
+  for (const ingredient of recipe.ingredients) {
+    if (ingredientRole(ingredient.item) !== "main") continue;
+    const identity = resolveIngredientIdentity(ingredient.item);
+    if (!seen.has(identity.key)) seen.set(identity.key, identity.label);
+  }
+  return [...seen.entries()]
+    .map(([key, label]) => ({ key, label }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** How many of a recipe's main ingredients are already at home. */
 export function recipeReadiness(recipe: Recipe, haveKeys: Set<string>): RecipeReadiness {
   const normalizedHave = new Set([...haveKeys].map(normalizeGroceryKey));
-  const needed = new Set(recipe.ingredients.map((ing) => ingredientKey(ing)));
-  const total = needed.size;
+  const mains = mainIngredientLines(recipe);
+  // Fall back to all ingredients when a recipe somehow has no classified mains.
+  const needed =
+    mains.length > 0
+      ? mains
+      : [...new Set(recipe.ingredients.map((ing) => ingredientKey(ing)))].map((key) => ({
+          key,
+          label: key,
+        }));
+  const total = needed.length;
   if (total === 0) return { recipe, have: 0, total: 0, pct: 0 };
   let have = 0;
-  for (const key of needed) {
-    if (normalizedHave.has(key)) have += 1;
+  for (const item of needed) {
+    if (normalizedHave.has(item.key)) have += 1;
   }
   return { recipe, have, total, pct: Math.round((have / total) * 100) };
 }
@@ -342,9 +366,14 @@ export interface BrowseRecipe {
   calories: number;
   protein: number;
   minutes: number;
+  /** Main-ingredient pantry coverage (seasonings/garnishes excluded). */
   have: number;
   total: number;
   pct: number;
+  /** All main ingredient labels for the dish. */
+  mains: string[];
+  /** Main ingredient labels currently marked at home. */
+  mainsHave: string[];
 }
 
 export function isVegRecipe(recipe: Pick<BrowseRecipe, "diet">): boolean {
@@ -396,9 +425,14 @@ export function buildBrowseCatalog(
   haveKeys: Set<string>,
   allow: (recipe: Recipe) => boolean,
 ): BrowseRecipe[] {
+  const normalizedHave = new Set([...haveKeys].map(normalizeGroceryKey));
   return RECIPES.filter(allow)
     .map((recipe) => {
-      const ready = recipeReadiness(recipe, haveKeys);
+      const ready = recipeReadiness(recipe, normalizedHave);
+      const mains = mainIngredientLines(recipe);
+      const mainsHave = mains
+        .filter((item) => normalizedHave.has(item.key))
+        .map((item) => item.label);
       return {
         id: recipe.id,
         name: recipe.name,
@@ -410,6 +444,8 @@ export function buildBrowseCatalog(
         have: ready.have,
         total: ready.total,
         pct: ready.pct,
+        mains: mains.map((item) => item.label),
+        mainsHave,
       };
     })
     .sort((a, b) => b.pct - a.pct || a.name.localeCompare(b.name));

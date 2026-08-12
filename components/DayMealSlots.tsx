@@ -94,10 +94,16 @@ function readinessSubtitle(recipe: BrowseRecipe): string {
   const pantry =
     recipe.total > 0
       ? missing === 0
-        ? `${recipe.have}/${recipe.total} at home`
-        : `${recipe.have}/${recipe.total} at home · missing ${missing}`
-      : "No ingredients listed";
-  return `${pantry} · ${recipe.calories} kcal · ${recipe.protein}g protein`;
+        ? `Mains ${recipe.have}/${recipe.total}`
+        : `Mains ${recipe.have}/${recipe.total} · missing ${missing}`
+      : "No main ingredients listed";
+  const mains =
+    recipe.mainsHave.length > 0
+      ? ` · ${recipe.mainsHave.slice(0, 3).join(", ")}`
+      : recipe.mains.length > 0
+        ? ` · needs ${recipe.mains.slice(0, 3).join(", ")}`
+        : "";
+  return `${pantry}${mains} · ${recipe.calories} kcal · ${recipe.protein}g protein`;
 }
 
 export function DayMealSlots({
@@ -236,7 +242,7 @@ export function DayMealSlots({
                 >
                   <span className="row__body">
                     <span className="row__title">{slotLabel}</span>
-                    <span className="row__sub">Choose a dish</span>
+                    <span className="row__sub">Pick from Can cook now</span>
                   </span>
                 </button>
               )}
@@ -347,7 +353,7 @@ export function DayMealSlots({
                                         {selected ? (
                                           <Icon name="check" size={18} />
                                         ) : status === "ready" ? (
-                                          <span className="pill pill--good">Ready</span>
+                                          <span className="pill pill--good">Mains ready</span>
                                         ) : status === "almost" ? (
                                           <span className="pill pill--accent">Almost</span>
                                         ) : null}

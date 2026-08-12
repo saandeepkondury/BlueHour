@@ -93,7 +93,7 @@ export default async function RecipePage({
                 <>
                   <hr className="card__divide" />
                   <p className="small sub">
-                    Pantry: {ready.have}/{ready.total} ingredients at home ({ready.pct}%)
+                    Pantry: {ready.have}/{ready.total} mains at home ({ready.pct}%)
                   </p>
                 </>
               ) : null}

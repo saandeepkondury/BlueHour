@@ -284,6 +284,104 @@ export function resolveIngredientIdentity(item: string): IngredientIdentity {
   };
 }
 
+export type IngredientRole = "main" | "addon";
+
+/**
+ * Seasonings, aromatics, sauces, oils, and garnishes — nice to have, but not
+ * what decides whether you can cook the dish from what's at home.
+ */
+const ADDON_KEYS = new Set([
+  // aromatics / garnish produce
+  "cilantro",
+  "mint",
+  "lime",
+  "lime-juice",
+  "lemon",
+  "lemon-juice",
+  "garlic",
+  "ginger",
+  "ginger-garlic-paste",
+  "green-chilli",
+  "jalape-o",
+  "onion",
+  "pico-de-gallo",
+  // fats / oils / dairy toppings
+  "olive-oil",
+  "avocado-oil",
+  "mustard-oil",
+  "sesame-oil",
+  "sesame-seeds",
+  "butter",
+  "ghee",
+  "sour-cream",
+  "parmesan",
+  // sauces / condiments / sweeteners
+  "soy-sauce",
+  "ketchup",
+  "mayonnaise",
+  "honey",
+  "mustard",
+  "sriracha",
+  "sriracha-mayonnaise",
+  "chilli-flake",
+  "chilli-sauce",
+  "chilli-oil-crisp",
+  "chipotle-peppers",
+  "gochujang",
+  "rice-vinegar",
+  "mirin",
+  "oyster-sauce",
+  "worcestershire-sauce",
+  "coconut-amino",
+  "tomato-paste",
+  "adobo-sauce",
+  "red-enchilada-sauce",
+  "red-chilli-sauce",
+  "schezwan-sauce",
+  "sweet-chilli-sauce",
+  "wasabi",
+  "pickled-ginger",
+  "pickled-jalape-o",
+  "pickle",
+  // powders / seasoning blends
+  "taco-seasoning",
+  "everything-bagel-seasoning",
+  "peri-peri-seasoning",
+  "smoked-paprika",
+  "coriander-powder",
+  "turmeric-powder",
+  "kashmiri-red-chilli-powder",
+  "kasuri-methi",
+  "rajma-masala",
+  "dashi-powder",
+  "brown-sugar",
+  "sugar",
+  "red-chilly",
+  // thickeners / flours / broths (supporting, not the dish)
+  "cornstarch",
+  "flour",
+  "potato-starch",
+  "rice-flour",
+  "oat-flour",
+  "beef-broth",
+  "chicken-broth",
+  "cashew",
+]);
+
+const ADDON_NAME_HINT =
+  /\b(sauce|seasoning|powder|flakes?|paste|oil|vinegar|mayo|mayonnaise|ketchup|aminos?|broth|stock|spice|masala|paprika|wasabi|mirin|honey|sugar|syrup|extract)\b/i;
+
+/**
+ * Main = protein, starch, beans, centerpiece dairy/veg that define the dish.
+ * Addon = seasoning, acid, aromatic, oil, garnish.
+ */
+export function ingredientRole(item: string): IngredientRole {
+  const identity = resolveIngredientIdentity(item);
+  if (ADDON_KEYS.has(identity.key)) return "addon";
+  if (ADDON_NAME_HINT.test(identity.label) || ADDON_NAME_HINT.test(item)) return "addon";
+  return "main";
+}
+
 /**
  * Map a stored pantry/buy-list key (new canonical, or legacy `name|unit`) to
  * the current identity key.

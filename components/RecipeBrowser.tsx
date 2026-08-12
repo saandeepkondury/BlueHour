@@ -129,6 +129,9 @@ export function RecipeBrowser({
             <p className="label" style={{ marginBottom: "0.35rem" }}>
               Ready from your pantry
             </p>
+            <p className="small sub" style={{ marginBottom: "0.75rem" }}>
+              Dishes where the mains are at home — seasonings and garnish don&apos;t count.
+            </p>
             <div className="meal-groups">
               {readyGroups.map((group) => (
                 <div className="meal-group" key={group.key}>
@@ -145,10 +148,13 @@ export function RecipeBrowser({
                         <span className="row__body">
                           <span className="row__title">{recipe.name}</span>
                           <span className="row__sub">
-                            <span className="pill pill--good">Ready</span>
+                            <span className="pill pill--good">Mains ready</span>
                             <span className="muted">
                               {" "}
-                              · {SLOT_LABEL[recipe.slot]} · {recipe.have}/{recipe.total} at home
+                              · {SLOT_LABEL[recipe.slot]} ·{" "}
+                              {recipe.mainsHave.length > 0
+                                ? recipe.mainsHave.slice(0, 4).join(" · ")
+                                : `${recipe.have}/${recipe.total} mains`}
                             </span>
                           </span>
                         </span>

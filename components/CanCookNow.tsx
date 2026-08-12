@@ -12,9 +12,19 @@ type DayMeal = {
   recipeId: string | null;
 };
 
+function mainsSummary(recipe: BrowseRecipe): string {
+  if (recipe.mainsHave.length > 0) {
+    return recipe.mainsHave.slice(0, 4).join(" · ");
+  }
+  if (recipe.mains.length > 0) {
+    return recipe.mains.slice(0, 4).join(" · ");
+  }
+  return `${recipe.minutes} min`;
+}
+
 /**
  * Compact pantry-ready strip for Today's Fuel.
- * Assign fills the recipe's slot when empty, otherwise swaps that slot.
+ * Ready = all main ingredients at home (seasonings/garnishes ignored).
  */
 export function CanCookNow({
   date,
@@ -57,7 +67,7 @@ export function CanCookNow({
           </Link>
         </div>
         <p className="small sub">
-          Mark what you have on Grocery to unlock dishes you can cook today.
+          Mark mains you have — chicken, rice, paneer — on Grocery to unlock dishes.
         </p>
       </div>
     );
@@ -73,7 +83,8 @@ export function CanCookNow({
           </Link>
         </div>
         <p className="small sub">
-          Nothing fully ready — use shuffle on a meal to see almost-there dishes.
+          No dish has all its main ingredients yet — seasonings don&apos;t count. Shuffle a
+          meal to see almost-there options.
         </p>
       </div>
     );
@@ -82,7 +93,12 @@ export function CanCookNow({
   return (
     <div className="can-cook" style={{ opacity: pending ? 0.7 : 1 }}>
       <div className="can-cook__head">
-        <p className="label">Can cook now</p>
+        <div>
+          <p className="label">Can cook now</p>
+          <p className="small sub" style={{ marginTop: "0.15rem" }}>
+            Based on mains — not sauces or garnish
+          </p>
+        </div>
         <Link className="pill pill--good" href={`/fuel/grocery?week=${weekStart}`}>
           {pantryCount} at home
         </Link>
@@ -101,11 +117,10 @@ export function CanCookNow({
                 <span className="row__body">
                   <span className="row__title">{recipe.name}</span>
                   <span className="row__sub row__sub--wrap">
-                    <span className="pill pill--good">Ready</span>
+                    <span className="pill pill--good">Mains ready</span>
                     <span className="muted">
                       {" "}
-                      · {SLOT_LABEL[recipe.slot]} · {recipe.have}/{recipe.total} ·{" "}
-                      {recipe.minutes} min
+                      · {SLOT_LABEL[recipe.slot]} · {mainsSummary(recipe)}
                     </span>
                   </span>
                 </span>
