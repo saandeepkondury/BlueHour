@@ -16,10 +16,10 @@ const ALIAS_GROUPS: readonly (readonly string[])[] = [
   // Produce
   ["Onion", "shallot", "red onion", "white onion", "yellow onion", "purple onion", "onion (small)", "green onion", "spring onion", "spring onions", "scallion", "scallions", "scallion greens"],
   ["Bell pepper", "bell peppers", "bell peppers (mixed)", "capsicum", "capsicum (bell pepper)", "red bell pepper"],
-  ["Sprouts", "steamed sprouts", "bean sprouts"],
+  ["Sprouts", "steamed sprouts", "bean sprouts", "moong sprouts", "green moong sprouts"],
   ["Cilantro", "coriander", "fresh coriander", "fresh cilantro"],
   ["Tomato", "tomatoes", "cherry tomatoes"],
-  ["Potato", "potatoes", "yukon gold potatoes"],
+  ["Potato", "potatoes", "yukon gold potatoes", "yellow potatoes"],
   ["Jalapeño", "jalapeno", "jalapeños", "jalapenos"],
   ["Green chilli", "green chillies", "green chili", "green chilies"],
   ["Garlic", "garlic cloves", "garlic clove"],
@@ -31,6 +31,11 @@ const ALIAS_GROUPS: readonly (readonly string[])[] = [
   ["Lemon", "lemons"],
   ["Lime", "limes"],
   ["Spinach", "baby spinach"],
+  ["Blueberries", "frozen blueberries"],
+  ["Carrot", "carrots"],
+  ["Broccoli", "broccoli florets"],
+  ["Cauliflower", "cauliflower florets"],
+  ["Peas", "green peas", "frozen peas"],
 
   // Dairy / cheese
   ["Paneer", "cottage cheese", "low-fat paneer", "high-protein paneer", "high-protein low-fat paneer"],
@@ -40,22 +45,32 @@ const ALIAS_GROUPS: readonly (readonly string[])[] = [
     "nonfat greek yogurt",
     "high-protein greek yogurt",
     "greek yogurt or crema",
+    "skyr yogurt",
+    "skyr",
   ],
   ["Yogurt", "curd (yogurt)", "thick curd (yogurt)", "plain yogurt", "fat-free yogurt", "low-fat yogurt"],
   ["Mozzarella", "fat-free mozzarella", "low-fat mozzarella"],
   ["Feta", "feta cheese", "low-fat feta", "cotija or feta", "cotija cheese", "queso fresco"],
   ["Cheddar", "fat-free cheddar"],
-  ["Cream cheese", "reduced-fat cream cheese"],
-  ["Butter", "light butter", "butter or oil"],
+  ["Cream cheese", "reduced-fat cream cheese", "light cream cheese", "low-fat cream cheese"],
+  ["Butter", "light butter", "butter or oil", "reduced-fat butter"],
   ["Sour cream", "light sour cream"],
   ["Milk", "skim milk"],
+  ["Evaporated milk", "light evaporated milk"],
+  ["Coconut milk", "coconut milk beverage", "fortified coconut milk"],
+  ["Ghee", "clarified butter"],
 
   // Protein
   ["Egg", "eggs"],
+  ["Egg white", "egg whites"],
   ["Chicken breast", "chicken", "boneless chicken"],
   ["Chicken thighs", "chicken thighs (boneless)", "chicken drumsticks/thighs"],
+  ["Ground chicken", "lean ground chicken", "lean ground chicken mince", "ground chicken mince"],
   ["Ground beef", "lean ground beef", "lean ground beef (93/7)", "extra-lean ground beef", "ground beef (80/20)"],
   ["Beef (thin)", "beef (thinly sliced)", "eye of round beef (thin)"],
+  ["Shrimp", "prawns", "prawn"],
+  ["Tilapia", "tilapia fillet", "tilapia fillets"],
+  ["Turkey bacon", "turkey rasher"],
 
   // Pantry staples
   [
@@ -65,18 +80,22 @@ const ALIAS_GROUPS: readonly (readonly string[])[] = [
     "dry soya chunks (boiled)",
     "dry soya chunks (raw)",
     "dry soya chunks (soaked)",
+    "boiled soya chunks",
+    "dry soy granules",
+    "soy granules",
   ],
   ["Soy sauce", "dark soy sauce"],
   ["Ketchup", "tomato ketchup", "reduced-sugar ketchup", "low-cal ketchup"],
-  ["Mayonnaise", "mayo", "light mayo"],
+  ["Mayonnaise", "mayo", "light mayo", "light mayonnaise"],
   ["Flour", "all-purpose flour", "plain flour", "atta", "whole wheat atta"],
   ["Cornstarch", "cornflour", "corn flour"],
   ["Nori", "nori sheet", "nori sheets"],
-  ["Olive oil", "oil", "oil or ghee"],
+  ["Olive oil", "oil", "oil or ghee", "cooking spray"],
   ["Sesame seeds", "sesame seed"],
   ["Black beans", "black bean"],
-  ["Kidney beans", "boiled rajma (kidney beans)", "rajma"],
-  ["Chickpeas", "cooked chickpeas"],
+  ["Refried beans", "refried bean"],
+  ["Kidney beans", "boiled rajma (kidney beans)", "rajma", "kidney beans (rajma)"],
+  ["Chickpeas", "cooked chickpeas", "canned chickpeas", "dried chickpeas", "chole"],
   [
     "Rice (uncooked)",
     "basmati rice (dry)",
@@ -85,6 +104,8 @@ const ALIAS_GROUPS: readonly (readonly string[])[] = [
     "sushi rice (uncooked)",
     "short-grain rice (uncooked)",
     "sticky rice (uncooked)",
+    "uncooked white rice",
+    "uncooked rice",
   ],
   [
     "Rice (cooked)",
@@ -94,9 +115,22 @@ const ALIAS_GROUPS: readonly (readonly string[])[] = [
     "cooked sticky rice",
     "short-grain rice (cooked)",
     "cooked mexican rice",
+    "cooked white rice",
+    "cooked basmati rice",
   ],
-  ["Chipotle peppers", "chipotle peppers in adobo", "chipotle chilli paste"],
+  ["Pasta (cooked)", "linguine (cooked)", "cooked linguine"],
+  ["Chipotle peppers", "chipotle peppers in adobo", "chipotle chilli paste", "chipotle paste", "chipotle pepper"],
   ["Sriracha", "sriracha sauce"],
+  ["Peanuts", "roasted peanuts"],
+  ["Peanut butter", "pb"],
+  ["Makhana", "makhana (fox nuts)", "fox nuts", "makhana powder"],
+  ["Protein powder", "whey protein", "whey"],
+  ["Rolled oats", "oats", "high-protein oats"],
+  ["Dried red chillies", "dry red chillies", "guajillo chillies", "chiles de árbol", "chile de arbol"],
+  ["Tomato paste", "tomato puree"],
+  ["Chicken broth", "chicken bouillon", "tomato bouillon", "bouillon"],
+  ["Chapati", "roti", "whole wheat roti"],
+  ["Low-calorie tortilla", "protein tortillas", "low-calorie tortillas", "low-cal tortillas"],
 ];
 
 /** Prep / size words that do not change what you buy. */
@@ -176,10 +210,12 @@ for (const group of ALIAS_GROUPS) {
 
 /** Keep lookalikes distinct when stripping would otherwise collide. */
 registerAlias("sriracha mayonnaise", { key: "sriracha-mayonnaise", label: "Sriracha mayonnaise" });
+registerAlias("spicy mayonnaise", { key: "sriracha-mayonnaise", label: "Sriracha mayonnaise" });
 registerAlias("avocado oil", { key: "avocado-oil", label: "Avocado oil" });
 registerAlias("mustard oil", { key: "mustard-oil", label: "Mustard oil" });
 registerAlias("sesame oil", { key: "sesame-oil", label: "Sesame oil" });
 registerAlias("coriander powder", { key: "coriander-powder", label: "Coriander powder" });
+registerAlias("cumin powder", { key: "cumin-powder", label: "Cumin powder" });
 registerAlias("lemon juice", { key: "lemon-juice", label: "Lemon juice" });
 registerAlias("lime juice", { key: "lime-juice", label: "Lime juice" });
 registerAlias("tomato paste", { key: "tomato-paste", label: "Tomato paste" });
@@ -189,6 +225,16 @@ registerAlias("beef bone broth", { key: "beef-broth", label: "Beef broth" });
 registerAlias("egg white", { key: "egg-white", label: "Egg white" });
 registerAlias("corn tortilla", { key: "corn-tortilla", label: "Corn tortilla" });
 registerAlias("green beans", { key: "green-beans", label: "Green beans" });
+registerAlias("rice paper sheets", { key: "rice-paper", label: "Rice paper" });
+registerAlias("gochujang", { key: "gochujang", label: "Gochujang" });
+registerAlias("oyster sauce", { key: "oyster-sauce", label: "Oyster sauce" });
+registerAlias("schezwan sauce", { key: "schezwan-sauce", label: "Schezwan sauce" });
+registerAlias("sweet chilli sauce", { key: "sweet-chilli-sauce", label: "Sweet chilli sauce" });
+registerAlias("hot sauce", { key: "hot-sauce", label: "Hot sauce" });
+registerAlias("cajun seasoning", { key: "cajun-seasoning", label: "Cajun seasoning" });
+registerAlias("italian seasoning", { key: "italian-seasoning", label: "Italian seasoning" });
+registerAlias("protein granola", { key: "protein-granola", label: "Protein granola" });
+registerAlias("desiccated coconut", { key: "desiccated-coconut", label: "Desiccated coconut" });
 
 function unfoldParentheticals(text: string): string {
   return text.replace(/[()]/g, " ").replace(/\s+/g, " ").trim();

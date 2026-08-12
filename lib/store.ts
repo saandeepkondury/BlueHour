@@ -268,7 +268,7 @@ export async function annotateWorkoutLog(entry: {
 // ---------- nutrition ----------
 
 /** Catalog marker — pantry-first: days stay empty until the runner assigns dishes. */
-const MEALS_CATALOG_VERSION = "pantry-pick-v1";
+const MEALS_CATALOG_VERSION = "meal-prep-v1";
 
 /** Prevents re-entry while catalog sync is in progress. */
 let mealsCatalogSyncing = false;
