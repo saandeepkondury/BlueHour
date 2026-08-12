@@ -121,6 +121,7 @@ export default async function GroceryPage({
                 <GroceryLineRow
                   key={`shop-${item.key}`}
                   item={item}
+                  showQty={false}
                   action={
                     <form action={markGroceryBought}>
                       <input type="hidden" name="weekStart" value={weekStart} />
@@ -151,6 +152,7 @@ export default async function GroceryPage({
                 <GroceryLineRow
                   key={`miss-${item.key}`}
                   item={item}
+                  showQty={false}
                   action={
                     <form action={toggleGroceryItem}>
                       <input type="hidden" name="weekStart" value={weekStart} />
@@ -179,6 +181,7 @@ export default async function GroceryPage({
                 <GroceryLineRow
                   key={`home-${item.key}`}
                   item={item}
+                  showQty={false}
                   action={
                     <form action={togglePantryItem}>
                       <input type="hidden" name="itemKey" value={item.key} />
