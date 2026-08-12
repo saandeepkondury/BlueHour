@@ -210,7 +210,7 @@ export async function DayView({
             </div>
 
             <p className="small sub" style={{ marginBottom: "0.75rem" }}>
-              Check off what you ate · tap a meal for the recipe · shuffle to change it.
+              Assign from Can cook now · check off what you ate · tap a meal for the recipe.
             </p>
 
             <MacroBars
