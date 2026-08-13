@@ -1,5 +1,16 @@
 /** One drinking cup ≈ 540 ml. Matches the Today stepper and the hydration push copy. */
 export const CUP_OZ = 18;
+/** Milliliters in one cup — keeps oz ↔ ml aligned with the measured bottle. */
+export const CUP_ML = 540;
+
+export function ozToMl(oz: number): number {
+  return Math.round((oz * CUP_ML) / CUP_OZ);
+}
+
+export function formatCups(oz: number): string {
+  const cups = oz / CUP_OZ;
+  return Number.isInteger(cups) ? String(cups) : cups.toFixed(1);
+}
 
 export const WATER_QUIET_START = 8;
 export const WATER_QUIET_END = 22;
@@ -24,7 +35,7 @@ export function waterPush(appUrl: string, ounces: number, target: number, date?:
     title: "Drink a glass of water",
     body:
       ounces > 0
-        ? `${ounces} of ${target} oz so far. ${cupsLeft === 1 ? "One more cup." : `${cupsLeft} cups left.`}`
+        ? `${ounces} of ${target} oz (${ozToMl(ounces)} of ${ozToMl(target)} ml). ${cupsLeft === 1 ? "One more cup." : `${cupsLeft} cups left.`}`
         : "One cup now — tap + Cup to log it.",
     url: appUrl,
     tag: "water",

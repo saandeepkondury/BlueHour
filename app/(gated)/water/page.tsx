@@ -7,7 +7,7 @@ import { Shell } from "@/components/Shell";
 import { WaterCard } from "@/components/WaterCard";
 import { addDays, formatShort, todayISO, weekdayShort } from "@/lib/date";
 import { pendingCount } from "@/lib/coach/store";
-import { CUP_OZ } from "@/lib/notify/water";
+import { CUP_OZ, formatCups, ozToMl } from "@/lib/notify/water";
 import { computeTargets } from "@/lib/nutrition/targets";
 import type { WorkoutType } from "@/lib/plan/types";
 import {
@@ -19,11 +19,6 @@ import {
 } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
-
-function cupsLabel(oz: number): string {
-  const cups = oz / CUP_OZ;
-  return Number.isInteger(cups) ? String(cups) : cups.toFixed(1);
-}
 
 export default async function WaterPage() {
   const today = todayISO();
@@ -74,7 +69,8 @@ export default async function WaterPage() {
 
   const weekFrom = addDays(today, -6);
   const weekLogs = history.filter((row) => row.date >= weekFrom);
-  const weekCups = weekLogs.reduce((sum, row) => sum + row.waterOz, 0) / CUP_OZ;
+  const weekOz = weekLogs.reduce((sum, row) => sum + row.waterOz, 0);
+  const weekCups = weekOz / CUP_OZ;
   const weekHit = weekLogs.filter((row) => row.waterOz >= targetFor(row.date) * 0.8).length;
 
   return (
@@ -99,6 +95,9 @@ export default async function WaterPage() {
                   {Number.isInteger(weekCups) ? weekCups : weekCups.toFixed(1)}
                   <small>cups</small>
                 </p>
+                <p className="tile__foot">
+                  {weekOz} oz · {ozToMl(weekOz)} ml
+                </p>
               </div>
               <div className="tile">
                 <p className="tile__label">Hit target</p>
@@ -118,7 +117,7 @@ export default async function WaterPage() {
         <section className="block">
           <div className="block__head">
             <h2 className="block__title">History</h2>
-            <span className="label">Cups by day</span>
+            <span className="label">Cups · oz · ml</span>
           </div>
           <div className="card">
             {history.length === 0 ? (
@@ -146,8 +145,9 @@ export default async function WaterPage() {
                         <span className="row__title">
                           {row.date === today ? "Today" : formatShort(row.date)}
                         </span>
-                        <span className="row__sub">
-                          {cupsLabel(row.waterOz)} of {cupsLabel(target)} cups · {row.waterOz} oz
+                        <span className="row__sub row__sub--wrap">
+                          {formatCups(row.waterOz)} of {formatCups(target)} cups · {row.waterOz} of{" "}
+                          {target} oz · {ozToMl(row.waterOz)} of {ozToMl(target)} ml
                         </span>
                       </span>
                       <span className="row__meta">{Math.min(999, pct)}%</span>

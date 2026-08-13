@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { Icon } from "@/components/Icon";
 import { Ring } from "@/components/Ring";
-import { CUP_OZ } from "@/lib/notify/water";
+import { CUP_OZ, formatCups, ozToMl } from "@/lib/notify/water";
 
 /**
  * Hydration is the most-tapped control in the app, so it reads and writes
@@ -43,10 +43,8 @@ export function WaterCard({
   }
 
   const pct = target > 0 ? (local / target) * 100 : 0;
-  const cups = local / CUP_OZ;
-  const targetCups = target / CUP_OZ;
-  const cupsLabel = Number.isInteger(cups) ? String(cups) : cups.toFixed(1);
-  const targetLabel = Number.isInteger(targetCups) ? String(targetCups) : targetCups.toFixed(1);
+  const localMl = ozToMl(local);
+  const targetMl = ozToMl(target);
 
   const label = (
     <>
@@ -67,8 +65,11 @@ export function WaterCard({
             <p className="tile__label">{label}</p>
           )}
           <p className="tile__value" style={{ marginTop: "0.3rem" }}>
-            {cupsLabel}
-            <small>/ {targetLabel} cups</small>
+            {formatCups(local)}
+            <small>/ {formatCups(target)} cups</small>
+          </p>
+          <p className="tile__foot" style={{ marginTop: "0.35rem" }}>
+            {local} of {target} oz · {localMl} of {targetMl} ml
           </p>
         </div>
         <Ring
@@ -77,7 +78,7 @@ export function WaterCard({
           size={64}
           thickness={6}
           value={`${Math.min(999, Math.round(pct))}%`}
-          label={`${local} of ${target} ounces`}
+          label={`${local} oz · ${localMl} ml`}
         />
       </div>
 

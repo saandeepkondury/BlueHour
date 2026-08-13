@@ -65,7 +65,13 @@ struct LogWaterIntent: AppIntent {
         let oz = max(1, min(ounces ?? 18, 64))
         do {
             let result = try await SyncClient().logWater(date: AustinDay.todayISO(), oz: oz)
-            let total = result.waterOz.map { "\($0) oz so far today." } ?? "Logged."
+            let total: String
+            if let waterOz = result.waterOz {
+                let ml = Int((Double(waterOz) * 540.0 / 18.0).rounded())
+                total = "\(waterOz) oz · \(ml) ml so far today."
+            } else {
+                total = "Logged."
+            }
             let cups = oz == 18 ? "one cup" : "\(oz) ounces"
             return .result(dialog: "Logged \(cups). \(total)")
         } catch {

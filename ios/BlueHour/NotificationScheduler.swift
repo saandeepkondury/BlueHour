@@ -174,7 +174,8 @@ enum NotificationScheduler {
         let content = UNMutableNotificationContent()
         content.title = "Cup logged"
         if let waterOz {
-            content.body = "\(waterOz) oz so far today."
+            let ml = Int((Double(waterOz) * 540.0 / 18.0).rounded())
+            content.body = "\(waterOz) oz · \(ml) ml so far today."
         } else {
             content.body = "One cup added."
         }
