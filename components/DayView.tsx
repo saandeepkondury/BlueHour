@@ -87,6 +87,15 @@ export async function DayView({
 
   return (
     <>
+      <section className="block block--tight">
+        <WaterCard
+          action={logWater}
+          date={date}
+          ounces={dayLog.waterOz}
+          target={targets.waterOz}
+        />
+      </section>
+
       <section className="block">
         <div className="stack">
           <ReadinessCard recovery={bundle.recovery} date={date} />
@@ -277,13 +286,6 @@ export async function DayView({
             <hr className="card__divide" />
             <AddExtraFood date={date} catalog={foodCatalog} />
           </div>
-
-          <WaterCard
-            action={logWater}
-            date={date}
-            ounces={dayLog.waterOz}
-            target={targets.waterOz}
-          />
         </div>
       </section>
 

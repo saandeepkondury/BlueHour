@@ -94,23 +94,6 @@ export default async function TodayPage() {
           bestPace={bestPace}
         />
 
-        {pending.length > 0 ? (
-          <div style={{ paddingTop: "0.875rem" }}>
-            <Link className="banner cardlink" href="/coach">
-              <span className="row__lead row__lead--accent">
-                <Icon name="coach" size={18} />
-              </span>
-              <span className="banner__body">
-                <span className="banner__title">{pending[0].title}</span>
-                <span className="banner__sub">
-                  {pending.length === 1 ? "Tap to review" : `${pending.length} suggestions waiting`}
-                </span>
-              </span>
-              <Icon name="chevron" size={16} />
-            </Link>
-          </div>
-        ) : null}
-
         <DayView
           bundle={bundle}
           isToday
