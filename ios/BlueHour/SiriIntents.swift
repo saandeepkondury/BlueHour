@@ -49,10 +49,10 @@ private func mapSyncError(_ error: Error) -> SiriIntentError {
 
 struct LogWaterIntent: AppIntent {
     static var title: LocalizedStringResource = "Log water"
-    static var description = IntentDescription("Logs one cup (8 oz) of water in Blue Hour.")
+    static var description = IntentDescription("Logs one cup (18 oz / 540 ml) of water in Blue Hour.")
     static var openAppWhenRun = false
 
-    @Parameter(title: "Ounces", default: 8)
+    @Parameter(title: "Ounces", default: 18)
     var ounces: Int?
 
     static var parameterSummary: some ParameterSummary {
@@ -62,11 +62,11 @@ struct LogWaterIntent: AppIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog {
         guard Settings.isConfigured else { throw SiriIntentError.notConfigured }
 
-        let oz = max(1, min(ounces ?? 8, 64))
+        let oz = max(1, min(ounces ?? 18, 64))
         do {
             let result = try await SyncClient().logWater(date: AustinDay.todayISO(), oz: oz)
             let total = result.waterOz.map { "\($0) oz so far today." } ?? "Logged."
-            let cups = oz == 8 ? "one cup" : "\(oz) ounces"
+            let cups = oz == 18 ? "one cup" : "\(oz) ounces"
             return .result(dialog: "Logged \(cups). \(total)")
         } catch {
             throw mapSyncError(error)

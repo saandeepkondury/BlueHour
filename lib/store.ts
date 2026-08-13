@@ -38,6 +38,7 @@ import { ensureStrengthPlan, regenerateStrengthPlan, strengthFor } from "@/lib/s
 import { checkedExercises, strengthLogFor } from "@/lib/strength/log";
 import { recoveryFor, type Recovery } from "@/lib/health/read";
 import { bannedRecipeIds, fuelOverrides, getSetting, KEYS, setSetting } from "@/lib/settings";
+import { CUP_OZ } from "@/lib/notify/water";
 import type { Phase } from "@/lib/plan/types";
 import type { StrengthLog, StrengthSession } from "@/drizzle/schema";
 
@@ -496,14 +497,49 @@ export async function deleteFoodLog(id: number): Promise<void> {
   await db.delete(foodLogs).where(eq(foodLogs.id, id));
 }
 
+/**
+ * One-shot: every logged cup was stored as the previous cup size (8 oz). Remap
+ * totals so cup count is preserved at the current CUP_OZ (18 oz / ≈540 ml).
+ */
+let waterCupMigrating: Promise<void> | null = null;
+
+/** Runs once per process until settings.water_cup_oz matches CUP_OZ. */
+export async function ensureWaterCupScale(): Promise<void> {
+  if (waterCupMigrating) return waterCupMigrating;
+
+  waterCupMigrating = (async () => {
+    await ready();
+    const raw = await getSetting(KEYS.waterCupOz);
+    // Unset = legacy 8 oz cups from before CUP_OZ was configurable.
+    const fromOz = raw === null ? 8 : Number(raw);
+    if (!Number.isFinite(fromOz) || fromOz <= 0 || fromOz === CUP_OZ) {
+      if (raw === null) await setSetting(KEYS.waterCupOz, String(CUP_OZ));
+      return;
+    }
+
+    const rows = await db.select().from(dayLogs).where(gt(dayLogs.waterOz, 0));
+    for (const row of rows) {
+      const next = Math.round((row.waterOz * CUP_OZ) / fromOz);
+      if (next === row.waterOz) continue;
+      await db.update(dayLogs).set({ waterOz: next }).where(eq(dayLogs.date, row.date));
+    }
+    await setSetting(KEYS.waterCupOz, String(CUP_OZ));
+  })();
+
+  try {
+    await waterCupMigrating;
+  } finally {
+    waterCupMigrating = null;
+  }
+}
+
 export async function getDayLog(date: string) {
-  await ready();
+  await ensureWaterCupScale();
   const [row] = await db.select().from(dayLogs).where(eq(dayLogs.date, date));
   return row ?? { date, waterOz: 0, sodiumMg: 0, notes: null };
 }
 
 export async function addWater(date: string, oz: number): Promise<void> {
-  await ready();
   const current = await getDayLog(date);
   const next = Math.max(0, current.waterOz + oz);
   await db
@@ -513,7 +549,7 @@ export async function addWater(date: string, oz: number): Promise<void> {
 }
 
 export async function getDayLogs(from: string, to: string) {
-  await ready();
+  await ensureWaterCupScale();
   return db
     .select()
     .from(dayLogs)
@@ -522,7 +558,7 @@ export async function getDayLogs(from: string, to: string) {
 
 /** Days with any water logged, newest first. */
 export async function getWaterHistory() {
-  await ready();
+  await ensureWaterCupScale();
   return db
     .select()
     .from(dayLogs)

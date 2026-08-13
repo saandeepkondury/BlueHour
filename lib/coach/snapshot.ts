@@ -19,6 +19,7 @@ import { computeTargets } from "@/lib/nutrition/targets";
 import type { Phase, WorkoutType } from "@/lib/plan/types";
 import { absStatus, type AbsStatus } from "@/lib/strength/abs";
 import { bannedRecipeIds, fuelOverrides } from "@/lib/settings";
+import { ensureWaterCupScale } from "@/lib/store";
 
 /**
  * One flat object describing the last two weeks and the next one. It is both
@@ -144,6 +145,7 @@ const round = (value: number | null, digits = 1): number | null =>
 
 export async function buildSnapshot(current: Profile, today: string): Promise<Snapshot> {
   await ready();
+  await ensureWaterCupScale();
 
   const from = addDays(today, -13);
   const nextStart = addDays(startOfWeek(today), 7);

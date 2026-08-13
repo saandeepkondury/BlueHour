@@ -15,6 +15,8 @@ export const KEYS = {
   ingestToken: "health_ingest_token",
   lastCoachRun: "last_coach_run",
   waterPushSlot: "water_push_slot",
+  /** Oz per cup used when water_oz was last written — rescale history when CUP_OZ changes. */
+  waterCupOz: "water_cup_oz",
   bannedRecipes: "banned_recipes",
   workoutxCache: "workoutx_cache",
   strengthCatalog: "strength_catalog_version",

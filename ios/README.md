@@ -49,7 +49,7 @@ The key is stored in the iPhone keychain, not in this repo. You only enter it on
 These are native local notifications on this phone, not Safari web push.
 
 - **Morning brief** — at the reminder hour in Settings (default 6am Austin), with that day's workout copy.
-- **Water** — every even hour from 8am to 10pm Austin, skipped once the day's water target is logged. Each water banner includes a **+ Cup** action that logs 8 oz without opening the app.
+- **Water** — every even hour from 8am to 10pm Austin, skipped once the day's water target is logged. Each water banner includes a **+ Cup** action that logs 18 oz (≈540 ml) without opening the app.
 - Both stop if morning reminders are paused on the website.
 
 Open the app (or return to it) to refresh the next few days of copy. Gear → **Send a test notification** to confirm iOS will show banners (the test includes the + Cup button).
@@ -64,7 +64,7 @@ The shell registers App Intents so you can talk to Blue Hour without opening it:
 
 | Say… | What happens |
 | --- | --- |
-| “Hey Siri, log a cup in Blue Hour” | Posts one cup (8 oz) via `/api/water/log` |
+| “Hey Siri, log a cup in Blue Hour” | Posts one cup (18 oz / ≈540 ml) via `/api/water/log` |
 | “Hey Siri, what's today's plan in Blue Hour” | Speaks today's workout + water snapshot |
 | “Hey Siri, sync Health in Blue Hour” | Pulls Apple Watch data and posts ingest |
 | “Hey Siri, open Water in Blue Hour” | Opens that screen in the WebView |

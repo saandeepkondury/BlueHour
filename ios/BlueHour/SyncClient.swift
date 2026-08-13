@@ -125,7 +125,7 @@ struct SyncClient {
         }
     }
 
-    func logWater(date: String, oz: Int = 8) async throws -> WaterLogResponse {
+    func logWater(date: String, oz: Int = 18) async throws -> WaterLogResponse {
         guard Settings.isConfigured, let url = Settings.waterLogURL() else {
             throw SyncError.notConfigured
         }

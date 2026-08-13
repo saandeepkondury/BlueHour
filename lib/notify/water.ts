@@ -1,5 +1,5 @@
-/** One US cup. Matches the Today stepper and the hydration push copy. */
-export const CUP_OZ = 8;
+/** One drinking cup ≈ 540 ml. Matches the Today stepper and the hydration push copy. */
+export const CUP_OZ = 18;
 
 export const WATER_QUIET_START = 8;
 export const WATER_QUIET_END = 22;
