@@ -295,8 +295,8 @@ export default async function SettingsPage() {
           <div className="card stack">
             <PushToggle vapidKey={vapidKey} />
             <p className="small muted">
-              On the iPhone app, morning briefs and water pings (every two hours, 8am–10pm Austin)
-              are native local notifications — water banners include a <strong>+ Cup</strong> button
+              On the iPhone app, morning briefs and water pings (one per cup, 9am–8pm Austin) are
+              native local notifications — water banners include a <strong>+ Cup</strong> button
               that logs without opening the app. Use <strong>Send a test notification</strong> in
               the app&apos;s gear sheet to try it. Web push below is only for the home-screen PWA
               (also gets + Cup). Pause morning reminders above to stop both.

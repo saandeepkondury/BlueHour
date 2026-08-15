@@ -257,7 +257,7 @@ private struct SetupView: View {
                     } header: {
                         Text("Notifications")
                     } footer: {
-                        Text("Morning briefs and water reminders (every 2 hours, 8am–10pm Austin) are scheduled on this phone. Water banners include a + Cup button that logs without opening the app. Siri can also log water, read today's plan, sync Health, or open a screen — try “Hey Siri, log a cup in Blue Hour.” Open once a day so copy stays current. Pause reminders in the website Settings if you want silence.")
+                        Text("Morning briefs and water reminders (one per cup, 9am–8pm Austin) are scheduled on this phone. Water banners include a + Cup button that logs without opening the app. Siri can also log water, read today's plan, sync Health, or open a screen — try “Hey Siri, log a cup in Blue Hour.” Open once a day so copy stays current. Pause reminders in the website Settings if you want silence.")
                     }
                 }
             }

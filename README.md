@@ -81,8 +81,9 @@ Set `HEALTH_INGEST_SECRET` (see `ios/README.md`) so the phone can authenticate.
    Austin in winter and 7am in summer. The route also accepts the following hour so DST does not
    skip a send, and records the day so a retry cannot double up. Set `CRON_SECRET` yourself (Vercel
    will use it for the morning job) and add the same value plus `APP_URL` as GitHub Actions secrets
-   so `.github/workflows/water-reminder.yml` can hit `/api/cron/water` every hour. The route only
-   notifies on even Austin hours from 8am to 10pm, and skips once the day's water target is met.
+   so `.github/workflows/water-reminder.yml` can hit `/api/cron/water` every hour. The route
+   spaces one ping per target cup from 9am to 8pm Austin, skips when intake is already on pace,
+   and stops once the day's water target is met.
 5. **`NEXT_PUBLIC_APP_URL`** — the absolute URL, used in reminder links.
 6. **`HEALTH_INGEST_SECRET`** — required for Apple Health sync from the iPhone app.
 

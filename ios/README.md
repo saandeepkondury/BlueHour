@@ -49,7 +49,7 @@ The key is stored in the iPhone keychain, not in this repo. You only enter it on
 These are native local notifications on this phone, not Safari web push.
 
 - **Morning brief** — at the reminder hour in Settings (default 6am Austin), with that day's workout copy.
-- **Water** — every even hour from 8am to 10pm Austin, skipped once the day's water target is logged. Each water banner includes a **+ Cup** action that logs 18 oz (≈540 ml) without opening the app.
+- **Water** — one reminder per target cup, evenly spaced from 9am to 8pm Austin; skipped when intake is already on pace or the day's target is logged. Each water banner includes a **+ Cup** action that logs 18 oz (≈540 ml) without opening the app.
 - Both stop if morning reminders are paused on the website.
 
 Open the app (or return to it) to refresh the next few days of copy. Gear → **Send a test notification** to confirm iOS will show banners (the test includes the + Cup button).

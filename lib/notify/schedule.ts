@@ -1,6 +1,6 @@
 import { addDays, todayISO, wallTimeInZone } from "@/lib/date";
 import { buildBrief } from "@/lib/notify/brief";
-import { WATER_QUIET_END, WATER_QUIET_START, waterPush, waterSlotDue } from "@/lib/notify/water";
+import { behindPace, waterPush, waterReminderSlots } from "@/lib/notify/water";
 import { getDayBundle, getDayLog, getProfile } from "@/lib/store";
 
 export type LocalPingKind = "morning" | "water";
@@ -80,15 +80,16 @@ export async function buildLocalSchedule(appUrl: string): Promise<LocalSchedule>
     if (log.waterOz >= target) continue;
 
     const copy = waterPush(appUrl, log.waterOz, target, date);
-    for (let hour = WATER_QUIET_START; hour <= WATER_QUIET_END; hour += 1) {
-      if (!waterSlotDue(hour)) continue;
+    for (const slot of waterReminderSlots(target)) {
+      if (!behindPace(log.waterOz, slot)) continue;
       const water = ping(
-        `water-${date}-${String(hour).padStart(2, "0")}`,
+        `water-${date}-${String(slot.hour).padStart(2, "0")}${String(slot.minute).padStart(2, "0")}`,
         "water",
         copy.title,
         copy.body,
         date,
-        hour,
+        slot.hour,
+        slot.minute,
       );
       if (water) items.push(water);
     }
