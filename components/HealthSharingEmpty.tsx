@@ -64,8 +64,8 @@ export function HealthSharingGuide({ synced }: { synced: boolean }) {
           <span className="row__title">What Blue Hour can read</span>
           <span className="row__sub row__sub--wrap">
             {synced
-              ? `Only what Health sharing allows. In the Health app: ${HEALTH_SHARE_PATH}. Turn on Sleep, Heart Rate, Resting Heart Rate, Heart Rate Variability, Workouts, Steps, and Active Energy. iOS never says which ones were refused — a missing metric shows as —. Without Steps or Active Energy, day activity stays —.`
-              : `Open Blue Hour on iPhone and Allow Health. Later: ${HEALTH_SHARE_PATH}. Turn on Sleep, Steps, and Active Energy as well as heart rate and workouts — without Sleep, Today stays empty overnight; without Steps or Active Energy, day activity stays —.`}
+              ? `Blue Hour asks for every Health category it uses on the iPhone sheet — Sleep, Heart Rate, Resting Heart Rate, Heart Rate Variability, Workouts, Steps, Active Energy, Weight, Body Fat, Waist, Height, and Date of Birth. You should not need to open the Health app unless you turned something off. If a metric stays —, later: ${HEALTH_SHARE_PATH}. iOS never says which ones were refused.`
+              : `Open Blue Hour on iPhone and Allow every category on the Health sheet. That covers Sleep, heart, workouts, steps, energy, and body composition — you should not need to open the Health app unless you turn something off. Later: ${HEALTH_SHARE_PATH}.`}
           </span>
         </div>
       </div>

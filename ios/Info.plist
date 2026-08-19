@@ -43,7 +43,7 @@
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Blue Hour reads your Apple Watch runs, steps, active energy, sleep, and heart rate so your training plan reflects what you actually did. It never writes to Health.</string>
+	<string>Blue Hour reads your workouts, sleep, heart rate, HRV, steps, active energy, weight, body fat, waist, height, and date of birth so the training plan, fueling, and Body &amp; core stay current. It never writes to Health.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

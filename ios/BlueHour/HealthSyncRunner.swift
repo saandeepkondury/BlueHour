@@ -8,6 +8,7 @@ enum HealthSyncRunner {
 
         let bridge = HealthBridge()
         try await bridge.requestAccess()
+        _ = await NotificationScheduler.requestPermission()
         let payload = try await bridge.collect()
         let result = try await SyncClient().send(payload)
         await NotificationScheduler.refresh()

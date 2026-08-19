@@ -55,6 +55,11 @@ struct Settings {
         return base.appendingPathComponent("api/auth/signup")
     }
 
+    static func appleSignInURL() -> URL? {
+        guard let base = URL(string: baseURL) else { return nil }
+        return base.appendingPathComponent("api/auth/apple")
+    }
+
     static func webSessionURL() -> URL? {
         guard let base = URL(string: baseURL) else { return nil }
         return base.appendingPathComponent("api/auth/web-session")

@@ -70,8 +70,8 @@ export function ReadinessCard({
             <>
               <span className="banner__title">Connect your Watch</span>
               <span className="banner__sub">
-                Open Blue Hour on iPhone and Allow Health. Turn on Sleep in {HEALTH_SHARE_PATH} —
-                without it, Today stays empty overnight.
+                Open Blue Hour on iPhone and Allow every category on the Health sheet — especially
+                Sleep. You should not need {HEALTH_SHARE_PATH} unless you turned something off.
               </span>
             </>
           )}

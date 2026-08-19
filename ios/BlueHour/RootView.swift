@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import AuthenticationServices
 
 enum SyncState: Equatable {
     case idle
@@ -237,6 +238,19 @@ private struct SetupView: View {
                     Text("Your plan, Watch data, and meals belong to this account. Nobody else on Blue Hour can see them.")
                 }
 
+                Section {
+                    SignInWithAppleButton(.signIn) { request in
+                        request.requestedScopes = [.fullName, .email]
+                    } onCompletion: { result in
+                        handleApple(result)
+                    }
+                    .signInWithAppleButtonStyle(.black)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .disabled(checking || baseURL.trimmed.isEmpty)
+                } footer: {
+                    Text("Creates an account on first use, or signs you back in.")
+                }
+
                 if let message {
                     Section { Text(message).font(.footnote) }
                 }
@@ -320,31 +334,84 @@ private struct SetupView: View {
                 "label": UIDevice.current.name,
             ])
 
-            do {
-                let (data, response) = try await URLSession.shared.data(for: request)
-                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            await finishAuth(request: request)
+        }
+    }
 
-                if (200..<300).contains(status),
-                   let auth = try? JSONDecoder().decode(AuthResponse.self, from: data) {
-                    Settings.deviceToken = auth.token
-                    Settings.accountEmail = auth.email
-                    password = ""
-                    onDone()
+    private func handleApple(_ result: Result<ASAuthorization, Error>) {
+        Settings.baseURL = baseURL
+        switch result {
+        case let .failure(error):
+            let ns = error as NSError
+            // User cancelled the sheet — stay quiet.
+            if ns.domain == ASAuthorizationError.errorDomain,
+               ns.code == ASAuthorizationError.canceled.rawValue {
+                return
+            }
+            message = error.localizedDescription
+        case let .success(authorization):
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                  let tokenData = credential.identityToken,
+                  let identityToken = String(data: tokenData, encoding: .utf8) else {
+                message = "Apple did not return a sign-in token. Try again."
+                return
+            }
+
+            var name = ""
+            if let fullName = credential.fullName {
+                name = PersonNameComponentsFormatter.localizedString(from: fullName, style: .default)
+            }
+
+            checking = true
+            message = nil
+            Task {
+                defer { checking = false }
+                guard let url = Settings.appleSignInURL() else {
+                    message = "That does not look like a valid address."
                     return
                 }
 
-                if let failure = try? JSONDecoder().decode(AuthError.self, from: data) {
-                    message = failure.error
-                } else {
-                    message = SyncError.server(status: status, message: "").localizedDescription
-                }
-            } catch let error as URLError where error.code == .timedOut {
-                message = SyncError.timeout.localizedDescription
-            } catch let error as URLError {
-                message = SyncError.unreachable.localizedDescription + " (\(error.localizedDescription))"
-            } catch {
-                message = error.localizedDescription
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.timeoutInterval = 45
+                var body: [String: Any] = [
+                    "identityToken": identityToken,
+                    "label": UIDevice.current.name,
+                ]
+                if !name.trimmed.isEmpty { body["name"] = name.trimmed }
+                request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+                await finishAuth(request: request)
             }
+        }
+    }
+
+    private func finishAuth(request: URLRequest) async {
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+            if (200..<300).contains(status),
+               let auth = try? JSONDecoder().decode(AuthResponse.self, from: data) {
+                Settings.deviceToken = auth.token
+                Settings.accountEmail = auth.email
+                password = ""
+                onDone()
+                return
+            }
+
+            if let failure = try? JSONDecoder().decode(AuthError.self, from: data) {
+                message = failure.error
+            } else {
+                message = SyncError.server(status: status, message: "").localizedDescription
+            }
+        } catch let error as URLError where error.code == .timedOut {
+            message = SyncError.timeout.localizedDescription
+        } catch let error as URLError {
+            message = SyncError.unreachable.localizedDescription + " (\(error.localizedDescription))"
+        } catch {
+            message = error.localizedDescription
         }
     }
 }

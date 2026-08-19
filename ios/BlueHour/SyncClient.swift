@@ -28,12 +28,27 @@ struct VitalSample: Encodable {
     let hrMax: Double?
 }
 
-/// Pre-resolved calendar day totals (America/Chicago). Steps and active kcal
-/// only arrive this way — they are not derived from raw vital samples.
+/// Pre-resolved calendar day totals (America/Chicago). Steps, active kcal,
+/// and body composition only arrive this way — they are not derived from raw vitals.
 struct DaySample: Encodable {
     let date: String
     let steps: Int?
     let activeKcal: Int?
+    let weightKg: Double?
+    let bodyFatPct: Double?
+    let waistCm: Double?
+}
+
+/// Height / sex / age from Health characteristics + latest height sample.
+struct ProfileHints: Encodable {
+    var heightCm: Double?
+    var weightKg: Double?
+    var sex: String?
+    var age: Int?
+
+    var isEmpty: Bool {
+        heightCm == nil && weightKg == nil && sex == nil && age == nil
+    }
 }
 
 struct WorkoutSample: Encodable {
@@ -54,9 +69,10 @@ struct HealthPayload: Encodable {
     let vitals: [VitalSample]
     let days: [DaySample]
     let workouts: [WorkoutSample]
+    let profile: ProfileHints?
 
     var isEmpty: Bool {
-        sleep.isEmpty && vitals.isEmpty && days.isEmpty && workouts.isEmpty
+        sleep.isEmpty && vitals.isEmpty && days.isEmpty && workouts.isEmpty && (profile?.isEmpty ?? true)
     }
 }
 

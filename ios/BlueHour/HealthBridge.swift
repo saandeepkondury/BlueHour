@@ -21,25 +21,9 @@ struct HealthBridge {
         }
     }
 
-    private var readTypes: Set<HKObjectType> {
-        var types: Set<HKObjectType> = [
-            HKObjectType.workoutType(),
-            HKCategoryType(.sleepAnalysis),
-            HKQuantityType(.restingHeartRate),
-            HKQuantityType(.walkingHeartRateAverage),
-            HKQuantityType(.heartRateVariabilitySDNN),
-            HKQuantityType(.heartRate),
-            HKQuantityType(.distanceWalkingRunning),
-            HKQuantityType(.activeEnergyBurned),
-            HKQuantityType(.stepCount),
-        ]
-        types.insert(HKQuantityType(.appleExerciseTime))
-        return types
-    }
-
     func requestAccess() async throws {
         guard HKHealthStore.isHealthDataAvailable() else { throw BridgeError.unavailable }
-        try await store.requestAuthorization(toShare: [], read: readTypes)
+        try await store.requestAuthorization(toShare: [], read: HealthKitAccess.readTypes)
     }
 
     func collect() async throws -> HealthPayload {
@@ -54,6 +38,10 @@ struct HealthBridge {
         async let ranges = loadDailyHeartRanges(since: nil)
         async let stepDays = loadDailyTotals(HKQuantityType(.stepCount), unit: .count(), since: nil)
         async let energyDays = loadDailyTotals(HKQuantityType(.activeEnergyBurned), unit: .kilocalorie(), since: nil)
+        async let weightDays = loadDailyMostRecent(HKQuantityType(.bodyMass), unit: .gramUnit(with: .kilo), since: nil)
+        async let fatDays = loadDailyMostRecent(HKQuantityType(.bodyFatPercentage), unit: .percent(), since: nil)
+        async let waistDays = loadDailyMostRecent(HKQuantityType(.waistCircumference), unit: .meterUnit(with: .centi), since: nil)
+        async let profile = loadProfileHints()
 
         var vitals: [VitalSample] = []
         for sample in try await resting {
@@ -87,14 +75,25 @@ struct HealthBridge {
         // Ascending so the server's last write per day is the most recent reading.
         vitals.sort { $0.at < $1.at }
 
-        let days = Self.mergeDayTotals(steps: try await stepDays, energy: try await energyDays)
+        let days = Self.mergeDayTotals(
+            steps: try await stepDays,
+            energy: try await energyDays,
+            weight: try await weightDays,
+            bodyFat: try await fatDays,
+            waist: try await waistDays
+        )
+        var hints = try await profile
+        if hints.weightKg == nil {
+            hints.weightKg = days.reversed().compactMap(\.weightKg).first
+        }
 
         return HealthPayload(
             device: await UIDeviceName.current(),
             sleep: try await sleep,
             vitals: vitals,
             days: days,
-            workouts: try await workouts
+            workouts: try await workouts,
+            profile: hints.isEmpty ? nil : hints
         )
     }
 
@@ -361,6 +360,98 @@ struct HealthBridge {
         }
     }
 
+    /// Latest discrete reading per Austin day (weight, body fat, waist).
+    private func loadDailyMostRecent(
+        _ type: HKQuantityType,
+        unit: HKUnit,
+        since start: Date?
+    ) async throws -> [(date: String, value: Double)] {
+        let calendar = Self.austinCalendar
+        let queryStart = start ?? Date(timeIntervalSince1970: 0)
+        let anchor = calendar.startOfDay(for: queryStart)
+        let interval = DateComponents(day: 1)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKStatisticsCollectionQuery(
+                quantityType: type,
+                quantitySamplePredicate: HKQuery.predicateForSamples(withStart: start, end: Date()),
+                options: .mostRecent,
+                anchorDate: anchor,
+                intervalComponents: interval
+            )
+            query.initialResultsHandler = { _, collection, error in
+                if error != nil {
+                    continuation.resume(returning: [])
+                    return
+                }
+                guard let collection else {
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                var out: [(date: String, value: Double)] = []
+                collection.enumerateStatistics(from: queryStart, to: Date()) { stats, _ in
+                    guard let quantity = stats.mostRecentQuantity() else { return }
+                    let value = quantity.doubleValue(for: unit)
+                    guard value.isFinite, value > 0 else { return }
+                    out.append((Self.austinDayString(stats.startDate), value))
+                }
+                continuation.resume(returning: out)
+            }
+            store.execute(query)
+        }
+    }
+
+    /// Height, sex, and age from Health so Settings does not have to be typed by hand.
+    private func loadProfileHints() async throws -> ProfileHints {
+        var hints = ProfileHints(heightCm: nil, weightKg: nil, sex: nil, age: nil)
+
+        if let sample = try await latestQuantity(HKQuantityType(.height)) {
+            let cm = sample.doubleValue(for: .meterUnit(with: .centi))
+            if cm.isFinite, cm > 0 { hints.heightCm = (cm * 10).rounded() / 10 }
+        }
+
+        if let sex = try? store.biologicalSex().biologicalSex {
+            switch sex {
+            case .female: hints.sex = "female"
+            case .male: hints.sex = "male"
+            default: break
+            }
+        }
+
+        if let components = try? store.dateOfBirthComponents(),
+           let year = components.year,
+           let month = components.month,
+           let day = components.day,
+           let birth = Calendar(identifier: .gregorian).date(
+               from: DateComponents(year: year, month: month, day: day)
+           )
+        {
+            let years = Calendar(identifier: .gregorian).dateComponents([.year], from: birth, to: Date()).year
+            if let years, (14...99).contains(years) { hints.age = years }
+        }
+
+        return hints
+    }
+
+    private func latestQuantity(_ type: HKQuantityType) async throws -> HKQuantity? {
+        try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: type,
+                predicate: nil,
+                limit: 1,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
+            ) { _, samples, error in
+                if error != nil {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: (samples?.first as? HKQuantitySample)?.quantity)
+            }
+            store.execute(query)
+        }
+    }
+
     /// Daily cumulative totals (steps, active energy) keyed for America/Chicago.
     private func loadDailyTotals(
         _ type: HKQuantityType,
@@ -403,28 +494,72 @@ struct HealthBridge {
         }
     }
 
+    private struct DayTotals {
+        var steps: Int?
+        var kcal: Int?
+        var weightKg: Double?
+        var bodyFatPct: Double?
+        var waistCm: Double?
+    }
+
     private static func mergeDayTotals(
         steps: [(date: String, value: Double)],
-        energy: [(date: String, value: Double)]
+        energy: [(date: String, value: Double)],
+        weight: [(date: String, value: Double)],
+        bodyFat: [(date: String, value: Double)],
+        waist: [(date: String, value: Double)]
     ) -> [DaySample] {
-        var byDate: [String: (steps: Int?, kcal: Int?)] = [:]
+        var byDate: [String: DayTotals] = [:]
+
+        func slot(_ date: String) -> DayTotals {
+            byDate[date] ?? DayTotals()
+        }
+
         for sample in steps {
             let rounded = Int(sample.value.rounded())
             guard rounded > 0 else { continue }
-            var entry = byDate[sample.date] ?? (steps: nil, kcal: nil)
+            var entry = slot(sample.date)
             entry.steps = rounded
             byDate[sample.date] = entry
         }
         for sample in energy {
             let rounded = Int(sample.value.rounded())
             guard rounded > 0 else { continue }
-            var entry = byDate[sample.date] ?? (steps: nil, kcal: nil)
+            var entry = slot(sample.date)
             entry.kcal = rounded
             byDate[sample.date] = entry
         }
+        for sample in weight {
+            guard sample.value.isFinite, sample.value > 0 else { continue }
+            var entry = slot(sample.date)
+            entry.weightKg = (sample.value * 10).rounded() / 10
+            byDate[sample.date] = entry
+        }
+        for sample in bodyFat {
+            guard sample.value.isFinite, sample.value > 0 else { continue }
+            // HealthKit percent() is 0–1 (0.18 = 18%). Guard in case a source writes 18.
+            let pct = sample.value <= 1 ? sample.value * 100 : sample.value
+            var entry = slot(sample.date)
+            entry.bodyFatPct = (pct * 10).rounded() / 10
+            byDate[sample.date] = entry
+        }
+        for sample in waist {
+            guard sample.value.isFinite, sample.value > 0 else { continue }
+            var entry = slot(sample.date)
+            entry.waistCm = (sample.value * 10).rounded() / 10
+            byDate[sample.date] = entry
+        }
+
         return byDate.keys.sorted().compactMap { date in
             guard let entry = byDate[date] else { return nil }
-            return DaySample(date: date, steps: entry.steps, activeKcal: entry.kcal)
+            return DaySample(
+                date: date,
+                steps: entry.steps,
+                activeKcal: entry.kcal,
+                weightKg: entry.weightKg,
+                bodyFatPct: entry.bodyFatPct,
+                waistCm: entry.waistCm
+            )
         }
     }
 

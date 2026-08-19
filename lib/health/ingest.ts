@@ -60,12 +60,20 @@ export interface WorkoutInput {
   activeKcal?: number | null;
 }
 
+export interface ProfileHint {
+  heightCm?: number | null;
+  weightKg?: number | null;
+  sex?: string | null;
+  age?: number | null;
+}
+
 export interface HealthPayload {
   device?: string | null;
   sleep?: SleepInput[];
   vitals?: VitalInput[];
   days?: DayInput[];
   workouts?: WorkoutInput[];
+  profile?: ProfileHint | null;
 }
 
 export interface IngestResult {
@@ -238,7 +246,20 @@ export function parsePayload(raw: unknown): HealthPayload {
     vitals,
     days,
     workouts: sessions,
+    profile: parseProfileHint(body.profile),
   };
+}
+
+function parseProfileHint(raw: unknown): ProfileHint | null {
+  if (raw === undefined || raw === null) return null;
+  const source = asRecord(raw, "profile");
+  const sexRaw = typeof source.sex === "string" ? source.sex.trim().toLowerCase() : "";
+  const sex = sexRaw === "male" || sexRaw === "female" ? sexRaw : null;
+  const heightCm = optionalNumber(source.heightCm, "profile.heightCm");
+  const weightKg = optionalNumber(source.weightKg, "profile.weightKg");
+  const age = optionalRounded(source.age, "profile.age");
+  if (heightCm === null && weightKg === null && sex === null && age === null) return null;
+  return { heightCm, weightKg, sex, age };
 }
 
 interface DayPatch {
@@ -438,6 +459,7 @@ export async function ingestHealth(payload: HealthPayload): Promise<IngestResult
     .where(and(eq(workoutLogs.userId, user), lt(workoutLogs.date, trainingStart)));
 
   const days = collectDays(payload);
+  await applyProfileHints(payload.profile, days);
   let daysWritten = 0;
   for (const [date, day] of days) {
     if (date < trainingStart) continue;
@@ -587,4 +609,62 @@ async function markRunsDone(dates: string[]): Promise<string[]> {
   }
 
   return done;
+}
+
+/**
+ * Fill empty Settings fields from Health (height / sex / age) and keep weight
+ * current from the scale so Body & core and fueling do not wait on a typed form.
+ */
+async function applyProfileHints(
+  hint: ProfileHint | null | undefined,
+  days: Map<string, DayPatch>,
+): Promise<void> {
+  const user = await uid();
+  const [row] = await db.select().from(profile).where(eq(profile.userId, user));
+  if (!row) return;
+
+  let latestWeight = hint?.weightKg ?? null;
+  if (latestWeight === null) {
+    for (const date of [...days.keys()].sort().reverse()) {
+      const kg = days.get(date)?.weightKg;
+      if (kg != null && kg > 0) {
+        latestWeight = kg;
+        break;
+      }
+    }
+  }
+
+  const patch: {
+    heightCm?: number;
+    weightKg?: number;
+    sex?: string;
+    age?: number;
+    updatedAt: string;
+  } = { updatedAt: new Date().toISOString() };
+
+  if (hint?.heightCm != null && hint.heightCm > 0 && (row.heightCm == null || row.heightCm <= 0)) {
+    patch.heightCm = Math.round(hint.heightCm * 10) / 10;
+  }
+  if (latestWeight != null && latestWeight > 0) {
+    patch.weightKg = Math.round(latestWeight * 10) / 10;
+  }
+  if (
+    (hint?.sex === "male" || hint?.sex === "female") &&
+    (row.sex == null || row.sex === "" || row.sex === "unspecified")
+  ) {
+    patch.sex = hint.sex;
+  }
+  if (hint?.age != null && hint.age >= 14 && hint.age <= 99 && (row.age == null || row.age <= 0)) {
+    patch.age = hint.age;
+  }
+
+  if (
+    patch.heightCm === undefined &&
+    patch.weightKg === undefined &&
+    patch.sex === undefined &&
+    patch.age === undefined
+  ) {
+    return;
+  }
+  await db.update(profile).set(patch).where(eq(profile.userId, user));
 }

@@ -6,7 +6,7 @@ import HealthKit
 ///
 /// Two wakes:
 /// 1. **HealthKit background delivery** — observer queries fire when new sleep,
-///    workouts, steps, energy, or heart data land.
+///    workouts, steps, energy, heart, or body-composition data land.
 /// 2. **BGAppRefresh** — a periodic backup in case observers are quiet.
 ///
 /// Both debounce to avoid stacking uploads when several types update at once.
@@ -46,16 +46,7 @@ actor BackgroundHealthSync {
     // MARK: - HealthKit observers
 
     private var watchedTypes: [HKSampleType] {
-        [
-            HKObjectType.workoutType(),
-            HKCategoryType(.sleepAnalysis),
-            HKQuantityType(.stepCount),
-            HKQuantityType(.activeEnergyBurned),
-            HKQuantityType(.restingHeartRate),
-            HKQuantityType(.heartRateVariabilitySDNN),
-            HKQuantityType(.heartRate),
-            HKQuantityType(.walkingHeartRateAverage),
-        ]
+        HealthKitAccess.observedTypes
     }
 
     private func startObservers() async {
@@ -63,7 +54,7 @@ actor BackgroundHealthSync {
         guard HKHealthStore.isHealthDataAvailable() else { return }
 
         do {
-            try await store.requestAuthorization(toShare: [], read: Set(watchedTypes.map { $0 as HKObjectType }))
+            try await store.requestAuthorization(toShare: [], read: HealthKitAccess.readTypes)
         } catch {
             return
         }

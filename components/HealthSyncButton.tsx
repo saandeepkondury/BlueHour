@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/Icon";
+import { HEALTH_SHARE_PATH } from "@/lib/health/sharing";
 
 type Status = "idle" | "syncing" | "done" | "missing-app";
 
@@ -70,14 +71,15 @@ export function HealthSyncButton() {
       ) : null}
       {status === "missing-app" ? (
         <p className="small muted">
-          Open the Blue Hour iPhone app — not Safari — to pull sleep, heart rate, and runs from
-          Apple Health. It also syncs on its own every time you open the app.
+          Open the Blue Hour iPhone app — not Safari — and Allow every category on the Health
+          sheet. After that, sleep, heart, runs, steps, and body composition sync without opening
+          the Health app.
         </p>
       ) : (
         <p className="small muted">
-          Syncs automatically when you open Blue Hour. Tap if a run or last night’s sleep has not
-          shown up yet. Missing metrics stay as — until Health sharing allows them (Health → Sharing
-          → Apps → Blue Hour).
+          Syncs when you open Blue Hour and in the background. Tap if a run or last night’s sleep
+          has not shown up yet. If a metric stays —, you likely turned that category off on the
+          Health sheet ({HEALTH_SHARE_PATH}).
         </p>
       )}
     </div>

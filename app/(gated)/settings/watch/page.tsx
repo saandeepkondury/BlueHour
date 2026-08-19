@@ -41,7 +41,7 @@ export default async function WatchPage() {
                 <span className="row__sub">
                   {sync
                     ? `Last ${relativeTime(sync.at)}${sync.device ? ` from ${sync.device}` : ""}`
-                    : "Opens Blue Hour on iPhone, then Allow Health"}
+                    : "Opens Blue Hour on iPhone, then Allow every Health category"}
                 </span>
               </div>
             </div>

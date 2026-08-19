@@ -2,7 +2,7 @@
 
 A small native shell: it reads Apple Health, shows the Blue Hour web app, and fires **local notifications** for the morning brief and water reminders. Apple Health has no web API, so a Safari tab can never see your Watch data — this app is the bridge.
 
-It reads and never writes: HealthKit sleep, resting HR, walking HR, HRV, daytime heart-rate range, **steps**, **active energy**, and workouts are synced, but the server only keeps days on or after your training start date so pre-app history does not crowd Sleep, Rest HR, HRV, or Runs. Agents can read a day snapshot from `GET /api/health/day` with the same device token, scoped to that account. **Settings → Apple Health** also has a Sync button that asks this shell to pull again. Siri can log water, read today's plan, sync Health, and open screens without tapping.
+It reads and never writes: HealthKit sleep, resting HR, walking HR, HRV, daytime heart-rate range, **steps**, **active energy**, **weight / body fat / waist**, **height**, date of birth, and workouts are synced, but the server only keeps days on or after your training start date so pre-app history does not crowd Sleep, Rest HR, HRV, or Runs. Empty Settings height / sex / age fill from Health; weight stays current from the scale. Agents can read a day snapshot from `GET /api/health/day` with the same device token, scoped to that account. **Settings → Apple Health** also has a Sync button that asks this shell to pull again. Siri can log water, read today's plan, sync Health, and open screens without tapping.
 
 Sync runs when you open the app, when HealthKit delivers new samples in the background, and on a periodic background refresh — so Today should not stay empty just because you skipped opening the app that morning.
 
@@ -31,14 +31,17 @@ On first launch the app asks for:
 
 - **Address** — the deployed site (`https://…vercel.app`), or `http://192.168.1.174:3000` while `npm run dev` is running on this Mac and the phone is on the same Wi-Fi. `npm run dev` listens on every interface so the phone can reach the Mac.
 - **Email and password** — your Blue Hour account. Flip **Create a new account** to sign up from the phone instead of the browser.
+- **Sign in with Apple** — same Connect sheet; creates an account on first use. Enable the **Sign in with Apple** capability on the App ID (Signing & Capabilities), and set `APPLE_CLIENT_ID` on the server to this app’s bundle id.
 
-Signing in exchanges the password for a device token, which is stored in the iPhone keychain and never leaves it. Every request this app makes — Health ingest, the day snapshot, the notification schedule, Siri — carries that token, so the server only ever writes to your account. There is no shared secret to paste.
+Signing in exchanges credentials for a device token, which is stored in the iPhone keychain and never leaves it. Every request this app makes — Health ingest, the day snapshot, the notification schedule, Siri — carries that token, so the server only ever writes to your account. There is no shared secret to paste.
 
 The embedded web pages are signed in for you: the app trades its device token for a session cookie (`/api/auth/web-session`) and installs it in the web view, so you do not sign in twice. If the session lapses, the app quietly mints another.
 
 Sign out on this phone from the same gear sheet. That revokes nothing else — your other devices keep working, and **More → Account** on the site can revoke any device by name.
 
-Then iOS shows the Health permission sheet: turn on **Workouts**, **Sleep**, **Heart Rate**, **Resting Heart Rate**, **Heart Rate Variability**, **Steps**, and **Active Energy**, and tap Allow. Shortly after, it asks to send notifications — allow that too.
+Then iOS shows the Health permission sheet with every category Blue Hour reads (workouts, sleep, heart rate, HRV, steps, active energy, weight, body fat, waist, height, date of birth). Tap Allow on all of them — you should not need to open the Health app afterwards. Shortly after, it asks to send notifications — allow that too.
+
+Existing installs get a second sheet only for newly added types (weight, body fat, waist, height, date of birth). Open Blue Hour once after this build so that sheet appears.
 
 #### Upgrading a phone set up before accounts existed
 
@@ -86,5 +89,5 @@ Apps signed with a free Apple ID stop working after 7 days. When Blue Hour refus
 ## Permission notes
 
 - HealthKit denials are silent by design: iOS never tells an app which read permissions you refused, so a missing metric shows as "—" rather than an error.
-- To change what it can see later: **Health app → Sharing → Apps → Blue Hour**. Turn on **Sleep**, **Steps**, and **Active Energy** as well as heart rate and workouts — without Sleep, Today stays empty for overnight hours; without Steps / Active Energy, day snapshots show "—" for activity.
+- The Connect Health sheet asks for every type Blue Hour uses. You should not need **Health → Sharing** unless you turned a category off. If you did: **Health app → Sharing → Apps → Blue Hour**.
 - Health sync also runs in the background (new samples + periodic refresh). Open the app once after installing this build so observers and the refresh task register. Notifications are still scheduled on-device for the next few days, so briefs and water pings fire even if you do not open the app that morning.

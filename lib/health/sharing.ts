@@ -24,7 +24,7 @@ export function healthShareEmpty(focus: HealthShareFocus, synced: boolean): {
   if (!synced) {
     return {
       title: "Connect Apple Health",
-      body: `Open Blue Hour on iPhone and Allow Health. You can change what it can see later in ${HEALTH_SHARE_PATH} — turn on ${FOCUS_LABEL[focus]}.`,
+      body: `Open Blue Hour on iPhone and Allow every category on the Health sheet. You should not need to open the Health app unless you turned something off. If you did: ${HEALTH_SHARE_PATH} — turn on ${FOCUS_LABEL[focus]}.`,
     };
   }
 
