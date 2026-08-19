@@ -1,6 +1,8 @@
 import SwiftUI
 import UIKit
+#if SUPPORTS_APPLE_SIGN_IN
 import AuthenticationServices
+#endif
 
 enum SyncState: Equatable {
     case idle
@@ -238,6 +240,7 @@ private struct SetupView: View {
                     Text("Your plan, Watch data, and meals belong to this account. Nobody else on Blue Hour can see them.")
                 }
 
+#if SUPPORTS_APPLE_SIGN_IN
                 Section {
                     SignInWithAppleButton(.signIn) { request in
                         request.requestedScopes = [.fullName, .email]
@@ -250,6 +253,7 @@ private struct SetupView: View {
                 } footer: {
                     Text("Creates an account on first use, or signs you back in.")
                 }
+#endif
 
                 if let message {
                     Section { Text(message).font(.footnote) }
@@ -338,6 +342,7 @@ private struct SetupView: View {
         }
     }
 
+#if SUPPORTS_APPLE_SIGN_IN
     private func handleApple(_ result: Result<ASAuthorization, Error>) {
         Settings.baseURL = baseURL
         switch result {
@@ -386,6 +391,7 @@ private struct SetupView: View {
             }
         }
     }
+#endif
 
     private func finishAuth(request: URLRequest) async {
         do {

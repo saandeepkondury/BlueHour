@@ -31,7 +31,7 @@ On first launch the app asks for:
 
 - **Address** — the deployed site (`https://…vercel.app`), or `http://192.168.1.174:3000` while `npm run dev` is running on this Mac and the phone is on the same Wi-Fi. `npm run dev` listens on every interface so the phone can reach the Mac.
 - **Email and password** — your Blue Hour account. Flip **Create a new account** to sign up from the phone instead of the browser.
-- **Sign in with Apple** — same Connect sheet; creates an account on first use. Enable the **Sign in with Apple** capability on the App ID (Signing & Capabilities), and set `APPLE_CLIENT_ID` on the server to this app’s bundle id.
+- **Sign in with Apple** — optional, and only on a **paid** Apple Developer account ($99/year). Free personal teams cannot use this capability, so the default build uses email/password only. If you have a paid account: set **Code Signing Entitlements** to `BlueHour+AppleSignIn.entitlements`, add `SUPPORTS_APPLE_SIGN_IN` under **Active Compilation Conditions**, enable **Sign in with Apple** in Signing & Capabilities, and set `APPLE_CLIENT_ID` on the server to this app’s bundle id.
 
 Signing in exchanges credentials for a device token, which is stored in the iPhone keychain and never leaves it. Every request this app makes — Health ingest, the day snapshot, the notification schedule, Siri — carries that token, so the server only ever writes to your account. There is no shared secret to paste.
 
