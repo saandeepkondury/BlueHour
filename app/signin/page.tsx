@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signIn } from "@/app/auth-actions";
+import { AppleSignInButton } from "@/components/AppleSignInButton";
 import { BrandLockup } from "@/components/Brand";
 import { sessionUserId } from "@/lib/auth/session";
 
@@ -22,41 +23,45 @@ export default async function SignInPage({
         Your plan, your Watch data, your account.
       </p>
 
-      <form action={signIn}>
-        {error ? <p className="notice notice--bad">{error}</p> : null}
-        {deleted ? (
-          <p className="notice notice--good">Your account and its data are gone.</p>
-        ) : null}
-        <input type="hidden" name="next" value={next ?? "/"} />
-        <label className="field">
-          <span className="sr-only">Email</span>
-          <input
-            name="email"
-            type="email"
-            placeholder="Email"
-            autoComplete="email"
-            autoCapitalize="none"
-            autoFocus
-            required
-          />
-        </label>
-        <label className="field">
-          <span className="sr-only">Password</span>
-          <input
-            name="password"
-            type="password"
-            placeholder="Password"
-            autoComplete="current-password"
-            required
-          />
-        </label>
-        <button className="btn btn--primary btn--block" type="submit">
-          Sign in
-        </button>
-        <p className="small muted" style={{ margin: 0 }}>
-          New here? <Link href="/signup">Create an account</Link>
-        </p>
-      </form>
+      <div className="unlock__stack">
+        <AppleSignInButton next={next ?? "/"} label="Sign in with Apple" />
+
+        <form action={signIn}>
+          {error ? <p className="notice notice--bad">{error}</p> : null}
+          {deleted ? (
+            <p className="notice notice--good">Your account and its data are gone.</p>
+          ) : null}
+          <input type="hidden" name="next" value={next ?? "/"} />
+          <label className="field">
+            <span className="sr-only">Email</span>
+            <input
+              name="email"
+              type="email"
+              placeholder="Email"
+              autoComplete="email"
+              autoCapitalize="none"
+              autoFocus
+              required
+            />
+          </label>
+          <label className="field">
+            <span className="sr-only">Password</span>
+            <input
+              name="password"
+              type="password"
+              placeholder="Password"
+              autoComplete="current-password"
+              required
+            />
+          </label>
+          <button className="btn btn--primary btn--block" type="submit">
+            Sign in
+          </button>
+          <p className="small muted" style={{ margin: 0 }}>
+            New here? <Link href="/signup">Create an account</Link>
+          </p>
+        </form>
+      </div>
     </main>
   );
 }

@@ -2142,6 +2142,57 @@ pre {
   animation: brand-rise 0.7s var(--ease) 0.2s both;
 }
 
+.unlock__stack {
+  width: min(19rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  animation: brand-rise 0.7s var(--ease) 0.2s both;
+}
+
+.unlock__stack form {
+  width: 100%;
+  animation: none;
+}
+
+.unlock__stack .apple-auth + form::before {
+  content: "or";
+  display: block;
+  margin: 0.15rem 0 0.55rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.btn--apple {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  background: #111;
+  color: #f5f5f7;
+  border: 1px solid #111;
+}
+
+.btn--apple:hover:not(:disabled) {
+  background: #000;
+}
+
+.btn--apple:disabled {
+  opacity: 0.55;
+}
+
+.btn--apple__glyph {
+  flex-shrink: 0;
+}
+
+.apple-auth {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
 /* ============================================================ onboard */
 
 .unlock--onboard {
@@ -2192,6 +2243,7 @@ pre {
   .unlock .wordmark,
   .unlock__lede,
   .unlock form,
+  .unlock__stack,
   .onboard-form {
     animation: none;
   }

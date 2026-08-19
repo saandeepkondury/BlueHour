@@ -27,12 +27,13 @@ const g = globalThis as Global;
 
 export class AppleAuthError extends Error {}
 
-/** Bundle ids allowed to sign in. Comma-separated so the app and a PWA can share. */
+/** Bundle ids and Services IDs allowed to sign in. Comma-separated. */
 function audiences(): string[] {
-  return (process.env.APPLE_CLIENT_ID ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
+  const parts = [
+    ...(process.env.APPLE_CLIENT_ID ?? "").split(","),
+    ...(process.env.NEXT_PUBLIC_APPLE_CLIENT_ID ?? "").split(","),
+  ];
+  return [...new Set(parts.map((value) => value.trim()).filter((value) => value.length > 0))];
 }
 
 export function appleSignInConfigured(): boolean {

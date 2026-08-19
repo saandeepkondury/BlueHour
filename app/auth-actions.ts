@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { AppleAuthError, appleSignInConfigured, verifyAppleIdentityToken } from "@/lib/auth/apple";
+import { resolveAppleUser } from "@/lib/auth/apple-user";
 import { endSession, sessionUserId, startSession } from "@/lib/auth/session";
 import { passwordProblem, verifyPassword } from "@/lib/auth/password";
 import {
@@ -67,6 +69,43 @@ export async function signIn(formData: FormData): Promise<void> {
 
   await startSession(user.id, (await headers()).get("user-agent"));
   redirect(next);
+}
+
+/**
+ * Completes Sign in with Apple after the browser (or Apple JS) hands us an
+ * identity token. Creates the account on first use, then sets the session cookie.
+ * Returns a path for the client to navigate — avoids fighting redirect errors
+ * inside the Apple popup completion handler.
+ */
+export async function completeAppleSignIn(input: {
+  identityToken: string;
+  name?: string;
+  next?: string;
+}): Promise<{ error: string } | { path: string }> {
+  const next = safeNext(input.next ?? "/");
+
+  if (!appleSignInConfigured()) {
+    return { error: "Sign in with Apple is not configured on this server." };
+  }
+
+  const identityToken = input.identityToken.trim();
+  if (!identityToken) return { error: "Apple did not return a sign-in token. Try again." };
+
+  let identity;
+  try {
+    identity = await verifyAppleIdentityToken(identityToken);
+  } catch (error) {
+    if (error instanceof AppleAuthError) return { error: error.message };
+    throw error;
+  }
+
+  const { user, created } = await resolveAppleUser({
+    identity,
+    name: input.name?.trim() ?? "",
+  });
+
+  await startSession(user.id, (await headers()).get("user-agent"));
+  return { path: created ? "/onboard" : next };
 }
 
 export async function signOut(): Promise<void> {

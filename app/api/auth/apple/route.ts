@@ -1,23 +1,19 @@
-import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { AppleAuthError, appleSignInConfigured, verifyAppleIdentityToken } from "@/lib/auth/apple";
+import { resolveAppleUser } from "@/lib/auth/apple-user";
+import { startSession } from "@/lib/auth/session";
 import { createDeviceToken } from "@/lib/auth/tokens";
-import {
-  createUser,
-  findUserByAppleSub,
-  findUserByEmail,
-  linkAppleSub,
-} from "@/lib/auth/users";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Sign in with Apple from the iPhone shell. Apple requires this once any other
- * sign-in method exists, and it is the only route that can create an account
- * without a password.
+ * Sign in with Apple.
  *
- * POST { identityToken, name?, label? } -> { token, email, name, created }
+ * - mode "device" (default): iPhone shell — returns a device token.
+ * - mode "session": browser — sets the session cookie and returns { ok, created }.
+ *
+ * POST { identityToken, name?, label?, mode? }
  */
 export async function POST(request: Request) {
   if (!appleSignInConfigured()) {
@@ -27,7 +23,12 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { identityToken?: unknown; name?: unknown; label?: unknown };
+  let body: {
+    identityToken?: unknown;
+    name?: unknown;
+    label?: unknown;
+    mode?: unknown;
+  };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -51,25 +52,18 @@ export async function POST(request: Request) {
 
   const name = typeof body.name === "string" ? body.name : "";
   const label = typeof body.label === "string" ? body.label : "iPhone";
+  const mode = body.mode === "session" ? "session" : "device";
 
-  let user = await findUserByAppleSub(identity.sub);
-  let created = false;
+  const { user, created } = await resolveAppleUser({ identity, name });
 
-  if (!user && identity.email) {
-    // Same person coming back through Apple after signing up with a password.
-    const byEmail = await findUserByEmail(identity.email);
-    if (byEmail) {
-      await linkAppleSub(byEmail.id, identity.sub);
-      user = { ...byEmail, appleSub: identity.sub };
-    }
-  }
-
-  if (!user) {
-    // Private Relay can withhold the address; a placeholder keeps email unique
-    // and the account usable, and the runner can set a real one later.
-    const email = identity.email ?? `apple-${randomUUID()}@appleid.invalid`;
-    user = await createUser({ email, name, appleSub: identity.sub });
-    created = true;
+  if (mode === "session") {
+    await startSession(user.id, request.headers.get("user-agent"));
+    return NextResponse.json({
+      ok: true,
+      created,
+      email: user.email,
+      name: user.name,
+    });
   }
 
   return NextResponse.json({

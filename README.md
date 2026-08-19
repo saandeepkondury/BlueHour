@@ -124,8 +124,14 @@ keychain; no shared secret is pasted anywhere. See `ios/README.md`.
    `/api/cron/water` every hour. That route spaces one ping per target cup from 9am to 8pm local,
    skips when intake is already on pace, and stops once the day's water target is met.
 4. **`NEXT_PUBLIC_APP_URL`** — the absolute URL, used in reminder links.
-5. **`APPLE_CLIENT_ID`** — the app's bundle id, to accept Sign in with Apple. Comma-separated if
-   more than one client signs in. Without it that route answers 503 and email sign-in still works.
+5. **`APPLE_CLIENT_ID`** / **`NEXT_PUBLIC_APPLE_CLIENT_ID`** — Sign in with Apple.
+   - iOS: set `APPLE_CLIENT_ID` to the app bundle id (`com.bluehour.trainer` by default) and enable
+     the **Sign in with Apple** capability on the App ID.
+   - Web: create a Services ID, register your domain, and set return URL
+     `https://your-domain/api/auth/apple/callback`. Put the Services ID in
+     `NEXT_PUBLIC_APPLE_CLIENT_ID` (and in `APPLE_CLIENT_ID`, or rely on the merge). The signup and
+     sign-in pages then show **Sign up / Sign in with Apple**. Without these, email/password still
+     works and the Apple routes answer 503.
 6. **`HEALTH_INGEST_SECRET`** — optional, and only an upgrade path. A phone still holding the old
    shared key keeps syncing while the deploy has exactly one account. Drop it once the phone has
    signed in.
