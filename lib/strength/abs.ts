@@ -1,6 +1,7 @@
-import { desc, isNotNull, lte, and, gte } from "drizzle-orm";
+import { desc, eq, isNotNull, lte, and, gte } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
 import { healthDays, type Profile } from "@/drizzle/schema";
+import { uid } from "@/lib/auth/current";
 import { addDays, daysBetween, formatShort } from "@/lib/date";
 import { phaseFor, type Phase, type WorkoutType } from "@/lib/plan/types";
 
@@ -73,10 +74,11 @@ export function targetBodyFatFor(current: Profile): number {
 /** Most recent non-null value per field, so a stale waist reading still counts. */
 export async function latestMeasurement(onOrBefore: string): Promise<BodyMeasurement | null> {
   await ready();
+  const user = await uid();
   const rows = await db
     .select()
     .from(healthDays)
-    .where(lte(healthDays.date, onOrBefore))
+    .where(and(eq(healthDays.userId, user), lte(healthDays.date, onOrBefore)))
     .orderBy(desc(healthDays.date))
     .limit(120);
 
@@ -104,10 +106,11 @@ export async function latestMeasurement(onOrBefore: string): Promise<BodyMeasure
 
 async function measurementNear(date: string): Promise<BodyMeasurement | null> {
   await ready();
+  const user = await uid();
   const rows = await db
     .select()
     .from(healthDays)
-    .where(and(gte(healthDays.date, addDays(date, -10)), lte(healthDays.date, addDays(date, 10)), isNotNull(healthDays.weightKg)))
+    .where(and(eq(healthDays.userId, user), gte(healthDays.date, addDays(date, -10)), lte(healthDays.date, addDays(date, 10)), isNotNull(healthDays.weightKg)))
     .orderBy(healthDays.date);
   const row = rows[0];
   return row

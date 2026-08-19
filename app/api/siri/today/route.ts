@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { authenticate, isDenied } from "@/lib/auth/request";
+import { runAsUser } from "@/lib/auth/scope";
 import { todayISO } from "@/lib/date";
-import { guardIngest } from "@/lib/health/guard";
 import { buildBrief } from "@/lib/notify/brief";
 import { CUP_OZ } from "@/lib/notify/water";
 import { getDayBundle, getDayLog } from "@/lib/store";
@@ -9,21 +10,19 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Compact today snapshot for Siri App Intents on the iPhone shell.
- * Auth: same Bearer sync key as Health ingest.
+ * Compact today snapshot for Siri App Intents on the iPhone shell, for whichever
+ * account that phone signed in as.
  */
 export async function GET(request: Request) {
-  const denied = await guardIngest(request);
-  if (denied) return denied;
+  const auth = await authenticate(request);
+  if (isDenied(auth)) return auth.denied;
 
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || new URL(request.url).origin;
   const date = todayISO();
-  const [brief, log, bundle] = await Promise.all([
-    buildBrief(date, appUrl),
-    getDayLog(date),
-    getDayBundle(date),
-  ]);
+  const [brief, log, bundle] = await runAsUser(auth.userId, () =>
+    Promise.all([buildBrief(date, appUrl), getDayLog(date), getDayBundle(date)]),
+  );
 
   if (!brief || !bundle) {
     return NextResponse.json({ error: "No plan for today." }, { status: 404 });

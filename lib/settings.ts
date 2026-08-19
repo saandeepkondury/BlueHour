@@ -1,10 +1,12 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
 import { settings } from "@/drizzle/schema";
+import { uid } from "@/lib/auth/current";
 
 /**
  * Anything that is neither a training row nor part of the runner's profile —
- * coach overrides and the OpenAI credentials — lives in one key/value table.
+ * coach overrides and the OpenAI credentials — lives in one key/value table,
+ * keyed by account.
  */
 
 export const KEYS = {
@@ -26,29 +28,68 @@ export const KEYS = {
 
 export type SettingKey = (typeof KEYS)[keyof typeof KEYS];
 
+/**
+ * Owner for rows that are the same for everyone — the WorkoutX exercise catalog
+ * cache. Not a real account, so it is never returned by any account lookup.
+ */
+const SHARED_SCOPE = "__shared__";
+
+export async function getSharedSetting(key: SettingKey): Promise<string | null> {
+  await ready();
+  const [row] = await db
+    .select()
+    .from(settings)
+    .where(and(eq(settings.userId, SHARED_SCOPE), eq(settings.key, key)));
+  return row?.value ?? null;
+}
+
+export async function setSharedSetting(key: SettingKey, value: string): Promise<void> {
+  await ready();
+  const updatedAt = new Date().toISOString();
+  await db
+    .insert(settings)
+    .values({ userId: SHARED_SCOPE, key, value, updatedAt })
+    .onConflictDoUpdate({
+      target: [settings.userId, settings.key],
+      set: { value, updatedAt },
+    });
+}
+
 export async function getSetting(key: SettingKey): Promise<string | null> {
   await ready();
-  const [row] = await db.select().from(settings).where(eq(settings.key, key));
+  const user = await uid();
+  const [row] = await db
+    .select()
+    .from(settings)
+    .where(and(eq(settings.userId, user), eq(settings.key, key)));
   return row?.value ?? null;
 }
 
 export async function getSettings(keys: SettingKey[]): Promise<Map<string, string>> {
   await ready();
-  const rows = await db.select().from(settings).where(inArray(settings.key, keys));
+  const user = await uid();
+  const rows = await db
+    .select()
+    .from(settings)
+    .where(and(eq(settings.userId, user), inArray(settings.key, keys)));
   return new Map(rows.map((row) => [row.key, row.value]));
 }
 
 export async function setSetting(key: SettingKey, value: string): Promise<void> {
   await ready();
+  const user = await uid();
   const updatedAt = new Date().toISOString();
   if (value === "") {
-    await db.delete(settings).where(eq(settings.key, key));
+    await db.delete(settings).where(and(eq(settings.userId, user), eq(settings.key, key)));
     return;
   }
   await db
     .insert(settings)
-    .values({ key, value, updatedAt })
-    .onConflictDoUpdate({ target: settings.key, set: { value, updatedAt } });
+    .values({ userId: user, key, value, updatedAt })
+    .onConflictDoUpdate({
+      target: [settings.userId, settings.key],
+      set: { value, updatedAt },
+    });
 }
 
 export async function getNumber(key: SettingKey, fallback: number): Promise<number> {
@@ -70,8 +111,8 @@ export async function fuelOverrides(): Promise<{ calorieDelta: number; proteinFl
 }
 
 /**
- * The environment wins over the stored key, so a deploy can rotate credentials
- * without anyone editing the database.
+ * The environment wins over the stored key, so a deploy can serve every account
+ * from one server-owned key without anyone pasting their own.
  */
 export async function openaiConfig(): Promise<{ key: string | null; model: string; fromEnv: boolean }> {
   const rows = await getSettings([KEYS.openaiKey, KEYS.openaiModel]);

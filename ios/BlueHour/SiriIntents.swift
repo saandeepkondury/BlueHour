@@ -110,22 +110,9 @@ struct SyncHealthIntent: AppIntent {
         guard Settings.isConfigured else { throw SiriIntentError.notConfigured }
 
         do {
-            let bridge = HealthBridge()
-            try await bridge.requestAccess()
-            let payload = try await bridge.collect()
-            let result = try await SyncClient().send(payload)
-            await NotificationScheduler.refresh()
-
-            let message: String
-            if result.workoutsWritten > 0 {
-                let runs = result.workoutsWritten == 1 ? "1 run" : "\(result.workoutsWritten) runs"
-                message = "Synced \(runs) and \(result.daysWritten) days."
-            } else if result.daysWritten > 0 {
-                message = "Synced \(result.daysWritten) days."
-            } else {
-                message = "Nothing new in Health."
-            }
-            return .result(dialog: IntentDialog(stringLiteral: message))
+            let result = try await HealthSyncRunner.sync()
+            BackgroundHealthSync.shared.startIfConfigured()
+            return .result(dialog: IntentDialog(stringLiteral: HealthSyncRunner.summary(for: result) + "."))
         } catch {
             throw mapSyncError(error)
         }

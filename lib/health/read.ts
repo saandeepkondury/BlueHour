@@ -8,6 +8,7 @@ import {
   type HealthDay,
   type WorkoutLog,
 } from "@/drizzle/schema";
+import { uid } from "@/lib/auth/current";
 import { addDays, daysBetween, todayISO } from "@/lib/date";
 import { phaseFor } from "@/lib/plan/types";
 
@@ -84,18 +85,28 @@ export function hasReadinessSignal(recovery: Recovery): boolean {
 
 export async function recoveryFor(date: string): Promise<Recovery> {
   await ready();
+  const user = await uid();
 
   const startDate = await trainingStartDate();
   if (startDate) await pruneHealthDaysBefore(startDate);
 
-  const [todayRow] = await db.select().from(healthDays).where(eq(healthDays.date, date));
+  const [todayRow] = await db
+    .select()
+    .from(healthDays)
+    .where(and(eq(healthDays.userId, user), eq(healthDays.date, date)));
   const baselineFrom = addDays(date, -14);
   const historyFrom =
     startDate && baselineFrom < startDate ? startDate : baselineFrom;
   const history = await db
     .select()
     .from(healthDays)
-    .where(and(gte(healthDays.date, historyFrom), lt(healthDays.date, date)));
+    .where(
+      and(
+        eq(healthDays.userId, user),
+        gte(healthDays.date, historyFrom),
+        lt(healthDays.date, date),
+      ),
+    );
 
   const restingSamples = history
     .map((row) => row.restingHr)
@@ -121,7 +132,13 @@ export async function recoveryFor(date: string): Promise<Recovery> {
     const recent = await db
       .select()
       .from(healthDays)
-      .where(and(gte(healthDays.date, recentFrom), lte(healthDays.date, date)))
+      .where(
+        and(
+          eq(healthDays.userId, user),
+          gte(healthDays.date, recentFrom),
+          lte(healthDays.date, date),
+        ),
+      )
       .orderBy(desc(healthDays.date));
     const hit = recent.find((row) => hasVitals(row));
     if (hit) {
@@ -371,10 +388,11 @@ async function racePrepFor(
   restingBaseline: number | null,
   hrvBaseline: number | null,
 ): Promise<RacePrep | null> {
+  const user = await uid();
   const [row] = await db
     .select({ raceDate: profile.raceDate, startDate: profile.startDate })
     .from(profile)
-    .where(eq(profile.id, 1));
+    .where(eq(profile.userId, user));
   const trainingStart = row?.startDate ?? addDays(date, -120);
   const lookback = addDays(date, -120);
   const historyFrom = lookback < trainingStart ? trainingStart : lookback;
@@ -382,7 +400,13 @@ async function racePrepFor(
   const logs = await db
     .select()
     .from(workoutLogs)
-    .where(and(gte(workoutLogs.date, historyFrom), lte(workoutLogs.date, before)));
+    .where(
+      and(
+        eq(workoutLogs.userId, user),
+        gte(workoutLogs.date, historyFrom),
+        lte(workoutLogs.date, before),
+      ),
+    );
 
   return racePrepFromData(
     date,
@@ -417,27 +441,42 @@ export interface ReadinessHistory {
 /** Daily race-readiness scores from training start through today. */
 export async function getReadinessHistory(): Promise<ReadinessHistory> {
   await ready();
+  const user = await uid();
 
   const [row] = await db
     .select({ raceDate: profile.raceDate, startDate: profile.startDate })
     .from(profile)
-    .where(eq(profile.id, 1));
+    .where(eq(profile.userId, user));
   const today = todayISO();
   const startDate = row?.startDate && row.startDate <= today ? row.startDate : today;
   const raceDate = row?.raceDate ?? null;
 
   await pruneHealthDaysBefore(startDate);
-  await db.delete(workoutLogs).where(lt(workoutLogs.date, startDate));
+  await db
+    .delete(workoutLogs)
+    .where(and(eq(workoutLogs.userId, user), lt(workoutLogs.date, startDate)));
 
   const [logs, vitalRows] = await Promise.all([
     db
       .select()
       .from(workoutLogs)
-      .where(and(gte(workoutLogs.date, startDate), lte(workoutLogs.date, today))),
+      .where(
+        and(
+          eq(workoutLogs.userId, user),
+          gte(workoutLogs.date, startDate),
+          lte(workoutLogs.date, today),
+        ),
+      ),
     db
       .select()
       .from(healthDays)
-      .where(and(gte(healthDays.date, startDate), lte(healthDays.date, today))),
+      .where(
+        and(
+          eq(healthDays.userId, user),
+          gte(healthDays.date, startDate),
+          lte(healthDays.date, today),
+        ),
+      ),
   ]);
 
   const vitalsByDate = new Map(vitalRows.map((day) => [day.date, day]));
@@ -566,13 +605,18 @@ function advisoryFor(
 
 export async function logFor(date: string): Promise<WorkoutLog | null> {
   await ready();
-  const [log] = await db.select().from(workoutLogs).where(eq(workoutLogs.date, date));
+  const user = await uid();
+  const [log] = await db
+    .select()
+    .from(workoutLogs)
+    .where(and(eq(workoutLogs.userId, user), eq(workoutLogs.date, date)));
   return log ?? null;
 }
 
 export async function lastSync(): Promise<{ at: string; device: string | null } | null> {
   await ready();
-  const [row] = await db.select().from(healthSync).orderBy(desc(healthSync.lastSyncAt)).limit(1);
+  const user = await uid();
+  const [row] = await db.select().from(healthSync).where(eq(healthSync.userId, user));
   return row ? { at: row.lastSyncAt, device: row.device } : null;
 }
 
@@ -581,20 +625,29 @@ export type VitalMetric = "sleep" | "rest_hr" | "hrv";
 /** Drop sleep / HR / HRV day rows from before the training block started. */
 export async function pruneHealthDaysBefore(startDate: string): Promise<number> {
   await ready();
-  const removed = await db.delete(healthDays).where(lt(healthDays.date, startDate)).returning({
-    date: healthDays.date,
-  });
+  const user = await uid();
+  const removed = await db
+    .delete(healthDays)
+    .where(and(eq(healthDays.userId, user), lt(healthDays.date, startDate)))
+    .returning({
+      date: healthDays.date,
+    });
   return removed.length;
 }
 
 async function trainingStartDate(): Promise<string | null> {
-  const [row] = await db.select({ startDate: profile.startDate }).from(profile).where(eq(profile.id, 1));
+  const user = await uid();
+  const [row] = await db
+    .select({ startDate: profile.startDate })
+    .from(profile)
+    .where(eq(profile.userId, user));
   return row?.startDate ?? null;
 }
 
 /** Days that have the requested vital, newest first — only since training start. */
 export async function getVitalsHistory(metric: VitalMetric): Promise<HealthDay[]> {
   await ready();
+  const user = await uid();
   const startDate = await trainingStartDate();
   if (startDate) await pruneHealthDaysBefore(startDate);
 
@@ -606,8 +659,8 @@ export async function getVitalsHistory(metric: VitalMetric): Promise<HealthDay[]
         : healthDays.hrvMs;
 
   const filters = startDate
-    ? and(isNotNull(column), gte(healthDays.date, startDate))
-    : isNotNull(column);
+    ? and(eq(healthDays.userId, user), isNotNull(column), gte(healthDays.date, startDate))
+    : and(eq(healthDays.userId, user), isNotNull(column));
 
   return db.select().from(healthDays).where(filters).orderBy(desc(healthDays.date));
 }

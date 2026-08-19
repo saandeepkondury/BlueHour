@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "Blue Hour — Austin Half trainer";
+export const alt = "Blue Hour — half marathon trainer";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -95,7 +95,7 @@ export default function OpenGraphImage() {
             fontFamily: "Georgia, 'Times New Roman', serif",
           }}
         >
-          Austin Half trainer
+          Half marathon trainer
         </div>
       </div>
     ),

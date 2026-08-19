@@ -2,9 +2,41 @@ import { createClient, type Client } from "@libsql/client";
 import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
 import * as schema from "@/drizzle/schema";
 
-const DDL = [
-  `CREATE TABLE IF NOT EXISTS profile (
-    id INTEGER PRIMARY KEY,
+/**
+ * Rows that predate accounts are parked under this owner and handed to the
+ * first account created on the deploy, so upgrading a personal install does not
+ * lose its training history. See `adoptLegacyData` in lib/auth/users.ts.
+ */
+export const LEGACY_USER_ID = "legacy";
+
+const TABLES: Record<string, string> = {
+  users: `CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT,
+    name TEXT NOT NULL DEFAULT '',
+    apple_sub TEXT UNIQUE,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  sessions: `CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    user_agent TEXT
+  )`,
+  device_tokens: `CREATE TABLE IF NOT EXISTS device_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    label TEXT NOT NULL DEFAULT 'iPhone',
+    created_at TEXT NOT NULL,
+    last_used_at TEXT
+  )`,
+  profile: `CREATE TABLE IF NOT EXISTS profile (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
     race_name TEXT NOT NULL,
     race_date TEXT NOT NULL,
     start_date TEXT NOT NULL,
@@ -12,6 +44,7 @@ const DDL = [
     goal TEXT NOT NULL DEFAULT 'finish',
     time_goal_sec INTEGER,
     long_run_day INTEGER NOT NULL DEFAULT 6,
+    time_zone TEXT NOT NULL DEFAULT 'America/Chicago',
     height_cm REAL,
     weight_kg REAL,
     age INTEGER,
@@ -21,12 +54,17 @@ const DDL = [
     email TEXT NOT NULL DEFAULT '',
     reminder_hour INTEGER NOT NULL DEFAULT 6,
     reminders_enabled INTEGER NOT NULL DEFAULT 1,
+    abs_goal INTEGER NOT NULL DEFAULT 1,
+    target_body_fat_pct REAL,
+    strength_days INTEGER NOT NULL DEFAULT 2,
+    ai_enabled INTEGER NOT NULL DEFAULT 1,
     onboarded_at TEXT,
     updated_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS workouts (
+  workouts: `CREATE TABLE IF NOT EXISTS workouts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL,
+    date TEXT NOT NULL,
     week INTEGER NOT NULL,
     weeks_to_race INTEGER NOT NULL,
     phase TEXT NOT NULL,
@@ -39,91 +77,27 @@ const DDL = [
     status TEXT NOT NULL DEFAULT 'planned',
     skip_reason TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS workout_logs (
+  workout_logs: `CREATE TABLE IF NOT EXISTS workout_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL,
+    date TEXT NOT NULL,
     distance_mi REAL NOT NULL DEFAULT 0,
     duration_sec INTEGER,
     rpe INTEGER,
     feel TEXT,
     notes TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'manual',
+    external_id TEXT,
+    avg_hr INTEGER,
+    max_hr INTEGER,
+    active_kcal INTEGER,
+    start_at TEXT,
+    end_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS meal_plans (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+  health_days: `CREATE TABLE IF NOT EXISTS health_days (
+    user_id TEXT NOT NULL,
     date TEXT NOT NULL,
-    slot TEXT NOT NULL,
-    recipe_id TEXT,
-    name TEXT NOT NULL,
-    calories INTEGER NOT NULL DEFAULT 0,
-    protein INTEGER NOT NULL DEFAULT 0,
-    carbs INTEGER NOT NULL DEFAULT 0,
-    fat INTEGER NOT NULL DEFAULT 0,
-    eaten INTEGER NOT NULL DEFAULT 0,
-    UNIQUE (date, slot)
-  )`,
-  `CREATE TABLE IF NOT EXISTS food_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT NOT NULL,
-    name TEXT NOT NULL,
-    calories INTEGER NOT NULL DEFAULT 0,
-    protein INTEGER NOT NULL DEFAULT 0,
-    carbs INTEGER NOT NULL DEFAULT 0,
-    fat INTEGER NOT NULL DEFAULT 0,
-    source TEXT NOT NULL DEFAULT 'custom',
-    meal_plan_id INTEGER,
-    created_at TEXT NOT NULL
-  )`,
-  `CREATE TABLE IF NOT EXISTS day_logs (
-    date TEXT PRIMARY KEY,
-    water_oz INTEGER NOT NULL DEFAULT 0,
-    sodium_mg INTEGER NOT NULL DEFAULT 0,
-    notes TEXT
-  )`,
-  `CREATE TABLE IF NOT EXISTS grocery_checks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    week_start TEXT NOT NULL,
-    item_key TEXT NOT NULL,
-    checked INTEGER NOT NULL DEFAULT 0,
-    UNIQUE (week_start, item_key)
-  )`,
-  `CREATE TABLE IF NOT EXISTS pantry_items (
-    item_key TEXT PRIMARY KEY,
-    have_at_home INTEGER NOT NULL DEFAULT 1,
-    updated_at TEXT NOT NULL
-  )`,
-  `CREATE TABLE IF NOT EXISTS supplement_prefs (
-    id TEXT PRIMARY KEY,
-    enabled INTEGER NOT NULL DEFAULT 1
-  )`,
-  `CREATE TABLE IF NOT EXISTS supplement_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT NOT NULL,
-    supplement_id TEXT NOT NULL,
-    taken INTEGER NOT NULL DEFAULT 0,
-    UNIQUE (date, supplement_id)
-  )`,
-  `CREATE TABLE IF NOT EXISTS fuel_checks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT NOT NULL,
-    stage TEXT NOT NULL,
-    checked INTEGER NOT NULL DEFAULT 0,
-    UNIQUE (date, stage)
-  )`,
-  `CREATE TABLE IF NOT EXISTS push_subscriptions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    endpoint TEXT NOT NULL UNIQUE,
-    p256dh TEXT NOT NULL,
-    auth TEXT NOT NULL,
-    created_at TEXT NOT NULL
-  )`,
-  `CREATE TABLE IF NOT EXISTS reminder_runs (
-    date TEXT PRIMARY KEY,
-    sent_at TEXT NOT NULL,
-    channels TEXT NOT NULL
-  )`,
-  `CREATE TABLE IF NOT EXISTS health_days (
-    date TEXT PRIMARY KEY,
     sleep_start TEXT,
     sleep_end TEXT,
     asleep_min INTEGER,
@@ -141,18 +115,108 @@ const DDL = [
     hrv_min REAL,
     hrv_max REAL,
     hrv_count INTEGER,
-    updated_at TEXT NOT NULL
+    steps INTEGER,
+    active_kcal INTEGER,
+    weight_kg REAL,
+    body_fat_pct REAL,
+    waist_cm REAL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, date)
   )`,
-  `CREATE TABLE IF NOT EXISTS health_sync (
-    id INTEGER PRIMARY KEY,
+  health_sync: `CREATE TABLE IF NOT EXISTS health_sync (
+    user_id TEXT PRIMARY KEY,
     last_sync_at TEXT NOT NULL,
     device TEXT,
     days_seen INTEGER NOT NULL DEFAULT 0,
     workouts_seen INTEGER NOT NULL DEFAULT 0
   )`,
-  `CREATE TABLE IF NOT EXISTS strength_sessions (
+  meal_plans: `CREATE TABLE IF NOT EXISTS meal_plans (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    slot TEXT NOT NULL,
+    recipe_id TEXT,
+    name TEXT NOT NULL,
+    calories INTEGER NOT NULL DEFAULT 0,
+    protein INTEGER NOT NULL DEFAULT 0,
+    carbs INTEGER NOT NULL DEFAULT 0,
+    fat INTEGER NOT NULL DEFAULT 0,
+    eaten INTEGER NOT NULL DEFAULT 0
+  )`,
+  food_logs: `CREATE TABLE IF NOT EXISTS food_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    name TEXT NOT NULL,
+    calories INTEGER NOT NULL DEFAULT 0,
+    protein INTEGER NOT NULL DEFAULT 0,
+    carbs INTEGER NOT NULL DEFAULT 0,
+    fat INTEGER NOT NULL DEFAULT 0,
+    source TEXT NOT NULL DEFAULT 'custom',
+    meal_plan_id INTEGER,
+    created_at TEXT NOT NULL
+  )`,
+  day_logs: `CREATE TABLE IF NOT EXISTS day_logs (
+    user_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    water_oz INTEGER NOT NULL DEFAULT 0,
+    sodium_mg INTEGER NOT NULL DEFAULT 0,
+    notes TEXT,
+    PRIMARY KEY (user_id, date)
+  )`,
+  grocery_checks: `CREATE TABLE IF NOT EXISTS grocery_checks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    week_start TEXT NOT NULL,
+    item_key TEXT NOT NULL,
+    checked INTEGER NOT NULL DEFAULT 0
+  )`,
+  pantry_items: `CREATE TABLE IF NOT EXISTS pantry_items (
+    user_id TEXT NOT NULL,
+    item_key TEXT NOT NULL,
+    have_at_home INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, item_key)
+  )`,
+  supplement_prefs: `CREATE TABLE IF NOT EXISTS supplement_prefs (
+    user_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (user_id, id)
+  )`,
+  supplement_logs: `CREATE TABLE IF NOT EXISTS supplement_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    supplement_id TEXT NOT NULL,
+    taken INTEGER NOT NULL DEFAULT 0
+  )`,
+  fuel_checks: `CREATE TABLE IF NOT EXISTS fuel_checks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    checked INTEGER NOT NULL DEFAULT 0
+  )`,
+  push_subscriptions: `CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    endpoint TEXT NOT NULL UNIQUE,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )`,
+  reminder_runs: `CREATE TABLE IF NOT EXISTS reminder_runs (
+    user_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    sent_at TEXT NOT NULL,
+    channels TEXT NOT NULL,
+    PRIMARY KEY (user_id, date)
+  )`,
+  strength_sessions: `CREATE TABLE IF NOT EXISTS strength_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    date TEXT NOT NULL,
     week INTEGER NOT NULL,
     phase TEXT NOT NULL,
     focus TEXT NOT NULL,
@@ -164,23 +228,26 @@ const DDL = [
     status TEXT NOT NULL DEFAULT 'planned',
     skip_reason TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS strength_checks (
+  strength_checks: `CREATE TABLE IF NOT EXISTS strength_checks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
     date TEXT NOT NULL,
     exercise_id TEXT NOT NULL,
     done INTEGER NOT NULL DEFAULT 0,
-    load TEXT,
-    UNIQUE (date, exercise_id)
+    load TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS strength_logs (
-    date TEXT PRIMARY KEY,
+  strength_logs: `CREATE TABLE IF NOT EXISTS strength_logs (
+    user_id TEXT NOT NULL,
+    date TEXT NOT NULL,
     minutes INTEGER,
     rpe INTEGER,
     notes TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, date)
   )`,
-  `CREATE TABLE IF NOT EXISTS coach_suggestions (
+  coach_suggestions: `CREATE TABLE IF NOT EXISTS coach_suggestions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
     created_at TEXT NOT NULL,
     date TEXT NOT NULL,
     origin TEXT NOT NULL DEFAULT 'rules',
@@ -193,47 +260,73 @@ const DDL = [
     status TEXT NOT NULL DEFAULT 'pending',
     decided_at TEXT,
     snapshot TEXT,
-    fingerprint TEXT NOT NULL UNIQUE
+    fingerprint TEXT NOT NULL
   )`,
-  `CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY,
+  settings: `CREATE TABLE IF NOT EXISTS settings (
+    user_id TEXT NOT NULL,
+    key TEXT NOT NULL,
     value TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, key)
   )`,
+};
+
+/**
+ * Tables whose rows belong to an account. A database created before accounts
+ * existed has these without `user_id`, which is what triggers the rebuild.
+ */
+const TENANT_TABLES = [
+  "profile",
+  "workouts",
+  "workout_logs",
+  "health_days",
+  "health_sync",
+  "meal_plans",
+  "food_logs",
+  "day_logs",
+  "grocery_checks",
+  "pantry_items",
+  "supplement_prefs",
+  "supplement_logs",
+  "fuel_checks",
+  "push_subscriptions",
+  "reminder_runs",
+  "strength_sessions",
+  "strength_checks",
+  "strength_logs",
+  "coach_suggestions",
+  "settings",
 ];
 
 /**
- * Additive column adds for databases created before HealthKit import existed.
- * SQLite has no "ADD COLUMN IF NOT EXISTS", so re-runs are expected to fail.
+ * Unique indexes are declared separately rather than inline so a later schema
+ * change can drop and rebuild them — SQLite cannot drop an inline constraint.
+ */
+const INDEXES = [
+  `CREATE INDEX IF NOT EXISTS sessions_user ON sessions (user_id)`,
+  `CREATE INDEX IF NOT EXISTS device_tokens_user ON device_tokens (user_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS profile_user_unique ON profile (user_id)`,
+  `CREATE INDEX IF NOT EXISTS profile_user ON profile (user_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS workouts_user_date ON workouts (user_id, date)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS workout_logs_user_date ON workout_logs (user_id, date)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS meal_plans_user_date_slot ON meal_plans (user_id, date, slot)`,
+  `CREATE INDEX IF NOT EXISTS food_logs_user_date ON food_logs (user_id, date)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS grocery_user_week_item ON grocery_checks (user_id, week_start, item_key)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS supp_log_user_date_id ON supplement_logs (user_id, date, supplement_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS fuel_user_date_stage ON fuel_checks (user_id, date, stage)`,
+  `CREATE INDEX IF NOT EXISTS push_subscriptions_user ON push_subscriptions (user_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS strength_sessions_user_date ON strength_sessions (user_id, date)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS strength_check_user_date_ex ON strength_checks (user_id, date, exercise_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS coach_user_fingerprint ON coach_suggestions (user_id, fingerprint)`,
+];
+
+/**
+ * Additive column adds for databases created by an earlier version of this
+ * schema. SQLite has no "ADD COLUMN IF NOT EXISTS", so re-runs are expected to
+ * fail and the duplicate-column error is swallowed.
  */
 const COLUMN_ADDS = [
-  `ALTER TABLE workout_logs ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'`,
-  `ALTER TABLE workout_logs ADD COLUMN external_id TEXT`,
-  `ALTER TABLE workout_logs ADD COLUMN avg_hr INTEGER`,
-  `ALTER TABLE workout_logs ADD COLUMN max_hr INTEGER`,
-  `ALTER TABLE workout_logs ADD COLUMN active_kcal INTEGER`,
-  `ALTER TABLE workout_logs ADD COLUMN start_at TEXT`,
-  `ALTER TABLE workout_logs ADD COLUMN end_at TEXT`,
-  `ALTER TABLE health_days ADD COLUMN steps INTEGER`,
-  `ALTER TABLE health_days ADD COLUMN active_kcal INTEGER`,
-  `ALTER TABLE health_days ADD COLUMN weight_kg REAL`,
-  `ALTER TABLE health_days ADD COLUMN body_fat_pct REAL`,
-  `ALTER TABLE health_days ADD COLUMN waist_cm REAL`,
-  `ALTER TABLE health_days ADD COLUMN rem_min INTEGER`,
-  `ALTER TABLE health_days ADD COLUMN core_min INTEGER`,
-  `ALTER TABLE health_days ADD COLUMN deep_min INTEGER`,
-  `ALTER TABLE health_days ADD COLUMN sleep_hr INTEGER`,
-  `ALTER TABLE health_days ADD COLUMN walking_hr INTEGER`,
-  `ALTER TABLE health_days ADD COLUMN hr_min INTEGER`,
-  `ALTER TABLE health_days ADD COLUMN hr_avg INTEGER`,
-  `ALTER TABLE health_days ADD COLUMN hr_max INTEGER`,
-  `ALTER TABLE health_days ADD COLUMN hrv_min REAL`,
-  `ALTER TABLE health_days ADD COLUMN hrv_max REAL`,
-  `ALTER TABLE health_days ADD COLUMN hrv_count INTEGER`,
-  `ALTER TABLE profile ADD COLUMN abs_goal INTEGER NOT NULL DEFAULT 1`,
-  `ALTER TABLE profile ADD COLUMN target_body_fat_pct REAL`,
-  `ALTER TABLE profile ADD COLUMN strength_days INTEGER NOT NULL DEFAULT 2`,
-  `ALTER TABLE profile ADD COLUMN ai_enabled INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE profile ADD COLUMN time_zone TEXT NOT NULL DEFAULT 'America/Chicago'`,
 ];
 
 type Global = typeof globalThis & {
@@ -262,15 +355,20 @@ function client(): Client {
 export const db: LibSQLDatabase<typeof schema> = drizzle(client(), { schema });
 
 /**
- * Creates tables on first use. The schema is small and additive, so running the
- * DDL on boot keeps a single-user deploy from needing a migration step.
+ * Creates tables on first use and upgrades a pre-accounts database in place.
+ * The schema is small enough that this replaces a separate migration step.
  */
 export function ready(): Promise<void> {
   if (!g.__bhReady) {
     g.__bhReady = (async () => {
-      for (const statement of DDL) {
+      for (const statement of Object.values(TABLES)) {
         await client().execute(statement);
       }
+
+      for (const table of TENANT_TABLES) {
+        await addTenancy(table);
+      }
+
       for (const statement of COLUMN_ADDS) {
         try {
           await client().execute(statement);
@@ -278,9 +376,50 @@ export function ready(): Promise<void> {
           if (!isDuplicateColumn(error)) throw error;
         }
       }
+
+      // Indexes last: several of them reference user_id, which only exists once
+      // the rebuild above has run.
+      for (const statement of INDEXES) {
+        await client().execute(statement);
+      }
     })();
   }
   return g.__bhReady;
+}
+
+async function columnsOf(table: string): Promise<string[]> {
+  const result = await client().execute(`PRAGMA table_info(${table})`);
+  return result.rows.map((row) => String((row as Record<string, unknown>).name));
+}
+
+/**
+ * Rebuilds one pre-accounts table: rename, recreate with the multi-tenant
+ * shape, copy the rows across under the legacy owner, drop the original. A
+ * rebuild is the only way to change a primary key or a unique constraint in
+ * SQLite, and every one of these tables needs `user_id` inside its key.
+ */
+async function addTenancy(table: string): Promise<void> {
+  const existing = await columnsOf(table);
+  if (existing.length === 0) return;
+  if (existing.includes("user_id")) return;
+
+  const legacyName = `${table}__pre_accounts`;
+  await client().execute(`DROP TABLE IF EXISTS ${legacyName}`);
+  await client().execute(`ALTER TABLE ${table} RENAME TO ${legacyName}`);
+  await client().execute(TABLES[table]);
+
+  const target = await columnsOf(table);
+  const shared = existing.filter((column) => target.includes(column) && column !== "user_id");
+  const columnList = shared.join(", ");
+
+  if (shared.length > 0) {
+    await client().execute(
+      `INSERT OR REPLACE INTO ${table} (user_id, ${columnList})
+       SELECT '${LEGACY_USER_ID}', ${columnList} FROM ${legacyName}`,
+    );
+  }
+
+  await client().execute(`DROP TABLE ${legacyName}`);
 }
 
 function isDuplicateColumn(error: unknown): boolean {

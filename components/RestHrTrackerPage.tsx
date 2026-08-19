@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { AppBar } from "@/components/AppBar";
+import { HealthSharingEmpty, HealthSharingTip } from "@/components/HealthSharingEmpty";
 import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { formatWithYear, todayISO, weekdayShort } from "@/lib/date";
 import { pendingCount } from "@/lib/coach/store";
-import { getRestHrSummary } from "@/lib/health/read";
+import { getRestHrSummary, lastSync } from "@/lib/health/read";
 
 function detailLine(row: {
   sleepHr: number | null;
@@ -22,7 +23,12 @@ function detailLine(row: {
 
 export async function RestHrTrackerPage() {
   const today = todayISO();
-  const [pending, summary] = await Promise.all([pendingCount(), getRestHrSummary()]);
+  const [pending, summary, sync] = await Promise.all([
+    pendingCount(),
+    getRestHrSummary(),
+    lastSync(),
+  ]);
+  const synced = Boolean(sync);
   const {
     history,
     todayHr,
@@ -59,9 +65,17 @@ export async function RestHrTrackerPage() {
                   ? delta !== null && delta !== 0
                     ? `Today · ${delta > 0 ? "+" : ""}${delta} vs normal`
                     : "Today"
-                  : "Nothing for today yet"}
+                  : synced
+                    ? "Permission or Watch not writing yet"
+                    : "Nothing for today yet"}
               </p>
             </div>
+
+            <HealthSharingTip
+              focus="heart"
+              synced={synced}
+              missing={todayHr === null && history.length > 0}
+            />
 
             <div className="bento bento--3">
               <div className="tile">
@@ -122,18 +136,7 @@ export async function RestHrTrackerPage() {
           </div>
           <div className="card">
             {history.length === 0 ? (
-              <div className="empty">
-                <span className="empty__icon">
-                  <Icon name="heart" size={20} />
-                </span>
-                <p className="small sub">
-                  Resting heart rate, walking average, and daytime range land here after sync —
-                  only days since this training block started.
-                </p>
-                <Link className="btn btn--ghost btn--sm" href="/settings/watch">
-                  Apple Health sync
-                </Link>
-              </div>
+              <HealthSharingEmpty icon="heart" focus="heart" synced={synced} />
             ) : (
               <div className="rows">
                 {history.map((row) => {

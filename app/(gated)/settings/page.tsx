@@ -90,9 +90,17 @@ export default async function SettingsPage() {
                   </select>
                 </label>
               </div>
+              <label className="field">
+                <span className="field__label">Experience</span>
+                <select name="experience" defaultValue={profile.experience}>
+                  <option value="beginner">Beginner — walk/run openers</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced — continuous from week one</option>
+                </select>
+              </label>
               <p className="small muted">
                 Changing the date or long-run day rebuilds the plan from today forward. Anything
-                already logged stays.
+                already logged stays. Experience shapes the opening weeks on the next rebuild.
               </p>
             </div>
           </section>

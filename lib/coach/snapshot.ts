@@ -14,7 +14,7 @@ import {
   workouts,
   type Profile,
 } from "@/drizzle/schema";
-import { addDays, daysBetween, startOfWeek } from "@/lib/date";
+import { addDays, daysBetween, formatWithYear, startOfWeek } from "@/lib/date";
 import { computeTargets } from "@/lib/nutrition/targets";
 import type { Phase, WorkoutType } from "@/lib/plan/types";
 import { absStatus, type AbsStatus } from "@/lib/strength/abs";
@@ -147,6 +147,7 @@ export async function buildSnapshot(current: Profile, today: string): Promise<Sn
   await ready();
   await ensureWaterCupScale();
 
+  const owner = current.userId;
   const from = addDays(today, -13);
   const nextStart = addDays(startOfWeek(today), 7);
   const nextEnd = addDays(nextStart, 6);
@@ -171,25 +172,25 @@ export async function buildSnapshot(current: Profile, today: string): Promise<Sn
     history,
     banned,
   ] = await Promise.all([
-    db.select().from(workouts).where(and(gte(workouts.date, from), lte(workouts.date, today))).orderBy(workouts.date),
-    db.select().from(workoutLogs).where(and(gte(workoutLogs.date, from), lte(workoutLogs.date, today))),
-    db.select().from(healthDays).where(and(gte(healthDays.date, from), lte(healthDays.date, today))),
-    db.select().from(mealPlans).where(and(gte(mealPlans.date, from), lte(mealPlans.date, today))),
-    db.select().from(foodLogs).where(and(gte(foodLogs.date, from), lte(foodLogs.date, today))),
-    db.select().from(dayLogs).where(and(gte(dayLogs.date, from), lte(dayLogs.date, today))),
+    db.select().from(workouts).where(and(eq(workouts.userId, owner), gte(workouts.date, from), lte(workouts.date, today))).orderBy(workouts.date),
+    db.select().from(workoutLogs).where(and(eq(workoutLogs.userId, owner), gte(workoutLogs.date, from), lte(workoutLogs.date, today))),
+    db.select().from(healthDays).where(and(eq(healthDays.userId, owner), gte(healthDays.date, from), lte(healthDays.date, today))),
+    db.select().from(mealPlans).where(and(eq(mealPlans.userId, owner), gte(mealPlans.date, from), lte(mealPlans.date, today))),
+    db.select().from(foodLogs).where(and(eq(foodLogs.userId, owner), gte(foodLogs.date, from), lte(foodLogs.date, today))),
+    db.select().from(dayLogs).where(and(eq(dayLogs.userId, owner), gte(dayLogs.date, from), lte(dayLogs.date, today))),
     db
       .select()
       .from(strengthSessions)
-      .where(and(gte(strengthSessions.date, from), lte(strengthSessions.date, today))),
-    db.select().from(workouts).where(and(gte(workouts.date, nextStart), lte(workouts.date, nextEnd))).orderBy(workouts.date),
-    db.select().from(workouts).where(and(gte(workouts.date, today), lte(workouts.date, aheadEnd))).orderBy(workouts.date),
+      .where(and(eq(strengthSessions.userId, owner), gte(strengthSessions.date, from), lte(strengthSessions.date, today))),
+    db.select().from(workouts).where(and(eq(workouts.userId, owner), gte(workouts.date, nextStart), lte(workouts.date, nextEnd))).orderBy(workouts.date),
+    db.select().from(workouts).where(and(eq(workouts.userId, owner), gte(workouts.date, today), lte(workouts.date, aheadEnd))).orderBy(workouts.date),
     db
       .select()
       .from(strengthSessions)
-      .where(and(gte(strengthSessions.date, today), lte(strengthSessions.date, aheadEnd))),
-    db.select().from(groceryChecks).where(eq(groceryChecks.checked, 1)),
-    db.select().from(fuelChecks).where(and(gte(fuelChecks.date, from), lte(fuelChecks.date, today))),
-    db.select().from(supplementLogs).where(and(gte(supplementLogs.date, from), lte(supplementLogs.date, today))),
+      .where(and(eq(strengthSessions.userId, owner), gte(strengthSessions.date, today), lte(strengthSessions.date, aheadEnd))),
+    db.select().from(groceryChecks).where(and(eq(groceryChecks.userId, owner), eq(groceryChecks.checked, 1))),
+    db.select().from(fuelChecks).where(and(eq(fuelChecks.userId, owner), gte(fuelChecks.date, from), lte(fuelChecks.date, today))),
+    db.select().from(supplementLogs).where(and(eq(supplementLogs.userId, owner), gte(supplementLogs.date, from), lte(supplementLogs.date, today))),
     db
       .select({
         date: coachSuggestions.date,
@@ -198,7 +199,12 @@ export async function buildSnapshot(current: Profile, today: string): Promise<Sn
         status: coachSuggestions.status,
       })
       .from(coachSuggestions)
-      .where(inArray(coachSuggestions.status, ["applied", "dismissed"]))
+      .where(
+        and(
+          eq(coachSuggestions.userId, owner),
+          inArray(coachSuggestions.status, ["applied", "dismissed"]),
+        ),
+      )
       .orderBy(desc(coachSuggestions.decidedAt))
       .limit(15),
     bannedRecipeIds(),
@@ -405,9 +411,14 @@ export async function buildSnapshot(current: Profile, today: string): Promise<Sn
     },
     totals,
     intention: {
-      race: "Austin Half Marathon on February 14, 2027 — finish healthy",
-      physique: "Visible abs by race day without starving the training",
-      diet: "A diet he will actually eat, shop for, and keep through February",
+      race: `${current.raceName || "Half marathon"} on ${formatWithYear(current.raceDate)} — ${
+        current.goal === "finish" ? "finish healthy" : current.goal
+      }`,
+      physique:
+        current.absGoal === 1
+          ? "Visible abs by race day without starving the training"
+          : "Hold body composition without starving the training",
+      diet: "A diet they will actually eat, shop for, and keep until race day",
     },
     adherence: {
       byWorkoutType,

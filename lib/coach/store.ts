@@ -2,6 +2,7 @@ import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { cache } from "react";
 import { db, ready } from "@/lib/db";
 import { coachSuggestions, profile, strengthSessions, type CoachSuggestion, type Profile } from "@/drizzle/schema";
+import { uid } from "@/lib/auth/current";
 import { addDays, isoInTimeZone, startOfWeek, todayISO } from "@/lib/date";
 import { convertDay, holdWeek, moveLongRun, scaleWeek } from "@/lib/plan/adapt";
 import { regenerateStrengthPlan } from "@/lib/strength/plan";
@@ -34,12 +35,14 @@ async function persist(
 ): Promise<number> {
   const createdAt = new Date().toISOString();
   const serialized = JSON.stringify(snapshot);
+  const user = await uid();
   let created = 0;
 
   for (const draft of drafts) {
     const result = await db
       .insert(coachSuggestions)
       .values({
+        userId: user,
         createdAt,
         date: snapshot.today,
         origin,
@@ -52,7 +55,7 @@ async function persist(
         snapshot: serialized,
         fingerprint: draft.fingerprint,
       })
-      .onConflictDoNothing()
+      .onConflictDoNothing({ target: [coachSuggestions.userId, coachSuggestions.fingerprint] })
       .returning({ id: coachSuggestions.id });
     if (result.length > 0) created += 1;
   }
@@ -125,30 +128,34 @@ export function changesOf(row: CoachSuggestion): Change[] {
 
 export async function pendingSuggestions(): Promise<CoachSuggestion[]> {
   await ready();
+  const user = await uid();
   return db
     .select()
     .from(coachSuggestions)
-    .where(eq(coachSuggestions.status, "pending"))
+    .where(and(eq(coachSuggestions.userId, user), eq(coachSuggestions.status, "pending")))
     .orderBy(desc(coachSuggestions.createdAt));
 }
 
 /** Cheap badge count — cached per request so layouts and pages share one query. */
 export const pendingCount = cache(async (): Promise<number> => {
   await ready();
+  const user = await uid();
   const rows = await db
     .select({ n: sql<number>`count(*)` })
     .from(coachSuggestions)
-    .where(eq(coachSuggestions.status, "pending"));
+    .where(and(eq(coachSuggestions.userId, user), eq(coachSuggestions.status, "pending")));
   return Number(rows[0]?.n ?? 0);
 });
 
 export async function decidedSuggestions(limit = 30): Promise<CoachSuggestion[]> {
   await ready();
+  const user = await uid();
   return db
     .select()
     .from(coachSuggestions)
     .where(
       and(
+        eq(coachSuggestions.userId, user),
         inArray(coachSuggestions.status, ["applied", "dismissed", "expired"]),
         gte(coachSuggestions.date, addDays(todayISO(), -60)),
       ),
@@ -160,18 +167,19 @@ export async function decidedSuggestions(limit = 30): Promise<CoachSuggestion[]>
 /** Anything stale enough that the data behind it has moved on. */
 export async function expireOldSuggestions(): Promise<void> {
   await ready();
+  const user = await uid();
   const cutoff = addDays(todayISO(), -4);
   const stale = await db
     .select()
     .from(coachSuggestions)
-    .where(eq(coachSuggestions.status, "pending"));
+    .where(and(eq(coachSuggestions.userId, user), eq(coachSuggestions.status, "pending")));
 
   for (const row of stale) {
     if (row.date >= cutoff) continue;
     await db
       .update(coachSuggestions)
       .set({ status: "expired", decidedAt: new Date().toISOString() })
-      .where(eq(coachSuggestions.id, row.id));
+      .where(and(eq(coachSuggestions.userId, user), eq(coachSuggestions.id, row.id)));
   }
 }
 
@@ -195,7 +203,13 @@ async function applyChange(change: Change, current: Profile): Promise<Profile> {
       await db
         .update(strengthSessions)
         .set({ status: "skipped", skipReason: "coach" })
-        .where(and(eq(strengthSessions.date, change.date), eq(strengthSessions.status, "planned")));
+        .where(
+          and(
+            eq(strengthSessions.userId, current.userId),
+            eq(strengthSessions.date, change.date),
+            eq(strengthSessions.status, "planned"),
+          ),
+        );
       return current;
     case "set_calorie_delta":
       await setSetting(KEYS.calorieDelta, String(change.kcal));
@@ -207,7 +221,7 @@ async function applyChange(change: Change, current: Profile): Promise<Profile> {
       const [updated] = await db
         .update(profile)
         .set({ strengthDays: change.days, updatedAt: new Date().toISOString() })
-        .where(eq(profile.id, current.id))
+        .where(eq(profile.userId, current.userId))
         .returning();
       const next = updated ?? current;
       await regenerateStrengthPlan(next);
@@ -217,7 +231,7 @@ async function applyChange(change: Change, current: Profile): Promise<Profile> {
       const [updated] = await db
         .update(profile)
         .set({ targetBodyFatPct: change.pct, updatedAt: new Date().toISOString() })
-        .where(eq(profile.id, current.id))
+        .where(eq(profile.userId, current.userId))
         .returning();
       return updated ?? current;
     }
@@ -239,7 +253,11 @@ async function applyChange(change: Change, current: Profile): Promise<Profile> {
 
 export async function applySuggestion(id: number, current: Profile): Promise<void> {
   await ready();
-  const [row] = await db.select().from(coachSuggestions).where(eq(coachSuggestions.id, id));
+  const user = await uid();
+  const [row] = await db
+    .select()
+    .from(coachSuggestions)
+    .where(and(eq(coachSuggestions.userId, user), eq(coachSuggestions.id, id)));
   if (!row || row.status !== "pending") return;
 
   let running = current;
@@ -250,21 +268,29 @@ export async function applySuggestion(id: number, current: Profile): Promise<voi
   await db
     .update(coachSuggestions)
     .set({ status: "applied", decidedAt: new Date().toISOString() })
-    .where(eq(coachSuggestions.id, id));
+    .where(and(eq(coachSuggestions.userId, user), eq(coachSuggestions.id, id)));
 }
 
 export async function dismissSuggestion(id: number): Promise<void> {
   await ready();
+  const user = await uid();
   await db
     .update(coachSuggestions)
     .set({ status: "dismissed", decidedAt: new Date().toISOString() })
-    .where(and(eq(coachSuggestions.id, id), eq(coachSuggestions.status, "pending")));
+    .where(
+      and(
+        eq(coachSuggestions.userId, user),
+        eq(coachSuggestions.id, id),
+        eq(coachSuggestions.status, "pending"),
+      ),
+    );
 }
 
 export async function deleteSuggestion(id: number): Promise<void> {
   await ready();
+  const user = await uid();
   await db
     .update(coachSuggestions)
     .set({ status: "deleted", decidedAt: new Date().toISOString() })
-    .where(eq(coachSuggestions.id, id));
+    .where(and(eq(coachSuggestions.userId, user), eq(coachSuggestions.id, id)));
 }

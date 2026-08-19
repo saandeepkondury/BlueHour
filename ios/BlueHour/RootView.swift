@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum SyncState: Equatable {
     case idle
@@ -20,13 +21,14 @@ final class SyncModel: ObservableObject {
     @Published var reloadToken = 0
     @Published var notice: SyncNotice?
 
-    private let bridge = HealthBridge()
-    private let client = SyncClient()
     private var inFlight = false
 
     func syncIfPossible() async {
-        await sync(reload: true, notifyWeb: false)
-        await NotificationScheduler.refresh()
+        let outcome = await sync(reload: true, notifyWeb: false)
+        // Runner refreshes briefs on a successful ingest; still try when sync failed.
+        if !outcome.ok {
+            await NotificationScheduler.refresh()
+        }
     }
 
     func syncFromWeb() async {
@@ -53,11 +55,10 @@ final class SyncModel: ObservableObject {
 
         state = .syncing
         do {
-            try await bridge.requestAccess()
-            let payload = try await bridge.collect()
-            let result = try await client.send(payload)
-            let message = Self.summary(for: result)
+            let result = try await HealthSyncRunner.sync()
+            let message = HealthSyncRunner.summary(for: result)
             state = .done(message)
+            BackgroundHealthSync.shared.startIfConfigured()
             if notifyWeb { notice = SyncNotice(ok: true, message: message) }
             if reload { reloadToken += 1 }
             return (true, message)
@@ -67,17 +68,6 @@ final class SyncModel: ObservableObject {
             if notifyWeb { notice = SyncNotice(ok: false, message: message) }
             return (false, message)
         }
-    }
-
-    private static func summary(for result: IngestResponse) -> String {
-        if result.workoutsWritten > 0 {
-            let runs = result.workoutsWritten == 1 ? "1 run" : "\(result.workoutsWritten) runs"
-            return "Synced \(runs) and \(result.daysWritten) days"
-        }
-        if result.daysWritten > 0 {
-            return "Synced \(result.daysWritten) days"
-        }
-        return "Nothing new in Health"
     }
 }
 
@@ -198,7 +188,9 @@ private struct SetupView: View {
     var onDone: () -> Void
 
     @State private var baseURL = Settings.baseURL
-    @State private var secret = Settings.ingestSecret
+    @State private var email = Settings.accountEmail
+    @State private var password = ""
+    @State private var creatingAccount = false
     @State private var checking = false
     @State private var message: String?
 
@@ -231,13 +223,18 @@ private struct SetupView: View {
                 }
 
                 Section {
-                    SecureField("Sync key", text: $secret)
+                    TextField("you@example.com", text: $email)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .keyboardType(.emailAddress)
+                    SecureField("Password", text: $password)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    Toggle("Create a new account", isOn: $creatingAccount)
                 } header: {
-                    Text("Sync key")
+                    Text("Your account")
                 } footer: {
-                    Text("Must match HEALTH_INGEST_SECRET in the app's environment.")
+                    Text("Your plan, Watch data, and meals belong to this account. Nobody else on Blue Hour can see them.")
                 }
 
                 if let message {
@@ -245,8 +242,19 @@ private struct SetupView: View {
                 }
 
                 Section {
-                    Button(checking ? "Checking…" : "Save and connect") { save() }
-                        .disabled(checking || baseURL.trimmed.isEmpty || secret.trimmed.isEmpty)
+                    Button(buttonTitle) { save() }
+                        .disabled(checking || baseURL.trimmed.isEmpty || email.trimmed.isEmpty || password.isEmpty)
+                }
+
+                if Settings.isConfigured, !Settings.accountEmail.isEmpty {
+                    Section {
+                        Text("Signed in as \(Settings.accountEmail)").font(.footnote)
+                        Button("Sign out on this phone", role: .destructive) {
+                            Settings.signOut()
+                            password = ""
+                            message = "Signed out. Sign in again to resume syncing."
+                        }
+                    }
                 }
 
                 if Settings.isConfigured {
@@ -273,30 +281,60 @@ private struct SetupView: View {
         }
     }
 
-    /// Confirms the URL and key before asking for Health permission, so a typo
-    /// shows up as a clear message instead of an empty sync.
+    private var buttonTitle: String {
+        if checking { return "Signing in…" }
+        return creatingAccount ? "Create account and connect" : "Sign in and connect"
+    }
+
+    private struct AuthResponse: Decodable {
+        let token: String
+        let email: String
+    }
+
+    private struct AuthError: Decodable {
+        let error: String
+    }
+
+    /// Signs in against the server and keeps the device token it returns, so the
+    /// runner never has to paste a shared secret. A bad password shows up here as
+    /// a clear message instead of an empty sync later.
     private func save() {
         Settings.baseURL = baseURL
-        Settings.ingestSecret = secret
         checking = true
         message = nil
 
         Task {
             defer { checking = false }
-            guard let url = Settings.ingestURL() else {
+            guard let url = creatingAccount ? Settings.signUpURL() : Settings.signInURL() else {
                 message = "That does not look like a valid address."
                 return
             }
 
             var request = URLRequest(url: url)
-            request.setValue("Bearer \(Settings.ingestSecret)", forHTTPHeaderField: "Authorization")
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.timeoutInterval = 45
+            request.httpBody = try? JSONSerialization.data(withJSONObject: [
+                "email": email.trimmed,
+                "password": password,
+                "label": UIDevice.current.name,
+            ])
 
             do {
-                let (_, response) = try await URLSession.shared.data(for: request)
+                let (data, response) = try await URLSession.shared.data(for: request)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-                if (200..<300).contains(status) {
+
+                if (200..<300).contains(status),
+                   let auth = try? JSONDecoder().decode(AuthResponse.self, from: data) {
+                    Settings.deviceToken = auth.token
+                    Settings.accountEmail = auth.email
+                    password = ""
                     onDone()
+                    return
+                }
+
+                if let failure = try? JSONDecoder().decode(AuthError.self, from: data) {
+                    message = failure.error
                 } else {
                     message = SyncError.server(status: status, message: "").localizedDescription
                 }

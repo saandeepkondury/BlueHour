@@ -33,7 +33,16 @@ struct WebView: UIViewRepresentable {
         view.isOpaque = false
         view.backgroundColor = UIColor(red: 0.949, green: 0.941, blue: 0.918, alpha: 1)
         context.coordinator.attach(view)
-        context.coordinator.load(url)
+
+        // Hand the web view a session for the account this phone signed in as,
+        // then load. Loading inside the task keeps the first request from racing
+        // the cookie and bouncing to the sign-in page.
+        let store = config.websiteDataStore.httpCookieStore
+        let target = url
+        Task { @MainActor in
+            await WebSession.install(into: store)
+            context.coordinator.load(target)
+        }
         return view
     }
 
@@ -69,6 +78,7 @@ struct WebView: UIViewRepresentable {
         private var isLoading = false
         private var pendingReload = false
         private var retries = 0
+        private var sessionRefreshed = false
 
         init(url: URL, onRequestSync: @escaping () -> Void) {
             parentURL = url
@@ -127,6 +137,18 @@ struct WebView: UIViewRepresentable {
             if pendingReload {
                 pendingReload = false
                 webView.reload()
+            }
+
+            // A session can expire while the device token is still good. Mint a
+            // fresh one and reload — once, so a genuinely signed-out phone still
+            // gets to see the sign-in page.
+            if webView.url?.path == "/signin", !sessionRefreshed, Settings.isConfigured {
+                sessionRefreshed = true
+                let store = webView.configuration.websiteDataStore.httpCookieStore
+                Task { @MainActor [weak self] in
+                    await WebSession.install(into: store)
+                    self?.load(self?.parentURL ?? webView.url!)
+                }
             }
         }
 

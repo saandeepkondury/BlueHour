@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { AppBar } from "@/components/AppBar";
+import { HealthSharingEmpty } from "@/components/HealthSharingEmpty";
 import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { addDays, formatShort, formatWithYear, startOfWeek, todayISO, weekdayShort } from "@/lib/date";
 import { formatDuration, formatMiles, formatPace, formatPacePerMi } from "@/lib/format";
 import { pendingCount } from "@/lib/coach/store";
+import { lastSync } from "@/lib/health/read";
 import { TYPE_LABEL, isRun, type WorkoutType } from "@/lib/plan/types";
 import { getProfile, getTrainingWorkoutLogs, getWorkouts } from "@/lib/store";
 import type { Workout, WorkoutLog } from "@/drizzle/schema";
@@ -81,12 +83,14 @@ export default async function RunsPage() {
   const priorWeek = addDays(thisWeek, -7);
   const recentFrom = addDays(today, -13);
 
-  const [pending, profile, allLogs] = await Promise.all([
+  const [pending, profile, allLogs, sync] = await Promise.all([
     pendingCount(),
     getProfile(),
     getTrainingWorkoutLogs(),
+    lastSync(),
   ]);
   const logs = allLogs.filter(isLogged).slice().reverse();
+  const synced = Boolean(sync);
 
   const planned =
     logs.length > 0
@@ -176,18 +180,7 @@ export default async function RunsPage() {
           </div>
           <div className="card">
             {logs.length === 0 ? (
-              <div className="empty">
-                <span className="empty__icon">
-                  <Icon name="watch" size={20} />
-                </span>
-                <p className="small sub">
-                  Walk and run workouts from Apple Watch land here after sync — only from{" "}
-                  {formatShort(profile.startDate)} onward.
-                </p>
-                <Link className="btn btn--ghost btn--sm" href="/settings/watch">
-                  Apple Health sync
-                </Link>
-              </div>
+              <HealthSharingEmpty icon="watch" focus="workouts" synced={synced} />
             ) : (
               <div className="rows">
                 {logs.map((log) => {

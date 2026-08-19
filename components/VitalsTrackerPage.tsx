@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppBar } from "@/components/AppBar";
+import { HealthSharingEmpty, HealthSharingTip } from "@/components/HealthSharingEmpty";
 import { Icon, type IconName } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
@@ -8,9 +9,11 @@ import { pendingCount } from "@/lib/coach/store";
 import {
   formatSleep,
   getVitalsHistory,
+  lastSync,
   meanOf,
   type VitalMetric,
 } from "@/lib/health/read";
+import type { HealthShareFocus } from "@/lib/health/sharing";
 import type { HealthDay } from "@/drizzle/schema";
 
 const META: Record<
@@ -18,8 +21,8 @@ const META: Record<
   {
     title: string;
     icon: IconName;
+    focus: HealthShareFocus;
     unit: string;
-    empty: string;
     historyLabel: string;
     value: (row: HealthDay) => number;
     display: (value: number) => string;
@@ -29,9 +32,8 @@ const META: Record<
   sleep: {
     title: "Sleep",
     icon: "moon",
+    focus: "sleep",
     unit: "asleep",
-    empty:
-      "Sleep from Apple Health shows up here once the Watch syncs — only nights since this training block started.",
     historyLabel: "Nights",
     value: (row) => row.asleepMin ?? 0,
     display: (value) => formatSleep(value),
@@ -40,9 +42,8 @@ const META: Record<
   rest_hr: {
     title: "Resting HR",
     icon: "heart",
+    focus: "heart",
     unit: "bpm",
-    empty:
-      "Resting heart rate lands here from Apple Health after sync — only days since this training block started.",
     historyLabel: "Days",
     value: (row) => row.restingHr ?? 0,
     display: (value) => String(value),
@@ -51,9 +52,8 @@ const META: Record<
   hrv: {
     title: "HRV",
     icon: "pulse",
+    focus: "hrv",
     unit: "ms",
-    empty:
-      "Heart-rate variability from your Watch shows up here after sync — only days since this training block started.",
     historyLabel: "Days",
     value: (row) => (row.hrvMs === null ? 0 : Math.round(row.hrvMs)),
     display: (value) => String(Math.round(value)),
@@ -64,7 +64,12 @@ const META: Record<
 export async function VitalsTrackerPage({ metric }: { metric: VitalMetric }) {
   const meta = META[metric];
   const today = todayISO();
-  const [pending, history] = await Promise.all([pendingCount(), getVitalsHistory(metric)]);
+  const [pending, history, sync] = await Promise.all([
+    pendingCount(),
+    getVitalsHistory(metric),
+    lastSync(),
+  ]);
+  const synced = Boolean(sync);
 
   const todayRow = history.find((row) => row.date === today) ?? null;
   const todayValue = todayRow ? meta.value(todayRow) : null;
@@ -91,9 +96,19 @@ export async function VitalsTrackerPage({ metric }: { metric: VitalMetric }) {
                 {todayValue !== null ? <small>{meta.unit}</small> : null}
               </p>
               <p className="card__sub" style={{ marginTop: "0.35rem" }}>
-                {todayValue !== null ? "Today" : "Nothing for today yet"}
+                {todayValue !== null
+                  ? "Today"
+                  : synced
+                    ? "Permission or Watch not writing yet"
+                    : "Nothing for today yet"}
               </p>
             </div>
+
+            <HealthSharingTip
+              focus={meta.focus}
+              synced={synced}
+              missing={todayValue === null && history.length > 0}
+            />
 
             <div className="bento bento--3">
               <div className="tile">
@@ -127,15 +142,7 @@ export async function VitalsTrackerPage({ metric }: { metric: VitalMetric }) {
           </div>
           <div className="card">
             {history.length === 0 ? (
-              <div className="empty">
-                <span className="empty__icon">
-                  <Icon name={meta.icon} size={20} />
-                </span>
-                <p className="small sub">{meta.empty}</p>
-                <Link className="btn btn--ghost btn--sm" href="/settings/watch">
-                  Apple Health sync
-                </Link>
-              </div>
+              <HealthSharingEmpty icon={meta.icon} focus={meta.focus} synced={synced} />
             ) : (
               <div className="rows">
                 {history.map((row) => {

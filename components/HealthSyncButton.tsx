@@ -76,7 +76,8 @@ export function HealthSyncButton() {
       ) : (
         <p className="small muted">
           Syncs automatically when you open Blue Hour. Tap if a run or last night’s sleep has not
-          shown up yet.
+          shown up yet. Missing metrics stay as — until Health sharing allows them (Health → Sharing
+          → Apps → Blue Hour).
         </p>
       )}
     </div>

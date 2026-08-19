@@ -42,6 +42,7 @@ const GROUPS: { title: string; links: { href: string; label: string; icon: IconN
     links: [
       { href: "/settings/watch", label: "Apple Health sync", icon: "watch" },
       { href: "/settings", label: "Settings", icon: "settings" },
+      { href: "/account", label: "Account", icon: "person" },
     ],
   },
 ];

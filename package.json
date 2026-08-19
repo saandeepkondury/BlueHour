@@ -8,7 +8,9 @@
     "start": "next start",
     "db:push": "drizzle-kit push",
     "typecheck": "tsc --noEmit",
-    "keys:vapid": "node scripts/generate-vapid.mjs"
+    "keys:vapid": "node scripts/generate-vapid.mjs",
+    "verify:isolation": "node scripts/verify-isolation.mjs",
+    "verify:legacy": "node scripts/verify-legacy-upgrade.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.15.7",

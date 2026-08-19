@@ -33,9 +33,16 @@ export type IconName =
   | "chart"
   | "shuffle"
   | "bell"
-  | "sync";
+  | "sync"
+  | "person";
 
 const PATHS: Record<IconName, React.ReactNode> = {
+  person: (
+    <>
+      <circle cx="12" cy="8.5" r="3.75" />
+      <path d="M4.75 20c.9-3.9 3.8-6 7.25-6s6.35 2.1 7.25 6" />
+    </>
+  ),
   today: (
     <>
       <path d="M4 11.5 12 4l8 7.5" />

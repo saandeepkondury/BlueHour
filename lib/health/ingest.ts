@@ -1,6 +1,7 @@
-import { eq, inArray, lt } from "drizzle-orm";
+import { and, eq, inArray, lt } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
 import { healthDays, healthSync, profile, workoutLogs, workouts } from "@/drizzle/schema";
+import { uid } from "@/lib/auth/current";
 import { isoInTimeZone, todayISO } from "@/lib/date";
 import { isRun, type WorkoutType } from "@/lib/plan/types";
 
@@ -420,16 +421,21 @@ function bestWorkoutPerDay(sessions: WorkoutInput[]): Map<string, WorkoutInput> 
 export async function ingestHealth(payload: HealthPayload): Promise<IngestResult> {
   await ready();
   const now = new Date().toISOString();
+  const user = await uid();
 
   // Only keep Health / run history from the training block start onward —
   // older HealthKit samples crowd Sleep, Rest HR, HRV, and Runs.
   const [profileRow] = await db
     .select({ startDate: profile.startDate })
     .from(profile)
-    .where(eq(profile.id, 1));
+    .where(eq(profile.userId, user));
   const trainingStart = profileRow?.startDate ?? todayISO();
-  await db.delete(healthDays).where(lt(healthDays.date, trainingStart));
-  await db.delete(workoutLogs).where(lt(workoutLogs.date, trainingStart));
+  await db
+    .delete(healthDays)
+    .where(and(eq(healthDays.userId, user), lt(healthDays.date, trainingStart)));
+  await db
+    .delete(workoutLogs)
+    .where(and(eq(workoutLogs.userId, user), lt(workoutLogs.date, trainingStart)));
 
   const days = collectDays(payload);
   let daysWritten = 0;
@@ -439,6 +445,7 @@ export async function ingestHealth(payload: HealthPayload): Promise<IngestResult
     await db
       .insert(healthDays)
       .values({
+        userId: user,
         date,
         sleepStart: day.sleepStart ?? null,
         sleepEnd: day.sleepEnd ?? null,
@@ -465,7 +472,7 @@ export async function ingestHealth(payload: HealthPayload): Promise<IngestResult
         updatedAt: now,
       })
       .onConflictDoUpdate({
-        target: healthDays.date,
+        target: [healthDays.userId, healthDays.date],
         // Keep whatever HealthKit did not send this round rather than nulling it.
         set: {
           ...(day.sleepStart ? { sleepStart: day.sleepStart, sleepEnd: day.sleepEnd } : {}),
@@ -526,8 +533,8 @@ export async function ingestHealth(payload: HealthPayload): Promise<IngestResult
     };
     await db
       .insert(workoutLogs)
-      .values({ ...values, createdAt: now })
-      .onConflictDoUpdate({ target: workoutLogs.date, set: values });
+      .values({ ...values, userId: user, createdAt: now })
+      .onConflictDoUpdate({ target: [workoutLogs.userId, workoutLogs.date], set: values });
     workoutsWritten += 1;
     dates.push(date);
   }
@@ -537,14 +544,14 @@ export async function ingestHealth(payload: HealthPayload): Promise<IngestResult
   await db
     .insert(healthSync)
     .values({
-      id: 1,
+      userId: user,
       lastSyncAt: now,
       device: payload.device ?? null,
       daysSeen: daysWritten,
       workoutsSeen: sessions.size,
     })
     .onConflictDoUpdate({
-      target: healthSync.id,
+      target: healthSync.userId,
       set: {
         lastSyncAt: now,
         device: payload.device ?? null,
@@ -562,7 +569,11 @@ export async function ingestHealth(payload: HealthPayload): Promise<IngestResult
  */
 async function markRunsDone(dates: string[]): Promise<string[]> {
   if (dates.length === 0) return [];
-  const planned = await db.select().from(workouts).where(inArray(workouts.date, dates));
+  const user = await uid();
+  const planned = await db
+    .select()
+    .from(workouts)
+    .where(and(eq(workouts.userId, user), inArray(workouts.date, dates)));
   const done: string[] = [];
 
   for (const day of planned) {
@@ -571,7 +582,7 @@ async function markRunsDone(dates: string[]): Promise<string[]> {
     await db
       .update(workouts)
       .set({ status: "done", skipReason: null })
-      .where(eq(workouts.id, day.id));
+      .where(and(eq(workouts.userId, user), eq(workouts.id, day.id)));
     done.push(day.date);
   }
 

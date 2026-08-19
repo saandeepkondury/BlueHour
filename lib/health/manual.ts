@@ -1,5 +1,6 @@
 import { db, ready } from "@/lib/db";
 import { healthDays } from "@/drizzle/schema";
+import { uid } from "@/lib/auth/current";
 
 /**
  * The Watch cannot measure a waist, and some mornings the sync does not run.
@@ -19,6 +20,7 @@ export interface ManualEntry {
 
 export async function saveManualHealth(entry: ManualEntry): Promise<void> {
   await ready();
+  const user = await uid();
   const now = new Date().toISOString();
 
   // Only fields the form actually submitted are written; the rest keep their values.
@@ -31,6 +33,9 @@ export async function saveManualHealth(entry: ManualEntry): Promise<void> {
 
   await db
     .insert(healthDays)
-    .values({ date: entry.date, ...set, updatedAt: now })
-    .onConflictDoUpdate({ target: healthDays.date, set: { ...set, updatedAt: now } });
+    .values({ userId: user, date: entry.date, ...set, updatedAt: now })
+    .onConflictDoUpdate({
+      target: [healthDays.userId, healthDays.date],
+      set: { ...set, updatedAt: now },
+    });
 }

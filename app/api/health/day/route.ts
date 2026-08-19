@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { authenticate, isDenied } from "@/lib/auth/request";
+import { runAsUser } from "@/lib/auth/scope";
 import { addDays, todayISO } from "@/lib/date";
-import { guardIngest } from "@/lib/health/guard";
 import {
   formatSleep,
   hasVitals,
@@ -16,15 +17,15 @@ export const dynamic = "force-dynamic";
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * Read-only day snapshot for agents / nightly brain sync.
- * Auth: same Bearer sync key as Health ingest (`HEALTH_INGEST_SECRET`).
+ * Read-only day snapshot for agents / nightly brain sync. Scoped to whichever
+ * account the device token belongs to.
  *
  * GET /api/health/day?date=YYYY-MM-DD
  * Omit `date` for today (America/Chicago).
  */
 export async function GET(request: Request) {
-  const denied = await guardIngest(request);
-  if (denied) return denied;
+  const auth = await authenticate(request);
+  if (isDenied(auth)) return auth.denied;
 
   const url = new URL(request.url);
   const rawDate = url.searchParams.get("date")?.trim();
@@ -38,13 +39,15 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [recovery, workoutLog, dayLog, planned, sync] = await Promise.all([
-      recoveryFor(date),
-      logFor(date),
-      getDayLog(date),
-      getWorkout(date),
-      lastSync(),
-    ]);
+    const [recovery, workoutLog, dayLog, planned, sync] = await runAsUser(auth.userId, () =>
+      Promise.all([
+        recoveryFor(date),
+        logFor(date),
+        getDayLog(date),
+        getWorkout(date),
+        lastSync(),
+      ]),
+    );
 
     const day = recovery.day;
     const vitalsPresent = hasVitals(day);

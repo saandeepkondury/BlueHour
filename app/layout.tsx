@@ -20,9 +20,9 @@ const brand = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Blue Hour — Austin Half trainer",
+  title: "Blue Hour — half marathon trainer",
   description:
-    "A personal training, fueling, and strength companion for the Ascension Seton Austin Half Marathon.",
+    "Pick your race and Blue Hour builds the training, fueling, and strength weeks back from it.",
   manifest: "/manifest.webmanifest",
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "https://blue-hour-psi.vercel.app"),
   icons: {
@@ -33,9 +33,9 @@ export const metadata: Metadata = {
     apple: "/apple-icon",
   },
   openGraph: {
-    title: "Blue Hour — Austin Half trainer",
+    title: "Blue Hour — half marathon trainer",
     description:
-      "A personal training, fueling, and strength companion for the Ascension Seton Austin Half Marathon.",
+      "Pick your race and Blue Hour builds the training, fueling, and strength weeks back from it.",
     siteName: "Blue Hour",
     type: "website",
   },

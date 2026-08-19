@@ -1,8 +1,9 @@
 import { revalidatePath } from "next/cache";
 import { after, NextResponse } from "next/server";
+import { authenticate, isDenied } from "@/lib/auth/request";
+import { runAsUser } from "@/lib/auth/scope";
 import { ingestHealth, parsePayload, PayloadError } from "@/lib/health/ingest";
 import { lastSync } from "@/lib/health/read";
-import { guardIngest } from "@/lib/health/guard";
 import { refreshCoach } from "@/lib/coach/store";
 import { getProfile } from "@/lib/store";
 
@@ -11,13 +12,13 @@ export const dynamic = "force-dynamic";
 
 /**
  * Where the iPhone app posts Apple Health samples. Health data is the most
- * sensitive thing this app stores, so this route refuses to run without a key
- * rather than falling open the way the passcode gate does.
+ * sensitive thing this app stores, so the caller must present a device token
+ * belonging to an account — there is no open fallback.
  */
 
 export async function POST(request: Request) {
-  const denied = await guardIngest(request);
-  if (denied) return denied;
+  const auth = await authenticate(request);
+  if (isDenied(auth)) return auth.denied;
 
   let body: unknown;
   try {
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await ingestHealth(parsePayload(body));
+    const result = await runAsUser(auth.userId, () => ingestHealth(parsePayload(body)));
 
     revalidatePath("/");
     revalidatePath("/core");
@@ -41,8 +42,10 @@ export async function POST(request: Request) {
     // plus rules can exceed the iOS URLSession timeout and look like a failed sync.
     after(async () => {
       try {
-        const current = await getProfile();
-        await refreshCoach(current, { skipModel: true });
+        await runAsUser(auth.userId, async () => {
+          const current = await getProfile();
+          await refreshCoach(current, { skipModel: true });
+        });
         revalidatePath("/coach");
       } catch (error) {
         console.error("post-ingest coach refresh failed", error);
@@ -59,10 +62,13 @@ export async function POST(request: Request) {
   }
 }
 
-/** Lets the phone confirm the URL and key before it asks for Health access. */
+/** Lets the phone confirm the URL and token before it asks for Health access. */
 export async function GET(request: Request) {
-  const denied = await guardIngest(request);
-  if (denied) return denied;
+  const auth = await authenticate(request);
+  if (isDenied(auth)) return auth.denied;
 
-  return NextResponse.json({ ok: true, lastSync: await lastSync() });
+  return NextResponse.json({
+    ok: true,
+    lastSync: await runAsUser(auth.userId, () => lastSync()),
+  });
 }

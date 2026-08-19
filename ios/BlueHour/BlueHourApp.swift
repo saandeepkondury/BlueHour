@@ -27,6 +27,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         NotificationScheduler.registerCategories()
         UNUserNotificationCenter.current().delegate = self
         BlueHourShortcuts.updateAppShortcutParameters()
+        BackgroundHealthSync.shared.register()
+        BackgroundHealthSync.shared.startIfConfigured()
         return true
     }
 

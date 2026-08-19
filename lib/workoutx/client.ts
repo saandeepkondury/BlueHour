@@ -1,5 +1,5 @@
 import { exerciseById } from "@/lib/strength/exercises";
-import { KEYS, getSetting, setSetting } from "@/lib/settings";
+import { KEYS, getSharedSetting, setSharedSetting } from "@/lib/settings";
 import { wxIdFor } from "./queries";
 
 const BASE = "https://api.workoutxapp.com/v1";
@@ -46,7 +46,7 @@ async function wxFetch(path: string): Promise<Response> {
 }
 
 async function readCache(): Promise<CacheMap> {
-  const raw = await getSetting(KEYS.workoutxCache);
+  const raw = await getSharedSetting(KEYS.workoutxCache);
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw) as CacheMap;
@@ -57,7 +57,7 @@ async function readCache(): Promise<CacheMap> {
 }
 
 async function writeCache(cache: CacheMap): Promise<void> {
-  await setSetting(KEYS.workoutxCache, JSON.stringify(cache));
+  await setSharedSetting(KEYS.workoutxCache, JSON.stringify(cache));
 }
 
 export async function resolveDemo(exerciseId: string): Promise<WorkoutXExercise | null> {

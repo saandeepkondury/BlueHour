@@ -110,7 +110,7 @@ enum NotificationScheduler {
     private static func fetchSchedule() async throws -> ScheduleResponse {
         guard let base = URL(string: Settings.baseURL) else { throw SyncError.notConfigured }
         var request = URLRequest(url: base.appendingPathComponent("api/notifications/schedule"))
-        request.setValue("Bearer \(Settings.ingestSecret)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(Settings.deviceToken)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 45
 
         let (data, response) = try await URLSession.shared.data(for: request)

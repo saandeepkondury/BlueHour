@@ -12,6 +12,7 @@ import {
 import { and, gte, lte, eq } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
 import { foodLogs, mealPlans } from "@/drizzle/schema";
+import { uid } from "@/lib/auth/current";
 
 export interface WeekProgress {
   weekStart: string;
@@ -127,17 +128,25 @@ async function nutritionWindow(
   today: string,
 ): Promise<ProgressSummary["nutrition"]> {
   await ready();
+  const user = await uid();
   const windowDays = 7;
   const from = addDays(today, -(windowDays - 1));
 
   const eatenMeals = await db
     .select()
     .from(mealPlans)
-    .where(and(gte(mealPlans.date, from), lte(mealPlans.date, today), eq(mealPlans.eaten, 1)));
+    .where(
+      and(
+        eq(mealPlans.userId, user),
+        gte(mealPlans.date, from),
+        lte(mealPlans.date, today),
+        eq(mealPlans.eaten, 1),
+      ),
+    );
   const extras = await db
     .select()
     .from(foodLogs)
-    .where(and(gte(foodLogs.date, from), lte(foodLogs.date, today)));
+    .where(and(eq(foodLogs.userId, user), gte(foodLogs.date, from), lte(foodLogs.date, today)));
   const water = await getDayLogs(from, today);
   const workoutsInWindow = await getWorkouts(from, today);
 

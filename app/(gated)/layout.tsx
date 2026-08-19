@@ -1,13 +1,16 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { AUTH_COOKIE, gateEnabled, isValidToken } from "@/lib/auth";
+import { sessionUserId } from "@/lib/auth/session";
+import { getProfile, isOnboarded } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
 export default async function GatedLayout({ children }: { children: React.ReactNode }) {
-  if (gateEnabled()) {
-    const token = (await cookies()).get(AUTH_COOKIE)?.value;
-    if (!isValidToken(token)) redirect("/unlock");
-  }
+  // Validates the cookie against the sessions table; middleware only checked
+  // that one was present.
+  if (!(await sessionUserId())) redirect("/signin");
+
+  const current = await getProfile();
+  if (!isOnboarded(current)) redirect("/onboard");
+
   return children;
 }

@@ -24,9 +24,11 @@ import {
   addFoodLog,
   addWater,
   annotateWorkoutLog,
+  completeOnboarding,
   deleteFoodLog,
   ensureWeekMeals,
   getProfile,
+  parseExperience,
   removeMealSlot,
   replaceMeal,
   resetGroceryChecks,
@@ -40,6 +42,7 @@ import {
   toggleSupplementTaken,
   updateProfile,
 } from "@/lib/store";
+import { redirect } from "next/navigation";
 
 function refresh(date?: string, exerciseId?: string) {
   revalidatePath("/");
@@ -323,19 +326,55 @@ export async function reshuffleWeek(formData: FormData): Promise<void> {
 
 // ---------- profile ----------
 
+const GOAL_TIME_SEC: Record<string, number | null> = {
+  finish: null,
+  sub2: 2 * 60 * 60,
+  sub145: 105 * 60,
+  sub130: 90 * 60,
+};
+
+/** First-run setup: race + experience, then generate the 28-week block. */
+export async function finishOnboarding(formData: FormData): Promise<void> {
+  const raceName = str(formData.get("raceName")) || "Half marathon";
+  const raceDate = str(formData.get("raceDate"));
+  if (!raceDate) return;
+
+  const goal = str(formData.get("goal")) || "finish";
+  const longRunDay = num(formData.get("longRunDay"));
+  if (longRunDay !== 0 && longRunDay !== 6) return;
+
+  await completeOnboarding({
+    raceName,
+    raceDate,
+    experience: parseExperience(str(formData.get("experience"))),
+    goal,
+    longRunDay,
+    timeGoalSec: GOAL_TIME_SEC[goal] ?? null,
+  });
+
+  refresh();
+  revalidatePath("/onboard");
+  redirect("/");
+}
+
 export async function saveProfile(formData: FormData): Promise<void> {
   const current = await getProfile();
 
   const heightIn = num(formData.get("heightIn"));
   const weightLb = num(formData.get("weightLb"));
+  const goal = str(formData.get("goal")) || current.goal;
 
   await updateProfile({
     raceName: str(formData.get("raceName")) || current.raceName,
     raceDate: str(formData.get("raceDate")) || current.raceDate,
     startDate: str(formData.get("startDate")) || current.startDate,
     longRunDay: num(formData.get("longRunDay")) ?? current.longRunDay,
-    goal: str(formData.get("goal")) || current.goal,
-    timeGoalSec: num(formData.get("timeGoalMin")) ? Math.round((num(formData.get("timeGoalMin")) ?? 0) * 60) : null,
+    experience: parseExperience(str(formData.get("experience")) || current.experience),
+    goal,
+    timeGoalSec:
+      num(formData.get("timeGoalMin")) !== null
+        ? Math.round((num(formData.get("timeGoalMin")) ?? 0) * 60)
+        : (GOAL_TIME_SEC[goal] ?? current.timeGoalSec),
     heightCm: heightIn !== null ? Math.round(heightIn * 2.54 * 10) / 10 : current.heightCm,
     weightKg: weightLb !== null ? Math.round((weightLb / 2.20462) * 10) / 10 : current.weightKg,
     age: num(formData.get("age")) ?? current.age,

@@ -1,6 +1,7 @@
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
 import { strengthSessions, workouts, type Profile, type StrengthSession, type Workout } from "@/drizzle/schema";
+import { uid } from "@/lib/auth/current";
 import { addDays, dayOfWeek, todayISO } from "@/lib/date";
 import { phaseFor, type Phase } from "@/lib/plan/types";
 import { KEYS, getSetting, setSetting } from "@/lib/settings";
@@ -185,25 +186,36 @@ export function buildStrengthPlan(
   return seeds;
 }
 
-async function insertSeeds(seeds: StrengthSeed[]): Promise<void> {
+async function insertSeeds(seeds: StrengthSeed[], owner: string): Promise<void> {
   for (const seed of seeds) {
-    await db.insert(strengthSessions).values(seed).onConflictDoNothing();
+    await db
+      .insert(strengthSessions)
+      .values({ ...seed, userId: owner })
+      .onConflictDoNothing({ target: [strengthSessions.userId, strengthSessions.date] });
   }
 }
 
 export async function ensureStrengthPlan(current: Profile): Promise<void> {
   await ready();
   const version = await getSetting(KEYS.strengthCatalog);
-  const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(strengthSessions);
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(strengthSessions)
+    .where(eq(strengthSessions.userId, current.userId));
 
   if (Number(count) === 0) {
-    const plan = await db.select().from(workouts).orderBy(workouts.date);
+    const plan = await db
+      .select()
+      .from(workouts)
+      .where(eq(workouts.userId, current.userId))
+      .orderBy(workouts.date);
     await insertSeeds(
       buildStrengthPlan(plan, {
         strengthDays: current.strengthDays,
         absGoal: current.absGoal === 1,
         raceDate: current.raceDate,
       }),
+      current.userId,
     );
     await setSetting(KEYS.strengthCatalog, STRENGTH_CATALOG_VERSION);
     return;
@@ -225,29 +237,51 @@ export async function regenerateStrengthPlan(current: Profile): Promise<void> {
 
   await db
     .delete(strengthSessions)
-    .where(and(gte(strengthSessions.date, from), eq(strengthSessions.status, "planned")));
+    .where(
+      and(
+        eq(strengthSessions.userId, current.userId),
+        gte(strengthSessions.date, from),
+        eq(strengthSessions.status, "planned"),
+      ),
+    );
 
-  const plan = await db.select().from(workouts).where(gte(workouts.date, from)).orderBy(workouts.date);
+  const plan = await db
+    .select()
+    .from(workouts)
+    .where(and(eq(workouts.userId, current.userId), gte(workouts.date, from)))
+    .orderBy(workouts.date);
   await insertSeeds(
     buildStrengthPlan(plan, {
       strengthDays: current.strengthDays,
       absGoal: current.absGoal === 1,
       raceDate: current.raceDate,
     }),
+    current.userId,
   );
 }
 
 export async function strengthFor(date: string): Promise<StrengthSession | null> {
   await ready();
-  const [row] = await db.select().from(strengthSessions).where(eq(strengthSessions.date, date));
+  const user = await uid();
+  const [row] = await db
+    .select()
+    .from(strengthSessions)
+    .where(and(eq(strengthSessions.userId, user), eq(strengthSessions.date, date)));
   return row ?? null;
 }
 
 export async function strengthBetween(from: string, to: string): Promise<StrengthSession[]> {
   await ready();
+  const user = await uid();
   return db
     .select()
     .from(strengthSessions)
-    .where(and(gte(strengthSessions.date, from), sql`${strengthSessions.date} <= ${to}`))
+    .where(
+      and(
+        eq(strengthSessions.userId, user),
+        gte(strengthSessions.date, from),
+        lte(strengthSessions.date, to),
+      ),
+    )
     .orderBy(strengthSessions.date);
 }

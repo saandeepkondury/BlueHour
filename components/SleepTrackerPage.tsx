@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { AppBar } from "@/components/AppBar";
+import { HealthSharingEmpty, HealthSharingTip } from "@/components/HealthSharingEmpty";
 import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { formatWithYear, todayISO, weekdayShort } from "@/lib/date";
 import { pendingCount } from "@/lib/coach/store";
-import { formatSleep, getSleepSummary } from "@/lib/health/read";
+import { formatSleep, getSleepSummary, lastSync } from "@/lib/health/read";
 
 function stageLine(row: {
   remMin: number | null;
@@ -23,7 +24,12 @@ function stageLine(row: {
 
 export async function SleepTrackerPage() {
   const today = todayISO();
-  const [pending, summary] = await Promise.all([pendingCount(), getSleepSummary()]);
+  const [pending, summary, sync] = await Promise.all([
+    pendingCount(),
+    getSleepSummary(),
+    lastSync(),
+  ]);
+  const synced = Boolean(sync);
   const { history, todayMin, weekAvgMin, daysLogged, avgSleepHr, avgRemMin, avgCoreMin, avgDeepMin } =
     summary;
 
@@ -44,9 +50,19 @@ export async function SleepTrackerPage() {
                 {todayMin !== null ? <small>asleep</small> : null}
               </p>
               <p className="card__sub" style={{ marginTop: "0.35rem" }}>
-                {todayMin !== null ? "Today" : "Nothing for today yet"}
+                {todayMin !== null
+                  ? "Today"
+                  : synced
+                    ? "Permission or Watch not writing yet"
+                    : "Nothing for today yet"}
               </p>
             </div>
+
+            <HealthSharingTip
+              focus="sleep"
+              synced={synced}
+              missing={todayMin === null && history.length > 0}
+            />
 
             <div className="bento bento--3">
               <div className="tile">
@@ -96,18 +112,7 @@ export async function SleepTrackerPage() {
           </div>
           <div className="card">
             {history.length === 0 ? (
-              <div className="empty">
-                <span className="empty__icon">
-                  <Icon name="moon" size={20} />
-                </span>
-                <p className="small sub">
-                  Sleep from Apple Health shows up here once the Watch syncs — only nights since
-                  this training block started.
-                </p>
-                <Link className="btn btn--ghost btn--sm" href="/settings/watch">
-                  Apple Health sync
-                </Link>
-              </div>
+              <HealthSharingEmpty icon="moon" focus="sleep" synced={synced} />
             ) : (
               <div className="rows">
                 {history.map((row) => {

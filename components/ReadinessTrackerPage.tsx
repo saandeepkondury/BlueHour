@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppBar } from "@/components/AppBar";
+import { HealthSharingEmpty, HealthSharingTip } from "@/components/HealthSharingEmpty";
 import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { ReadinessChart } from "@/components/ReadinessChart";
@@ -7,7 +8,7 @@ import { Ring } from "@/components/Ring";
 import { Shell } from "@/components/Shell";
 import { formatShort, formatWithYear, todayISO, weekdayShort } from "@/lib/date";
 import { pendingCount } from "@/lib/coach/store";
-import { getReadinessHistory, type ReadinessDay } from "@/lib/health/read";
+import { getReadinessHistory, lastSync, type ReadinessDay } from "@/lib/health/read";
 
 function titleFor(day: ReadinessDay | null): string {
   if (!day || day.score === null) return "No score yet";
@@ -33,7 +34,12 @@ function detailLine(day: ReadinessDay): string {
 
 export async function ReadinessTrackerPage() {
   const today = todayISO();
-  const [pending, history] = await Promise.all([pendingCount(), getReadinessHistory()]);
+  const [pending, history, sync] = await Promise.all([
+    pendingCount(),
+    getReadinessHistory(),
+    lastSync(),
+  ]);
+  const synced = Boolean(sync);
   const { today: todayEntry, days, high, low, avg, delta, startDate } = history;
   const scoredDays = days.filter((day) => day.score !== null);
 
@@ -56,7 +62,9 @@ export async function ReadinessTrackerPage() {
                       ? delta !== null && delta !== 0
                         ? `${delta > 0 ? "+" : ""}${delta} vs yesterday · since ${formatShort(startDate)}`
                         : `Since ${formatShort(startDate)}`
-                      : `Scores start when Watch data lands · since ${formatShort(startDate)}`}
+                      : synced
+                        ? `Permission or Watch not writing yet · since ${formatShort(startDate)}`
+                        : `Scores start when Watch data lands · since ${formatShort(startDate)}`}
                   </p>
                 </div>
                 {todayEntry?.score != null ? (
@@ -90,6 +98,12 @@ export async function ReadinessTrackerPage() {
               </div>
             </div>
 
+            <HealthSharingTip
+              focus="vitals"
+              synced={synced}
+              missing={todayEntry?.score == null && scoredDays.length > 0}
+            />
+
             <div className="bento bento--3">
               <div className="tile">
                 <p className="tile__label">High</p>
@@ -117,18 +131,7 @@ export async function ReadinessTrackerPage() {
           </div>
           <div className="card">
             {scoredDays.length === 0 ? (
-              <div className="empty">
-                <span className="empty__icon">
-                  <Icon name="chart" size={20} />
-                </span>
-                <p className="small sub">
-                  Daily scores build from sleep, resting HR, HRV, and runs — starting{" "}
-                  {formatShort(startDate)}.
-                </p>
-                <Link className="btn btn--ghost btn--sm" href="/settings/watch">
-                  Apple Health sync
-                </Link>
-              </div>
+              <HealthSharingEmpty icon="chart" focus="vitals" synced={synced} />
             ) : (
               <div className="rows">
                 {days.map((day) => {

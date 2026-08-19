@@ -1,7 +1,10 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db, ready } from "@/lib/db";
 import { reminderRuns } from "@/drizzle/schema";
+import { runAsUser } from "@/lib/auth/scope";
+import { pruneExpiredSessions } from "@/lib/auth/tokens";
+import { allUserIds } from "@/lib/auth/users";
 import { hourInTimeZone, todayISO } from "@/lib/date";
 import { buildBrief } from "@/lib/notify/brief";
 import { cronAuthorized } from "@/lib/notify/cron-auth";
@@ -14,16 +17,70 @@ export const dynamic = "force-dynamic";
 
 /**
  * Called by Vercel Cron. Hobby is limited to one run per day, so vercel.json
- * fires at 12:00 UTC (6am CST / 7am CDT). Pro can switch that back to hourly.
- * We send when the Austin hour is the chosen reminder hour, or one hour later
- * to cover the DST offset on a once-a-day schedule. A recorded send prevents
- * a retry from delivering the brief twice.
+ * fires at 12:00 UTC. Every account is visited in turn and judged against its
+ * own timezone and reminder hour, so a runner in Austin and one in Berlin each
+ * get their brief in the morning. A recorded send prevents a retry from
+ * delivering the same brief twice.
  */
 
-async function alreadySent(date: string): Promise<boolean> {
-  await ready();
-  const [row] = await db.select().from(reminderRuns).where(eq(reminderRuns.date, date));
+interface Outcome {
+  userId: string;
+  sent?: number;
+  skipped?: string;
+  error?: string;
+}
+
+async function alreadySent(userId: string, date: string): Promise<boolean> {
+  const [row] = await db
+    .select()
+    .from(reminderRuns)
+    .where(and(eq(reminderRuns.userId, userId), eq(reminderRuns.date, date)));
   return Boolean(row);
+}
+
+async function remindOne(userId: string, appUrl: string, force: boolean): Promise<Outcome> {
+  const current = await getProfile();
+
+  if (current.remindersEnabled !== 1 && !force) {
+    return { userId, skipped: "reminders are paused" };
+  }
+  if (!current.onboardedAt && !force) {
+    return { userId, skipped: "not onboarded" };
+  }
+
+  const hour = hourInTimeZone(new Date(), current.timeZone);
+  // Accept the following hour too, so a once-a-day schedule still lands after a
+  // daylight-saving shift.
+  const due = hour === current.reminderHour || hour === (current.reminderHour + 1) % 24;
+  if (!due && !force) {
+    return { userId, skipped: `hour ${hour} is not ${current.reminderHour}` };
+  }
+
+  const date = todayISO(current.timeZone);
+  if (!force && (await alreadySent(userId, date))) {
+    return { userId, skipped: "already sent today" };
+  }
+
+  // Once-a-day synthesis, then the brief can quote anything still waiting.
+  await expireOldSuggestions();
+  await refreshCoach(current);
+
+  const brief = await buildBrief(date, appUrl);
+  if (!brief) return { userId, skipped: "no session scheduled today" };
+
+  const push = await sendPush(brief.push);
+  if (push.sent > 0) {
+    const sentAt = new Date().toISOString();
+    await db
+      .insert(reminderRuns)
+      .values({ userId, date, sentAt, channels: "push" })
+      .onConflictDoUpdate({
+        target: [reminderRuns.userId, reminderRuns.date],
+        set: { sentAt, channels: "push" },
+      });
+  }
+
+  return { userId, sent: push.sent };
 }
 
 export async function GET(request: Request) {
@@ -31,53 +88,29 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  await ready();
   const url = new URL(request.url);
   const force = url.searchParams.get("force") === "1";
-  const date = todayISO();
-  const current = await getProfile();
-
-  if (current.remindersEnabled !== 1 && !force) {
-    return NextResponse.json({ ok: true, skipped: "reminders are paused" });
-  }
-
-  const hour = hourInTimeZone(new Date());
-  const due =
-    hour === current.reminderHour || hour === (current.reminderHour + 1) % 24;
-  if (!due && !force) {
-    return NextResponse.json({ ok: true, skipped: `hour ${hour} is not ${current.reminderHour}` });
-  }
-
-  if (!force && (await alreadySent(date))) {
-    return NextResponse.json({ ok: true, skipped: "already sent today" });
-  }
-
-  // Once-a-day synthesis, then the brief can quote anything still waiting.
-  await expireOldSuggestions();
-  await refreshCoach(current);
-
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || url.origin;
-  const brief = await buildBrief(date, appUrl);
-  if (!brief) {
-    return NextResponse.json({ ok: true, skipped: "no session scheduled today" });
+
+  const results: Outcome[] = [];
+  for (const userId of await allUserIds()) {
+    try {
+      results.push(await runAsUser(userId, () => remindOne(userId, appUrl, force)));
+    } catch (error) {
+      // One broken account must not stop the rest of the run.
+      console.error("morning brief failed", userId, error);
+      results.push({ userId, error: "failed" });
+    }
   }
 
-  const push = await sendPush(brief.push);
-
-  if (push.sent > 0) {
-    await db
-      .insert(reminderRuns)
-      .values({ date, sentAt: new Date().toISOString(), channels: "push" })
-      .onConflictDoUpdate({
-        target: reminderRuns.date,
-        set: { sentAt: new Date().toISOString(), channels: "push" },
-      });
-  }
+  await pruneExpiredSessions();
 
   return NextResponse.json({
     ok: true,
-    date,
-    push,
-    subject: brief.subject,
+    accounts: results.length,
+    sent: results.reduce((total, row) => total + (row.sent ?? 0), 0),
+    results,
   });
 }
 

@@ -1,6 +1,7 @@
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
 import { workouts, type Workout } from "@/drizzle/schema";
+import { uid } from "@/lib/auth/current";
 import { addDays, dayOfWeek, startOfWeek } from "@/lib/date";
 
 /**
@@ -11,31 +12,44 @@ import { addDays, dayOfWeek, startOfWeek } from "@/lib/date";
 
 export async function markDone(date: string): Promise<void> {
   await ready();
-  await db.update(workouts).set({ status: "done", skipReason: null }).where(eq(workouts.date, date));
+  const user = await uid();
+  await db
+    .update(workouts)
+    .set({ status: "done", skipReason: null })
+    .where(and(eq(workouts.userId, user), eq(workouts.date, date)));
 }
 
 export async function markPlanned(date: string): Promise<void> {
   await ready();
+  const user = await uid();
   await db
     .update(workouts)
     .set({ status: "planned", skipReason: null })
-    .where(eq(workouts.date, date));
+    .where(and(eq(workouts.userId, user), eq(workouts.date, date)));
 }
 
 export async function skipWorkout(date: string, reason: string): Promise<void> {
   await ready();
+  const user = await uid();
   await db
     .update(workouts)
     .set({ status: "skipped", skipReason: reason || null })
-    .where(eq(workouts.date, date));
+    .where(and(eq(workouts.userId, user), eq(workouts.date, date)));
 }
 
 export async function weekWorkouts(weekStart: string): Promise<Workout[]> {
   await ready();
+  const user = await uid();
   return db
     .select()
     .from(workouts)
-    .where(and(gte(workouts.date, weekStart), lte(workouts.date, addDays(weekStart, 6))))
+    .where(
+      and(
+        eq(workouts.userId, user),
+        gte(workouts.date, weekStart),
+        lte(workouts.date, addDays(weekStart, 6)),
+      ),
+    )
     .orderBy(workouts.date);
 }
 
@@ -45,6 +59,7 @@ export async function weekWorkouts(weekStart: string): Promise<Workout[]> {
  */
 export async function holdWeek(weekStart: string): Promise<void> {
   await ready();
+  const user = await uid();
   const thisWeek = await weekWorkouts(weekStart);
   const nextStart = addDays(weekStart, 7);
   const nextWeek = await weekWorkouts(nextStart);
@@ -71,13 +86,14 @@ export async function holdWeek(weekStart: string): Promise<void> {
         purpose: source.purpose,
         tip: source.tip,
       })
-      .where(eq(workouts.id, target.id));
+      .where(and(eq(workouts.userId, user), eq(workouts.id, target.id)));
   }
 }
 
 /** Swaps the long run with another day in the same week. */
 export async function moveLongRun(weekStart: string, targetDow: number): Promise<void> {
   await ready();
+  const user = await uid();
   const week = await weekWorkouts(weekStart);
   const long = week.find((day) => day.type === "long");
   const target = week.find((day) => dayOfWeek(day.date) === targetDow);
@@ -96,8 +112,14 @@ export async function moveLongRun(weekStart: string, targetDow: number): Promise
   const longPayload = swap(long);
   const targetPayload = swap(target);
 
-  await db.update(workouts).set(targetPayload).where(eq(workouts.id, long.id));
-  await db.update(workouts).set(longPayload).where(eq(workouts.id, target.id));
+  await db
+    .update(workouts)
+    .set(targetPayload)
+    .where(and(eq(workouts.userId, user), eq(workouts.id, long.id)));
+  await db
+    .update(workouts)
+    .set(longPayload)
+    .where(and(eq(workouts.userId, user), eq(workouts.id, target.id)));
 }
 
 const round25 = (value: number) => Math.round(value * 4) / 4;
@@ -127,6 +149,7 @@ function retitle(title: string, distanceMi: number, durationMin: number | null):
  */
 export async function scaleWeek(weekStart: string, pct: number): Promise<void> {
   await ready();
+  const user = await uid();
   const factor = Math.min(1.15, Math.max(0.5, pct / 100));
   const week = await weekWorkouts(weekStart);
 
@@ -140,14 +163,18 @@ export async function scaleWeek(weekStart: string, pct: number): Promise<void> {
     await db
       .update(workouts)
       .set({ distanceMi, durationMin, title: retitle(day.title, distanceMi, durationMin) })
-      .where(eq(workouts.id, day.id));
+      .where(and(eq(workouts.userId, user), eq(workouts.id, day.id)));
   }
 }
 
 /** Turns a single planned day into rest, an easy run, or a cross-train. */
 export async function convertDay(date: string, to: "rest" | "easy" | "cross"): Promise<void> {
   await ready();
-  const [day] = await db.select().from(workouts).where(eq(workouts.date, date));
+  const user = await uid();
+  const [day] = await db
+    .select()
+    .from(workouts)
+    .where(and(eq(workouts.userId, user), eq(workouts.date, date)));
   if (!day || day.status !== "planned" || day.type === "race") return;
 
   if (to === "rest") {
@@ -160,7 +187,7 @@ export async function convertDay(date: string, to: "rest" | "easy" | "cross"): P
         durationMin: null,
         purpose: "Rest is training. This is when the adaptations actually happen.",
       })
-      .where(eq(workouts.id, day.id));
+      .where(and(eq(workouts.userId, user), eq(workouts.id, day.id)));
     return;
   }
 
@@ -174,7 +201,7 @@ export async function convertDay(date: string, to: "rest" | "easy" | "cross"): P
         durationMin: 30,
         purpose: "Aerobic work without the pounding. Bike, swim, or the elliptical.",
       })
-      .where(eq(workouts.id, day.id));
+      .where(and(eq(workouts.userId, user), eq(workouts.id, day.id)));
     return;
   }
 
@@ -188,7 +215,7 @@ export async function convertDay(date: string, to: "rest" | "easy" | "cross"): P
       durationMin: null,
       purpose: "Easy miles. Aerobic volume with almost no cost to recovery.",
     })
-    .where(eq(workouts.id, day.id));
+    .where(and(eq(workouts.userId, user), eq(workouts.id, day.id)));
 }
 
 /** Days in the same week that the long run can move to. */
@@ -204,21 +231,31 @@ export async function currentWeekStart(today: string): Promise<string> {
 /** Marks every still-planned day before today as skipped, so streaks stay honest. */
 export async function closeOutMissedDays(today: string): Promise<void> {
   await ready();
+  const user = await uid();
   const stale = await db
     .select()
     .from(workouts)
-    .where(and(lte(workouts.date, addDays(today, -1)), eq(workouts.status, "planned")));
+    .where(
+      and(
+        eq(workouts.userId, user),
+        lte(workouts.date, addDays(today, -1)),
+        eq(workouts.status, "planned"),
+      ),
+    );
 
   const runIds = stale.filter((day) => day.type !== "rest").map((day) => day.id);
   const restIds = stale.filter((day) => day.type === "rest").map((day) => day.id);
 
   if (restIds.length > 0) {
-    await db.update(workouts).set({ status: "done" }).where(inArray(workouts.id, restIds));
+    await db
+      .update(workouts)
+      .set({ status: "done" })
+      .where(and(eq(workouts.userId, user), inArray(workouts.id, restIds)));
   }
   if (runIds.length > 0) {
     await db
       .update(workouts)
       .set({ status: "skipped", skipReason: "missed" })
-      .where(inArray(workouts.id, runIds));
+      .where(and(eq(workouts.userId, user), inArray(workouts.id, runIds)));
   }
 }

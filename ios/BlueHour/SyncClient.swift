@@ -28,6 +28,14 @@ struct VitalSample: Encodable {
     let hrMax: Double?
 }
 
+/// Pre-resolved calendar day totals (America/Chicago). Steps and active kcal
+/// only arrive this way — they are not derived from raw vital samples.
+struct DaySample: Encodable {
+    let date: String
+    let steps: Int?
+    let activeKcal: Int?
+}
+
 struct WorkoutSample: Encodable {
     let externalId: String
     let startAt: Date
@@ -44,10 +52,11 @@ struct HealthPayload: Encodable {
     let device: String?
     let sleep: [SleepSample]
     let vitals: [VitalSample]
+    let days: [DaySample]
     let workouts: [WorkoutSample]
 
     var isEmpty: Bool {
-        sleep.isEmpty && vitals.isEmpty && workouts.isEmpty
+        sleep.isEmpty && vitals.isEmpty && days.isEmpty && workouts.isEmpty
     }
 }
 
@@ -82,14 +91,14 @@ enum SyncError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return "Set the Blue Hour address and sync key first."
+            return "Set the Blue Hour address and sign in first."
         case .timeout:
             return "Sync timed out. Is npm run dev running on the Mac?"
         case .unreachable:
             return "Cannot reach the trainer. Same Wi‑Fi, and Mac awake?"
         case let .server(status, message):
-            if status == 401 { return "Sync key rejected. Check it matches HEALTH_INGEST_SECRET." }
-            if status == 503 { return "The server has no HEALTH_INGEST_SECRET set." }
+            if status == 401 { return "This phone is signed out. Open the gear sheet and sign in again." }
+            if status == 503 { return "The server is not ready to accept Health data yet." }
             return "Server returned \(status). \(message)"
         }
     }
@@ -104,7 +113,7 @@ struct SyncClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(Settings.ingestSecret)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(Settings.deviceToken)", forHTTPHeaderField: "Authorization")
         // Cold Next.js compiles of this route have taken ~30s locally.
         request.timeoutInterval = 90
 
@@ -133,7 +142,7 @@ struct SyncClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(Settings.ingestSecret)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(Settings.deviceToken)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 30
         request.httpBody = try JSONSerialization.data(withJSONObject: ["date": date, "oz": oz])
 
@@ -152,7 +161,7 @@ struct SyncClient {
         }
 
         var request = URLRequest(url: url)
-        request.setValue("Bearer \(Settings.ingestSecret)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(Settings.deviceToken)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 45
 
         do {

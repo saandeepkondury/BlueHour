@@ -3,6 +3,7 @@ import { Icon } from "@/components/Icon";
 import { Ring } from "@/components/Ring";
 import { formatShort, todayISO } from "@/lib/date";
 import { hasReadinessSignal, hasVitals, type Recovery } from "@/lib/health/read";
+import { HEALTH_SHARE_PATH } from "@/lib/health/sharing";
 
 function hoursMinutes(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -61,13 +62,17 @@ export function ReadinessCard({
             <>
               <span className="banner__title">Waiting on today&apos;s sleep &amp; runs</span>
               <span className="banner__sub">
-                Watch is connected — sync again once this morning&apos;s readings land.
+                Blue Hour only reads what Health sharing allows. Check Sleep (and Workouts) in{" "}
+                {HEALTH_SHARE_PATH}, then sync again — or the Watch has not written yet.
               </span>
             </>
           ) : (
             <>
               <span className="banner__title">Connect your Watch</span>
-              <span className="banner__sub">Sleep, HRV and runs land here on their own.</span>
+              <span className="banner__sub">
+                Open Blue Hour on iPhone and Allow Health. Turn on Sleep in {HEALTH_SHARE_PATH} —
+                without it, Today stays empty overnight.
+              </span>
             </>
           )}
         </span>
@@ -108,7 +113,8 @@ export function ReadinessCard({
             </p>
             {stale && isToday ? (
               <p className="card__sub">
-                Latest Watch reading — today&apos;s sleep and rest HR have not landed yet.
+                Latest Watch reading — today&apos;s sleep and rest HR have not landed yet. If Sleep
+                stays empty, check {HEALTH_SHARE_PATH}.
               </p>
             ) : advisory ? (
               <p className="card__sub">{advisory}</p>
@@ -143,42 +149,50 @@ export function ReadinessCard({
       </Link>
 
       {hasVitals(day) ? (
-        <div className="bento bento--3">
-          <Link className="tile cardlink" href="/sleep" style={{ textDecoration: "none", color: "inherit" }}>
-            <p className="tile__label">
-              <Icon name="moon" size={13} />
-              Sleep
-            </p>
-            <p className="tile__value">
-              {day!.asleepMin !== null ? hoursMinutes(day!.asleepMin) : "—"}
-            </p>
-          </Link>
-          <Link className="tile cardlink" href="/rest-hr" style={{ textDecoration: "none", color: "inherit" }}>
-            <p className="tile__label">
-              <Icon name="heart" size={13} />
-              Rest HR
-            </p>
-            <p className="tile__value">
-              {day!.restingHr ?? "—"}
-              {day!.restingHr !== null ? <small>bpm</small> : null}
-            </p>
-            {restingDelta !== null && restingDelta !== 0 ? (
-              <p className="tile__foot">
-                {restingDelta > 0 ? "+" : ""}
-                {restingDelta} vs normal
+        <div className="stack">
+          <div className="bento bento--3">
+            <Link className="tile cardlink" href="/sleep" style={{ textDecoration: "none", color: "inherit" }}>
+              <p className="tile__label">
+                <Icon name="moon" size={13} />
+                Sleep
               </p>
-            ) : null}
-          </Link>
-          <Link className="tile cardlink" href="/hrv" style={{ textDecoration: "none", color: "inherit" }}>
-            <p className="tile__label">
-              <Icon name="pulse" size={13} />
-              HRV
+              <p className="tile__value">
+                {day!.asleepMin !== null ? hoursMinutes(day!.asleepMin) : "—"}
+              </p>
+            </Link>
+            <Link className="tile cardlink" href="/rest-hr" style={{ textDecoration: "none", color: "inherit" }}>
+              <p className="tile__label">
+                <Icon name="heart" size={13} />
+                Rest HR
+              </p>
+              <p className="tile__value">
+                {day!.restingHr ?? "—"}
+                {day!.restingHr !== null ? <small>bpm</small> : null}
+              </p>
+              {restingDelta !== null && restingDelta !== 0 ? (
+                <p className="tile__foot">
+                  {restingDelta > 0 ? "+" : ""}
+                  {restingDelta} vs normal
+                </p>
+              ) : null}
+            </Link>
+            <Link className="tile cardlink" href="/hrv" style={{ textDecoration: "none", color: "inherit" }}>
+              <p className="tile__label">
+                <Icon name="pulse" size={13} />
+                HRV
+              </p>
+              <p className="tile__value">
+                {day!.hrvMs !== null ? Math.round(day!.hrvMs) : "—"}
+                {day!.hrvMs !== null ? <small>ms</small> : null}
+              </p>
+            </Link>
+          </div>
+          {isToday && lastSyncAt && day!.asleepMin === null ? (
+            <p className="small muted">
+              Sleep is empty — turn it on in {HEALTH_SHARE_PATH}, or the Watch has not written
+              overnight yet.
             </p>
-            <p className="tile__value">
-              {day!.hrvMs !== null ? Math.round(day!.hrvMs) : "—"}
-              {day!.hrvMs !== null ? <small>ms</small> : null}
-            </p>
-          </Link>
+          ) : null}
         </div>
       ) : racePrep ? (
         <div className="bento bento--3">

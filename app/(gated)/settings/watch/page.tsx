@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { saveHealthEntry } from "@/app/actions";
 import { AppBar } from "@/components/AppBar";
+import { HealthSharingGuide } from "@/components/HealthSharingEmpty";
 import { HealthSyncButton } from "@/components/HealthSyncButton";
 import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
@@ -49,6 +50,10 @@ export default async function WatchPage() {
 
         <section className="block">
           <HealthSyncButton />
+        </section>
+
+        <section className="block block--tight">
+          <HealthSharingGuide synced={Boolean(sync)} />
         </section>
 
         <section className="block">

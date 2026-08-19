@@ -31,6 +31,7 @@ struct HealthBridge {
             HKQuantityType(.heartRate),
             HKQuantityType(.distanceWalkingRunning),
             HKQuantityType(.activeEnergyBurned),
+            HKQuantityType(.stepCount),
         ]
         types.insert(HKQuantityType(.appleExerciseTime))
         return types
@@ -51,6 +52,8 @@ struct HealthBridge {
         async let walking = loadVitals(HKQuantityType(.walkingHeartRateAverage), unit: bpm, since: nil)
         async let hrv = loadVitals(HKQuantityType(.heartRateVariabilitySDNN), unit: .secondUnit(with: .milli), since: nil)
         async let ranges = loadDailyHeartRanges(since: nil)
+        async let stepDays = loadDailyTotals(HKQuantityType(.stepCount), unit: .count(), since: nil)
+        async let energyDays = loadDailyTotals(HKQuantityType(.activeEnergyBurned), unit: .kilocalorie(), since: nil)
 
         var vitals: [VitalSample] = []
         for sample in try await resting {
@@ -84,10 +87,13 @@ struct HealthBridge {
         // Ascending so the server's last write per day is the most recent reading.
         vitals.sort { $0.at < $1.at }
 
+        let days = Self.mergeDayTotals(steps: try await stepDays, energy: try await energyDays)
+
         return HealthPayload(
             device: await UIDeviceName.current(),
             sleep: try await sleep,
             vitals: vitals,
+            days: days,
             workouts: try await workouts
         )
     }
@@ -311,7 +317,7 @@ struct HealthBridge {
     ) async throws -> [(date: Date, min: Double, average: Double, max: Double)] {
         let type = HKQuantityType(.heartRate)
         let unit = HKUnit.count().unitDivided(by: .minute())
-        let calendar = Calendar.current
+        let calendar = Self.austinCalendar
         // Anchor needs a concrete day even when the predicate has no floor.
         let queryStart = start ?? Date(timeIntervalSince1970: 0)
         let anchor = calendar.startOfDay(for: queryStart)
@@ -353,6 +359,89 @@ struct HealthBridge {
             }
             store.execute(query)
         }
+    }
+
+    /// Daily cumulative totals (steps, active energy) keyed for America/Chicago.
+    private func loadDailyTotals(
+        _ type: HKQuantityType,
+        unit: HKUnit,
+        since start: Date?
+    ) async throws -> [(date: String, value: Double)] {
+        let calendar = Self.austinCalendar
+        let queryStart = start ?? Date(timeIntervalSince1970: 0)
+        let anchor = calendar.startOfDay(for: queryStart)
+        let interval = DateComponents(day: 1)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKStatisticsCollectionQuery(
+                quantityType: type,
+                quantitySamplePredicate: HKQuery.predicateForSamples(withStart: start, end: Date()),
+                options: .cumulativeSum,
+                anchorDate: anchor,
+                intervalComponents: interval
+            )
+            query.initialResultsHandler = { _, collection, error in
+                if error != nil {
+                    continuation.resume(returning: [])
+                    return
+                }
+                guard let collection else {
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                var out: [(date: String, value: Double)] = []
+                collection.enumerateStatistics(from: queryStart, to: Date()) { stats, _ in
+                    guard let sum = stats.sumQuantity() else { return }
+                    let value = sum.doubleValue(for: unit)
+                    guard value > 0 else { return }
+                    out.append((Self.austinDayString(stats.startDate), value))
+                }
+                continuation.resume(returning: out)
+            }
+            store.execute(query)
+        }
+    }
+
+    private static func mergeDayTotals(
+        steps: [(date: String, value: Double)],
+        energy: [(date: String, value: Double)]
+    ) -> [DaySample] {
+        var byDate: [String: (steps: Int?, kcal: Int?)] = [:]
+        for sample in steps {
+            let rounded = Int(sample.value.rounded())
+            guard rounded > 0 else { continue }
+            var entry = byDate[sample.date] ?? (steps: nil, kcal: nil)
+            entry.steps = rounded
+            byDate[sample.date] = entry
+        }
+        for sample in energy {
+            let rounded = Int(sample.value.rounded())
+            guard rounded > 0 else { continue }
+            var entry = byDate[sample.date] ?? (steps: nil, kcal: nil)
+            entry.kcal = rounded
+            byDate[sample.date] = entry
+        }
+        return byDate.keys.sorted().compactMap { date in
+            guard let entry = byDate[date] else { return nil }
+            return DaySample(date: date, steps: entry.steps, activeKcal: entry.kcal)
+        }
+    }
+
+    /// Training calendar matches the server (America/Chicago), not the phone's travel zone.
+    private static let austinCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Chicago") ?? .current
+        return calendar
+    }()
+
+    private static func austinDayString(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = austinCalendar
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = austinCalendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
     }
 
     // MARK: - Plumbing

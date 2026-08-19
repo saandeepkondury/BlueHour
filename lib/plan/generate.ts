@@ -66,6 +66,8 @@ function round25(value: number): number {
   return Math.round(value * 4) / 4;
 }
 
+export type PlanExperience = "beginner" | "intermediate" | "advanced";
+
 /** Walk/run only in the first ~3 weeks of a full 28-week runway. */
 function walkRunInterval(weeksToRace: number): { run: number; walk: number; totalMin: number } {
   if (weeksToRace >= 27) return { run: 3, walk: 1, totalMin: 22 };
@@ -73,7 +75,13 @@ function walkRunInterval(weeksToRace: number): { run: number; walk: number; tota
   return { run: 5, walk: 1, totalMin: 30 };
 }
 
-function usesWalkRun(weeksToRace: number): boolean {
+/**
+ * Beginners get walk/run for the opening weeks. Intermediate keeps a single
+ * soft-landing week. Advanced starts on continuous easy mileage.
+ */
+function usesWalkRun(weeksToRace: number, experience: PlanExperience): boolean {
+  if (experience === "advanced") return false;
+  if (experience === "intermediate") return weeksToRace >= 27;
   return weeksToRace >= 25;
 }
 
@@ -281,7 +289,7 @@ function purposeFor(type: WorkoutType, phase: Phase, long: number, cutback: bool
   if (override) return override;
   switch (type) {
     case "race":
-      return "Thirteen point one miles from downtown to the Capitol. Everything in this plan pointed here.";
+      return "Thirteen point one miles. Everything in this plan pointed here.";
     case "long":
       if (cutback) return "Cutback long run. Backing off this week is what lets next week's jump stick.";
       if (long >= 10) return "The confidence run. Time on feet teaches your legs the second half of the race.";
@@ -301,11 +309,17 @@ function purposeFor(type: WorkoutType, phase: Phase, long: number, cutback: bool
   }
 }
 
-function titleFor(type: WorkoutType, distance: number, weeksToRace: number, override?: string): string {
+function titleFor(
+  type: WorkoutType,
+  distance: number,
+  weeksToRace: number,
+  override?: string,
+  raceName?: string,
+): string {
   if (override) return override;
   switch (type) {
     case "race":
-      return "Austin Half Marathon — 13.1 mi";
+      return `${raceName?.trim() || "Race day"} — ${RACE_DISTANCE_MI} mi`;
     case "long":
       return `Long run — ${formatMi(distance)} mi`;
     case "easy":
@@ -334,6 +348,9 @@ interface GenerateInput {
   raceDate: string;
   /** 6 = Saturday, 0 = Sunday */
   longRunDay: number;
+  experience?: PlanExperience;
+  /** Names race day after the runner's own race. */
+  raceName?: string;
 }
 
 /**
@@ -344,7 +361,13 @@ interface GenerateInput {
  *   Mon strength A · Tue run (easy → quality) · Wed abs A ·
  *   Thu easy · Fri strength B + abs B · Sat long · Sun rest / easy
  */
-export function generatePlan({ startDate, raceDate, longRunDay }: GenerateInput): WorkoutSeed[] {
+export function generatePlan({
+  startDate,
+  raceDate,
+  longRunDay,
+  experience = "beginner",
+  raceName,
+}: GenerateInput): WorkoutSeed[] {
   const planStart = startOfWeek(startDate);
   const raceWeekStart = startOfWeek(raceDate);
   const totalWeeks = Math.max(1, Math.round(daysBetween(planStart, raceWeekStart) / 7) + 1);
@@ -381,7 +404,7 @@ export function generatePlan({ startDate, raceDate, longRunDay }: GenerateInput)
             title: quality.title,
             purpose: quality.purpose,
           });
-        } else if (usesWalkRun(weeksToRace)) {
+        } else if (usesWalkRun(weeksToRace, experience)) {
           const interval = walkRunInterval(weeksToRace);
           assignments.set(tue, { type: "walk_run", distance: round25(interval.totalMin / 15), durationMin: interval.totalMin });
         } else {
@@ -392,7 +415,7 @@ export function generatePlan({ startDate, raceDate, longRunDay }: GenerateInput)
       if (thu !== longRunDay) {
         const dist = thuDistance(phase, long, weeksToRace);
         if (dist > 0) {
-          if (usesWalkRun(weeksToRace)) {
+          if (usesWalkRun(weeksToRace, experience)) {
             const interval = walkRunInterval(weeksToRace);
             assignments.set(thu, {
               type: "walk_run",
@@ -432,7 +455,7 @@ export function generatePlan({ startDate, raceDate, longRunDay }: GenerateInput)
         weeksToRace,
         phase,
         type,
-        title: titleFor(type, distance, weeksToRace, assigned?.title),
+        title: titleFor(type, distance, weeksToRace, assigned?.title, raceName),
         distanceMi: distance,
         durationMin,
         purpose: purposeFor(type, phase, long, cutback, assigned?.purpose),

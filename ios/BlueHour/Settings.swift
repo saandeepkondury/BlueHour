@@ -1,10 +1,16 @@
 import Foundation
 import Security
 
-/// Where the phone sends Health data. The URL is a preference; the ingest
-/// secret is a credential, so it lives in the keychain instead of UserDefaults.
+/// Where the phone sends Health data, and as whom. The URL and the signed-in
+/// email are preferences; the device token is a credential, so it lives in the
+/// keychain instead of UserDefaults.
+///
+/// The keychain account name is unchanged from when this held a shared
+/// `HEALTH_INGEST_SECRET`, so a phone that was set up before accounts existed
+/// keeps working until the runner signs in.
 struct Settings {
     private static let urlKey = "bh.baseURL"
+    private static let emailKey = "bh.accountEmail"
     private static let secretAccount = "bh.ingestSecret"
     private static let service = "com.bluehour.trainer"
 
@@ -13,18 +19,45 @@ struct Settings {
         set { UserDefaults.standard.set(newValue.trimmed, forKey: urlKey) }
     }
 
-    static var ingestSecret: String {
+    /// Shown on the Connect screen so it is obvious which account this phone syncs.
+    static var accountEmail: String {
+        get { UserDefaults.standard.string(forKey: emailKey) ?? "" }
+        set { UserDefaults.standard.set(newValue.trimmed, forKey: emailKey) }
+    }
+
+    /// Issued by signing in. Sent as a Bearer on every request this app makes.
+    static var deviceToken: String {
         get { keychainRead() ?? "" }
         set { keychainWrite(newValue.trimmed) }
     }
 
     static var isConfigured: Bool {
-        !baseURL.isEmpty && !ingestSecret.isEmpty && URL(string: baseURL) != nil
+        !baseURL.isEmpty && !deviceToken.isEmpty && URL(string: baseURL) != nil
+    }
+
+    static func signOut() {
+        deviceToken = ""
+        accountEmail = ""
     }
 
     static func ingestURL() -> URL? {
         guard let base = URL(string: baseURL) else { return nil }
         return base.appendingPathComponent("api/health/ingest")
+    }
+
+    static func signInURL() -> URL? {
+        guard let base = URL(string: baseURL) else { return nil }
+        return base.appendingPathComponent("api/auth/signin")
+    }
+
+    static func signUpURL() -> URL? {
+        guard let base = URL(string: baseURL) else { return nil }
+        return base.appendingPathComponent("api/auth/signup")
+    }
+
+    static func webSessionURL() -> URL? {
+        guard let base = URL(string: baseURL) else { return nil }
+        return base.appendingPathComponent("api/auth/web-session")
     }
 
     static func waterLogURL() -> URL? {

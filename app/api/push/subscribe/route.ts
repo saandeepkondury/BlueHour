@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
+import { authenticate, isDenied } from "@/lib/auth/request";
+import { runAsUser } from "@/lib/auth/scope";
 import { deletePushSubscription, savePushSubscription } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Stores the browser's push subscription. Guarded by the same passcode as the app. */
+/** Stores the browser's push subscription against the signed-in account. */
 export async function POST(request: Request) {
+  const auth = await authenticate(request);
+  if (isDenied(auth)) return auth.denied;
+
   let body: unknown;
   try {
     body = await request.json();
@@ -18,16 +23,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "incomplete subscription" }, { status: 400 });
   }
 
-  await savePushSubscription({
-    endpoint: sub.endpoint,
-    p256dh: sub.keys.p256dh,
-    auth: sub.keys.auth,
-  });
+  await runAsUser(auth.userId, () =>
+    savePushSubscription({
+      endpoint: sub.endpoint!,
+      p256dh: sub.keys!.p256dh!,
+      auth: sub.keys!.auth!,
+    }),
+  );
 
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(request: Request) {
+  const auth = await authenticate(request);
+  if (isDenied(auth)) return auth.denied;
+
   let body: unknown;
   try {
     body = await request.json();
@@ -38,6 +48,6 @@ export async function DELETE(request: Request) {
   const endpoint = (body as { endpoint?: string }).endpoint;
   if (!endpoint) return NextResponse.json({ error: "endpoint is required" }, { status: 400 });
 
-  await deletePushSubscription(endpoint);
+  await runAsUser(auth.userId, () => deletePushSubscription(endpoint));
   return NextResponse.json({ ok: true });
 }

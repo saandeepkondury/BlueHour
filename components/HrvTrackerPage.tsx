@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { AppBar } from "@/components/AppBar";
+import { HealthSharingEmpty, HealthSharingTip } from "@/components/HealthSharingEmpty";
 import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { formatWithYear, todayISO, weekdayShort } from "@/lib/date";
 import { pendingCount } from "@/lib/coach/store";
-import { getHrvSummary } from "@/lib/health/read";
+import { getHrvSummary, lastSync } from "@/lib/health/read";
 
 function detailLine(row: {
   hrvMin: number | null;
@@ -26,7 +27,12 @@ function detailLine(row: {
 
 export async function HrvTrackerPage() {
   const today = todayISO();
-  const [pending, summary] = await Promise.all([pendingCount(), getHrvSummary()]);
+  const [pending, summary, sync] = await Promise.all([
+    pendingCount(),
+    getHrvSummary(),
+    lastSync(),
+  ]);
+  const synced = Boolean(sync);
   const {
     history,
     todayMs,
@@ -63,9 +69,17 @@ export async function HrvTrackerPage() {
                   ? delta !== null && delta !== 0
                     ? `Today · ${delta > 0 ? "+" : ""}${delta} vs normal`
                     : "Today"
-                  : "Nothing for today yet"}
+                  : synced
+                    ? "Permission or Watch not writing yet"
+                    : "Nothing for today yet"}
               </p>
             </div>
+
+            <HealthSharingTip
+              focus="hrv"
+              synced={synced}
+              missing={todayMs === null && history.length > 0}
+            />
 
             <div className="bento bento--3">
               <div className="tile">
@@ -126,20 +140,8 @@ export async function HrvTrackerPage() {
           </div>
           <div className="card">
             {history.length === 0 ? (
-              <div className="empty">
-                <span className="empty__icon">
-                  <Icon name="pulse" size={20} />
-                </span>
-                <p className="small sub">
-                  Heart-rate variability from your Watch shows up here after sync — only days since
-                  this training block started.
-                </p>
-                <Link className="btn btn--ghost btn--sm" href="/settings/watch">
-                  Apple Health sync
-                </Link>
-              </div>
-            ) : (
-              <div className="rows">
+              <HealthSharingEmpty icon="pulse" focus="hrv" synced={synced} />
+            ) : (              <div className="rows">
                 {history.map((row) => {
                   const href = row.date === today ? "/" : `/day/${row.date}`;
                   const value =

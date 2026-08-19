@@ -43,7 +43,16 @@
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Blue Hour reads your Apple Watch runs, sleep, and heart rate so your training plan reflects what you actually did. It never writes to Health.</string>
+	<string>Blue Hour reads your Apple Watch runs, steps, active energy, sleep, and heart rate so your training plan reflects what you actually did. It never writes to Health.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.bluehour.trainer.health-refresh</string>
+	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Blue Hour connects to the trainer running on your Mac while you develop locally.</string>
 	<key>NSAppTransportSecurity</key>
