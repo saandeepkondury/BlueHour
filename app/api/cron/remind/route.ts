@@ -10,7 +10,6 @@ import { buildBrief } from "@/lib/notify/brief";
 import { cronAuthorized } from "@/lib/notify/cron-auth";
 import { sendPush } from "@/lib/notify/push";
 import { getProfile } from "@/lib/store";
-import { expireOldSuggestions, refreshCoach } from "@/lib/coach/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,10 +59,6 @@ async function remindOne(userId: string, appUrl: string, force: boolean): Promis
   if (!force && (await alreadySent(userId, date))) {
     return { userId, skipped: "already sent today" };
   }
-
-  // Once-a-day synthesis, then the brief can quote anything still waiting.
-  await expireOldSuggestions();
-  await refreshCoach(current);
 
   const brief = await buildBrief(date, appUrl);
   if (!brief) return { userId, skipped: "no session scheduled today" };

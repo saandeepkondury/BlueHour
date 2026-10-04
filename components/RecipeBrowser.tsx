@@ -24,14 +24,10 @@ function cookMeta(recipe: BrowseRecipe): string {
 }
 
 export function RecipeBrowser({
-  weekStart,
-  today,
   catalog,
   initialSlot = "breakfast",
   hasPantry,
 }: {
-  weekStart: string;
-  today: string;
   catalog: BrowseRecipe[];
   initialSlot?: Slot;
   hasPantry: boolean;
@@ -93,7 +89,7 @@ export function RecipeBrowser({
                   <Link
                     className="row cook-rec__row"
                     key={recipe.id}
-                    href={`/recipe/${recipe.id}?week=${weekStart}&date=${today}&slot=${recipe.slot}`}
+                    href={`/recipe/${recipe.id}`}
                     prefetch={false}
                     style={{ color: "inherit", textDecoration: "none" }}
                   >
@@ -117,7 +113,7 @@ export function RecipeBrowser({
       <section className="block block--tight">
         <div className="card">
           <p className="label" style={{ marginBottom: "0.65rem" }}>
-            All recipes
+            Instagram recipes
           </p>
           <div className="seg" role="tablist" aria-label="Meal type" style={{ marginBottom: "0.5rem" }}>
             {MEAL_SLOTS.map((s) => (
@@ -159,7 +155,7 @@ export function RecipeBrowser({
                         <Link
                           className="row"
                           key={recipe.id}
-                          href={`/recipe/${recipe.id}?week=${weekStart}&date=${today}&slot=${recipe.slot}`}
+                          href={`/recipe/${recipe.id}`}
                           prefetch={false}
                           style={{ color: "inherit", textDecoration: "none" }}
                         >

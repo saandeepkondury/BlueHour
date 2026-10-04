@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import WidgetKit
 #if SUPPORTS_APPLE_SIGN_IN
 import AuthenticationServices
 #endif
@@ -78,6 +79,7 @@ struct RootView: View {
     @StateObject private var model = SyncModel()
     @ObservedObject private var deepLinks = DeepLinkRouter.shared
     @Environment(\.scenePhase) private var scenePhase
+    @State private var widgetToken = 0
 
     var body: some View {
         Group {
@@ -92,7 +94,8 @@ struct RootView: View {
                         notice: model.notice,
                         onRequestSync: {
                             Task { await model.syncFromWeb() }
-                        }
+                        },
+                        widgetToken: widgetToken
                     )
                 }
                 .ignoresSafeArea(.container, edges: .bottom)
@@ -107,9 +110,17 @@ struct RootView: View {
             await model.syncIfPossible()
         }
         .onChange(of: scenePhase) { _, phase in
+            if phase == .background || phase == .active {
+                WidgetCenter.shared.reloadAllTimelines()
+            }
             guard phase == .active else { return }
+            widgetToken += 1
             BlueHourShortcuts.updateAppShortcutParameters()
             Task { await model.syncIfPossible() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: WidgetSync.changed)) { _ in
+            WidgetCenter.shared.reloadAllTimelines()
+            widgetToken += 1
         }
         .onChange(of: deepLinks.syncToken) { _, _ in
             Task { await model.syncIfPossible() }

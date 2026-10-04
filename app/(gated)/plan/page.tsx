@@ -8,7 +8,7 @@ import { Shell } from "@/components/Shell";
 import { StrengthCard } from "@/components/StrengthCard";
 import { formatRange, formatShort, startOfWeek, todayISO, weekdayShort } from "@/lib/date";
 import { formatMiles } from "@/lib/format";
-import { pendingCount } from "@/lib/coach/store";
+import { pendingCount } from "@/lib/habits/store";
 import { PHASE_LABEL, TYPE_LABEL, type Phase, type WorkoutType } from "@/lib/plan/types";
 import { getAllWorkoutLogs, getAllWorkouts } from "@/lib/store";
 import { checkedExercises, strengthLogFor } from "@/lib/strength/log";

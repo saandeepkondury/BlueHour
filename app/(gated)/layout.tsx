@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { NativeBridge } from "@/components/NativeBridge";
 import { sessionUserId } from "@/lib/auth/session";
 import { getProfile, isOnboarded } from "@/lib/store";
 
@@ -12,5 +13,10 @@ export default async function GatedLayout({ children }: { children: React.ReactN
   const current = await getProfile();
   if (!isOnboarded(current)) redirect("/onboard");
 
-  return children;
+  return (
+    <>
+      <NativeBridge />
+      {children}
+    </>
+  );
 }

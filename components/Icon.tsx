@@ -8,7 +8,7 @@ export type IconName =
   | "calendar"
   | "fuel"
   | "body"
-  | "coach"
+  | "star"
   | "settings"
   | "grid"
   | "chevron"
@@ -34,9 +34,31 @@ export type IconName =
   | "shuffle"
   | "bell"
   | "sync"
-  | "person";
+  | "person"
+  | "camera"
+  | "book"
+  | "edit";
 
 const PATHS: Record<IconName, React.ReactNode> = {
+  camera: (
+    <>
+      <path d="M4.5 8.5A2 2 0 0 1 6.5 6.5h1.8l1.4-2h4.6l1.4 2h1.8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2z" />
+      <circle cx="12" cy="13" r="3.4" />
+    </>
+  ),
+  edit: (
+    <>
+      <path d="M14.5 5.5 18.5 9.5 9 19H5v-4z" />
+      <path d="M12.5 7.5 16.5 11.5" />
+    </>
+  ),
+  book: (
+    <>
+      <path d="M5 4.5h10.5A2.5 2.5 0 0 1 18 7v12.5H7.5A2.5 2.5 0 0 1 5 17z" />
+      <path d="M5 17a2.5 2.5 0 0 1 2.5-2.5H18" />
+      <path d="M9 8.5h5" />
+    </>
+  ),
   person: (
     <>
       <circle cx="12" cy="8.5" r="3.75" />
@@ -71,8 +93,8 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M6.5 10.5 12 12l5.5-1.5" />
     </>
   ),
-  coach: (
-    <path d="M4.8 5.6h10.4A3.2 3.2 0 0 1 18.4 8.8v5.2a3.2 3.2 0 0 1-3.2 3.2H9.6L6 20.4l.7-3.2H4.8A3.2 3.2 0 0 1 1.6 14V8.8A3.2 3.2 0 0 1 4.8 5.6z" />
+  star: (
+    <path d="M12 3.15l2.62 5.31 5.86.85-4.24 4.13 1 5.83L12 16.5l-5.24 2.77 1-5.83-4.24-4.13 5.86-.85z" />
   ),
   settings: (
     <>

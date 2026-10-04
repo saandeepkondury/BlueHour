@@ -5,7 +5,7 @@ import { Icon, type IconName } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { addDays, formatWithYear, todayISO, weekdayShort } from "@/lib/date";
-import { pendingCount } from "@/lib/coach/store";
+import { pendingCount } from "@/lib/habits/store";
 import {
   formatSleep,
   getVitalsHistory,

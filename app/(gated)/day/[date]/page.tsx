@@ -6,7 +6,7 @@ import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { addDays, formatShort, startOfWeek, todayISO, weekdayShort } from "@/lib/date";
-import { pendingCount } from "@/lib/coach/store";
+import { pendingCount } from "@/lib/habits/store";
 import { longRunOptions } from "@/lib/plan/adapt";
 import { getDayBundle } from "@/lib/store";
 

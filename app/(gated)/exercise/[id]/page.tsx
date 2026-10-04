@@ -7,7 +7,7 @@ import { ExerciseDemo } from "@/components/ExerciseDemo";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { formatShort, todayISO } from "@/lib/date";
-import { pendingCount } from "@/lib/coach/store";
+import { pendingCount } from "@/lib/habits/store";
 import { exerciseById } from "@/lib/strength/exercises";
 import { checkFor, historyForExercise } from "@/lib/strength/log";
 import { getWorkoutXExercise, resolveDemo, workoutxConfigured } from "@/lib/workoutx/client";

@@ -5,7 +5,10 @@ enum AppDestination: String, CaseIterable {
     case today
     case water
     case coach
+    case habits
     case fuel
+    /// The widget's camera button: Fuel with the "Log a meal" sheet already open.
+    case logMeal = "log-meal"
     case plan
     case progress
     case sync
@@ -14,8 +17,9 @@ enum AppDestination: String, CaseIterable {
         switch self {
         case .today: return "/"
         case .water: return "/water"
-        case .coach: return "/coach"
+        case .coach, .habits: return "/habits"
         case .fuel: return "/fuel"
+        case .logMeal: return "/fuel?compose=1"
         case .plan: return "/plan"
         case .progress: return "/progress"
         case .sync: return nil

@@ -156,6 +156,45 @@ const TABLES: Record<string, string> = {
     meal_plan_id INTEGER,
     created_at TEXT NOT NULL
   )`,
+  meal_entries: `CREATE TABLE IF NOT EXISTS meal_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    slot TEXT NOT NULL,
+    name TEXT NOT NULL,
+    photo_url TEXT,
+    source TEXT NOT NULL DEFAULT 'home',
+    mark TEXT,
+    starred INTEGER NOT NULL DEFAULT 0,
+    recipe_ref TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  user_recipes: `CREATE TABLE IF NOT EXISTS user_recipes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    steps TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  user_recipe_ingredients: `CREATE TABLE IF NOT EXISTS user_recipe_ingredients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    recipe_id INTEGER NOT NULL,
+    item_key TEXT NOT NULL,
+    name TEXT NOT NULL,
+    qty REAL,
+    unit TEXT,
+    position INTEGER NOT NULL DEFAULT 0
+  )`,
+  ingredient_labels: `CREATE TABLE IF NOT EXISTS ingredient_labels (
+    user_id TEXT NOT NULL,
+    item_key TEXT NOT NULL,
+    label TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, item_key)
+  )`,
   day_logs: `CREATE TABLE IF NOT EXISTS day_logs (
     user_id TEXT NOT NULL,
     date TEXT NOT NULL,
@@ -262,6 +301,14 @@ const TABLES: Record<string, string> = {
     snapshot TEXT,
     fingerprint TEXT NOT NULL
   )`,
+  habit_stars: `CREATE TABLE IF NOT EXISTS habit_stars (
+    user_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    habit_id TEXT NOT NULL,
+    starred INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, date, habit_id)
+  )`,
   settings: `CREATE TABLE IF NOT EXISTS settings (
     user_id TEXT NOT NULL,
     key TEXT NOT NULL,
@@ -295,6 +342,7 @@ const TENANT_TABLES = [
   "strength_checks",
   "strength_logs",
   "coach_suggestions",
+  "habit_stars",
   "settings",
 ];
 
@@ -311,6 +359,10 @@ const INDEXES = [
   `CREATE UNIQUE INDEX IF NOT EXISTS workout_logs_user_date ON workout_logs (user_id, date)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS meal_plans_user_date_slot ON meal_plans (user_id, date, slot)`,
   `CREATE INDEX IF NOT EXISTS food_logs_user_date ON food_logs (user_id, date)`,
+  `CREATE INDEX IF NOT EXISTS meal_entries_user_date ON meal_entries (user_id, date)`,
+  `CREATE INDEX IF NOT EXISTS user_recipes_user ON user_recipes (user_id)`,
+  `CREATE INDEX IF NOT EXISTS user_recipe_ingredients_recipe ON user_recipe_ingredients (user_id, recipe_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS user_recipe_ingredients_unique ON user_recipe_ingredients (user_id, recipe_id, item_key)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS grocery_user_week_item ON grocery_checks (user_id, week_start, item_key)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS supp_log_user_date_id ON supplement_logs (user_id, date, supplement_id)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS fuel_user_date_stage ON fuel_checks (user_id, date, stage)`,

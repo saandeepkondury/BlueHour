@@ -11,8 +11,9 @@ import {
 } from "@/lib/store";
 import { and, gte, lte, eq } from "drizzle-orm";
 import { db, ready } from "@/lib/db";
-import { foodLogs, mealPlans } from "@/drizzle/schema";
+import { foodLogs } from "@/drizzle/schema";
 import { uid } from "@/lib/auth/current";
+import { getMealsBetween } from "@/lib/meals/store";
 
 export interface WeekProgress {
   weekStart: string;
@@ -132,17 +133,8 @@ async function nutritionWindow(
   const windowDays = 7;
   const from = addDays(today, -(windowDays - 1));
 
-  const eatenMeals = await db
-    .select()
-    .from(mealPlans)
-    .where(
-      and(
-        eq(mealPlans.userId, user),
-        gte(mealPlans.date, from),
-        lte(mealPlans.date, today),
-        eq(mealPlans.eaten, 1),
-      ),
-    );
+  // Only Instagram catalog meals carry macros; a photo-only meal would drag the averages to zero.
+  const eatenMeals = (await getMealsBetween(from, today)).filter((meal) => meal.calories > 0);
   const extras = await db
     .select()
     .from(foodLogs)

@@ -24,6 +24,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        Settings.shareWithWidget()
+        WidgetSync.listenInApp()
         NotificationScheduler.registerCategories()
         UNUserNotificationCenter.current().delegate = self
         BlueHourShortcuts.updateAppShortcutParameters()

@@ -226,6 +226,77 @@ export const foodLogs = sqliteTable(
   (t) => [index("food_logs_user_date").on(t.userId, t.date)],
 );
 
+/**
+ * One row per thing eaten. A day can hold any number of them, so a second
+ * snack is just another row. `recipeRef` is `catalog:<id>` or `user:<id>`.
+ */
+export const mealEntries = sqliteTable(
+  "meal_entries",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: text("user_id").notNull(),
+    date: text("date").notNull(),
+    slot: text("slot").notNull(),
+    name: text("name").notNull(),
+    photoUrl: text("photo_url"),
+    /** home | prepped | out */
+    source: text("source").notNull().default("home"),
+    /** healthy | cheat, or null for neither. */
+    mark: text("mark"),
+    starred: integer("starred").notNull().default(0),
+    recipeRef: text("recipe_ref"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [index("meal_entries_user_date").on(t.userId, t.date)],
+);
+
+export const userRecipes = sqliteTable(
+  "user_recipes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    /** JSON array of step strings, in order. */
+    steps: text("steps").notNull().default("[]"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [index("user_recipes_user").on(t.userId)],
+);
+
+export const userRecipeIngredients = sqliteTable(
+  "user_recipe_ingredients",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: text("user_id").notNull(),
+    recipeId: integer("recipe_id").notNull(),
+    /** Identity key from resolveIngredientIdentity, shared with the pantry and grocery list. */
+    itemKey: text("item_key").notNull(),
+    /** What was typed, kept for reference. Display uses ingredient_labels. */
+    name: text("name").notNull(),
+    qty: real("qty"),
+    unit: text("unit"),
+    position: integer("position").notNull().default(0),
+  },
+  (t) => [
+    index("user_recipe_ingredients_recipe").on(t.userId, t.recipeId),
+    unique("user_recipe_ingredients_unique").on(t.userId, t.recipeId, t.itemKey),
+  ],
+);
+
+/** One display name per ingredient identity, per account. First name saved wins. */
+export const ingredientLabels = sqliteTable(
+  "ingredient_labels",
+  {
+    userId: text("user_id").notNull(),
+    itemKey: text("item_key").notNull(),
+    label: text("label").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.itemKey] })],
+);
+
 export const dayLogs = sqliteTable(
   "day_logs",
   {
@@ -373,8 +444,8 @@ export const strengthLogs = sqliteTable(
 );
 
 /**
- * Every coach proposal, kept whether or not it was taken. Nothing here changes
- * the plan until the runner presses Apply.
+ * Leftover table from the old coach. Kept so existing databases still load.
+ * The app no longer writes here.
  */
 export const coachSuggestions = sqliteTable(
   "coach_suggestions",
@@ -403,6 +474,18 @@ export const coachSuggestions = sqliteTable(
   (t) => [unique("coach_user_fingerprint").on(t.userId, t.fingerprint)],
 );
 
+export const habitStars = sqliteTable(
+  "habit_stars",
+  {
+    userId: text("user_id").notNull(),
+    date: text("date").notNull(),
+    habitId: text("habit_id").notNull(),
+    starred: integer("starred").notNull().default(1),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.date, t.habitId] })],
+);
+
 /** Small key/value bag for things that are neither profile nor training data. */
 export const settings = sqliteTable(
   "settings",
@@ -425,9 +508,13 @@ export type HealthDay = typeof healthDays.$inferSelect;
 export type HealthSync = typeof healthSync.$inferSelect;
 export type MealPlanRow = typeof mealPlans.$inferSelect;
 export type FoodLog = typeof foodLogs.$inferSelect;
+export type MealEntryRow = typeof mealEntries.$inferSelect;
+export type UserRecipeRow = typeof userRecipes.$inferSelect;
+export type UserRecipeIngredientRow = typeof userRecipeIngredients.$inferSelect;
 export type DayLog = typeof dayLogs.$inferSelect;
 export type PantryItem = typeof pantryItems.$inferSelect;
 export type StrengthSession = typeof strengthSessions.$inferSelect;
 export type StrengthCheck = typeof strengthChecks.$inferSelect;
 export type StrengthLog = typeof strengthLogs.$inferSelect;
 export type CoachSuggestion = typeof coachSuggestions.$inferSelect;
+export type HabitStar = typeof habitStars.$inferSelect;

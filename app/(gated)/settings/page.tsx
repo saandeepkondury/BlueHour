@@ -1,16 +1,15 @@
 import Link from "next/link";
-import { saveCoachSettings, saveGoals, saveProfile, sendTestBrief } from "@/app/actions";
+import { saveGoals, saveProfile, sendTestBrief } from "@/app/actions";
 import { AppBar } from "@/components/AppBar";
 import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { PushToggle } from "@/components/PushToggle";
 import { Shell } from "@/components/Shell";
-import { pendingCount } from "@/lib/coach/store";
+import { pendingCount } from "@/lib/habits/store";
 import { todayISO } from "@/lib/date";
 import { cmToIn, hourLabel, kgToLb } from "@/lib/format";
 import { buildBrief } from "@/lib/notify/brief";
 import { getProfile } from "@/lib/store";
-import { openaiConfig } from "@/lib/settings";
 import { targetBodyFatFor } from "@/lib/strength/abs";
 
 export const dynamic = "force-dynamic";
@@ -36,8 +35,7 @@ const DIETS = [
 export default async function SettingsPage() {
   const profile = await getProfile();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "http://localhost:3000";
-  const [coach, pending, brief] = await Promise.all([
-    openaiConfig(),
+  const [pending, brief] = await Promise.all([
     pendingCount(),
     buildBrief(todayISO(), appUrl),
   ]);
@@ -268,24 +266,13 @@ export default async function SettingsPage() {
                   </select>
                 </label>
               </div>
-              <label className="field">
-                <span className="field__label">Let the model read my data</span>
-                <select name="aiEnabled" defaultValue={profile.aiEnabled ? "1" : "0"}>
-                  <option value="1">Yes, once a day from my logs</option>
-                  <option value="0">No, guardrails only</option>
-                </select>
-              </label>
               <details className="fold">
                 <summary>How this works</summary>
                 <div className="fold__body">
                   <p className="small sub">
-                    A deficit is periodized around training — real in base and build, almost nothing
-                    at peak, none in the taper — and the protein floor rises so what you lose is fat.
-                    Core circuits stay on the calendar either way. The model reads your day once,
-                    conservatively: what you completed versus skipped, meals you actually eat,
-                    sleep, and past yes/no decisions. It never auto-applies. With it off, built-in
-                    rules still watch sleep, resting heart rate, missed runs and protein, and nothing
-                    leaves your database.
+                    A deficit is periodized around training, real in base and build, almost nothing
+                    at peak, none in the taper, and the protein floor rises so what you lose is fat.
+                    Core circuits stay on the calendar either way.
                   </p>
                 </div>
               </details>
@@ -353,55 +340,6 @@ export default async function SettingsPage() {
             </div>
           </div>
         </section>
-
-        <form action={saveCoachSettings}>
-          <section className="block">
-            <div className="block__head">
-              <h2 className="block__title">OpenAI key</h2>
-              <span className="label">
-                {coach.fromEnv ? "From env" : coach.key ? "Stored" : "None"}
-              </span>
-            </div>
-            <div className="card stack">
-              <label className="field">
-                <span className="field__label">Key</span>
-                <input
-                  name="openaiKey"
-                  type="password"
-                  autoComplete="off"
-                  placeholder={
-                    coach.fromEnv
-                      ? "Set in the environment — leave blank"
-                      : coach.key
-                        ? "Stored. Paste a new one to replace it."
-                        : "sk-..."
-                  }
-                />
-              </label>
-              <div className="grid2">
-                <label className="field">
-                  <span className="field__label">Model</span>
-                  <input name="openaiModel" defaultValue={coach.model} placeholder="gpt-4.1-mini" />
-                </label>
-                <label className="field">
-                  <span className="field__label">Stored key</span>
-                  <select name="clearKey" defaultValue="0">
-                    <option value="0">Keep it</option>
-                    <option value="1">Delete it</option>
-                  </select>
-                </label>
-              </div>
-              <p className="small muted">
-                A fourteen-day summary is sent once a day automatically — planned versus completed
-                running, rest, sleep, meals eaten or ignored, grocery, strength, and past decisions.
-                Not when you ask. No names, no email, no chat prompt.
-              </p>
-              <button className="btn btn--ghost btn--block" type="submit">
-                Save coach settings
-              </button>
-            </div>
-          </section>
-        </form>
 
         <p className="fineprint">
           General information for a healthy adult, not medical advice. Sharp pain, dizziness, or

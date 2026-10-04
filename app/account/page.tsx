@@ -11,7 +11,7 @@ import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { listDeviceTokens } from "@/lib/auth/tokens";
 import { sessionUser } from "@/lib/auth/session";
-import { pendingCount } from "@/lib/coach/store";
+import { pendingCount } from "@/lib/habits/store";
 import { formatWithYear } from "@/lib/date";
 import { getProfile, isOnboarded } from "@/lib/store";
 

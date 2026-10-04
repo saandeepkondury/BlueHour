@@ -10,7 +10,7 @@ import { getProfile, getWorkout } from "@/lib/store";
 import { absStatus, latestMeasurement } from "@/lib/strength/abs";
 import { strengthAdherence } from "@/lib/strength/log";
 import { strengthBetween } from "@/lib/strength/plan";
-import { pendingCount } from "@/lib/coach/store";
+import { pendingCount } from "@/lib/habits/store";
 import type { Phase, WorkoutType } from "@/lib/plan/types";
 
 export const dynamic = "force-dynamic";

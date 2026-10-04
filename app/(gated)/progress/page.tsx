@@ -4,7 +4,7 @@ import { Nav } from "@/components/Nav";
 import { Ring } from "@/components/Ring";
 import { Shell } from "@/components/Shell";
 import { formatMiles } from "@/lib/format";
-import { pendingCount } from "@/lib/coach/store";
+import { pendingCount } from "@/lib/habits/store";
 import { PHASE_LABEL, type Phase } from "@/lib/plan/types";
 import { getProgress } from "@/lib/progress";
 

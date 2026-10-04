@@ -76,7 +76,22 @@ Sign in once (address + account) before Siri can reach the trainer. Phrases also
 
 **After every Xcode rebuild:** open Blue Hour once on the phone. Launch re-registers the App Shortcuts so they show up again in the Shortcuts app (a debug reinstall clears the previous index). Then force-quit and reopen **Shortcuts** if the list still looks empty.
 
-Deep links work the same way: `bluehour://water`, `bluehour://coach`, `bluehour://sync`, etc.
+Deep links work the same way: `bluehour://water`, `bluehour://habits`, `bluehour://sync`, etc. `bluehour://coach` still opens Habits, and `bluehour://log-meal` opens Fuel with the meal photo sheet up.
+
+## Home screen widget
+
+Today's habits and water, on your home screen. Long-press the home screen, tap **Edit**, then **Add Widget**, search **Blue Hour**, and pick a size. Stars and **+ Cup** work right on the widget without opening the app:
+
+| Size | What it does |
+| --- | --- |
+| Small | Habit count, the three tappable stars, and a **+ Cup** water pill |
+| Medium | The three stars, today's plan (tap to open Plan), water progress with **+ Cup**, and **Log meal** (opens Fuel with the camera sheet ready) |
+| Large | Everything in Medium with more room: big count and streak, a row of cups that fill in as you drink (tap it to open Water), the plan, and Log meal |
+| Lock screen | Rectangular: stars, count, cups, and today's plan. Circular: a 0 to 3 ring |
+
+**+ Cup** logs 18 oz, the same as the notification button. The widget calls `/api/habits/today`, `/api/habits/star`, and `/api/water/log` with the same device token the app got at sign-in. The app and widget share that token through a keychain group (`keychain-access-groups`), which works on free personal teams. Phones signed in before the widget existed move the token over the first time the app opens, so there's no need to sign in again.
+
+The widget and the Habits page card share `/api/habits/today`. A star or + Cup on either side writes the server, then the other refetches: the page asks the shell to reload the widget, and a widget tap pings the app so Habits refreshes if it is open (or as soon as you come back). It also refetches when you leave or open the app, at Austin midnight, and at least every 15 minutes. If the trainer can't be reached, it shows the last card it got. On a local dev server, open the app once first so iOS has granted local network access.
 
 ## Daily use
 

@@ -1,5 +1,5 @@
 import Foundation
-import Security
+import WidgetKit
 
 /// Where the phone sends Health data, and as whom. The URL and the signed-in
 /// email are preferences; the device token is a credential, so it lives in the
@@ -11,12 +11,13 @@ import Security
 struct Settings {
     private static let urlKey = "bh.baseURL"
     private static let emailKey = "bh.accountEmail"
-    private static let secretAccount = "bh.ingestSecret"
-    private static let service = "com.bluehour.trainer"
 
     static var baseURL: String {
         get { UserDefaults.standard.string(forKey: urlKey) ?? "" }
-        set { UserDefaults.standard.set(newValue.trimmed, forKey: urlKey) }
+        set {
+            UserDefaults.standard.set(newValue.trimmed, forKey: urlKey)
+            SharedKeychain.write(SharedKeychain.baseURLAccount, newValue.trimmed)
+        }
     }
 
     /// Shown on the Connect screen so it is obvious which account this phone syncs.
@@ -27,12 +28,28 @@ struct Settings {
 
     /// Issued by signing in. Sent as a Bearer on every request this app makes.
     static var deviceToken: String {
-        get { keychainRead() ?? "" }
-        set { keychainWrite(newValue.trimmed) }
+        get { SharedKeychain.read(SharedKeychain.tokenAccount) ?? "" }
+        set {
+            SharedKeychain.write(SharedKeychain.tokenAccount, newValue.trimmed)
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 
     static var isConfigured: Bool {
         !baseURL.isEmpty && !deviceToken.isEmpty && URL(string: baseURL) != nil
+    }
+
+    /// Phones signed in before the widget existed hold the token in an app-only
+    /// keychain item. Rewrite both values into the shared group once.
+    static func shareWithWidget() {
+        let token = deviceToken
+        if !token.isEmpty, SharedKeychain.read(SharedKeychain.tokenAccount, sharedOnly: true) == nil {
+            deviceToken = token
+        }
+        let url = baseURL
+        if !url.isEmpty, SharedKeychain.read(SharedKeychain.baseURLAccount, sharedOnly: true) != url {
+            baseURL = url
+        }
     }
 
     static func signOut() {
@@ -75,40 +92,17 @@ struct Settings {
         return base.appendingPathComponent("api/siri/today")
     }
 
+    /// `path` may carry a query (`/fuel?compose=1`), which `appendingPathComponent` would escape.
     static func pageURL(path: String) -> URL? {
         guard let base = URL(string: baseURL) else { return nil }
         if path == "/" || path.isEmpty { return base }
-        let trimmed = path.hasPrefix("/") ? String(path.dropFirst()) : path
-        return base.appendingPathComponent(trimmed)
-    }
-
-    private static func keychainQuery() -> [String: Any] {
-        [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: secretAccount,
-        ]
-    }
-
-    private static func keychainRead() -> String? {
-        var query = keychainQuery()
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    private static func keychainWrite(_ value: String) {
-        SecItemDelete(keychainQuery() as CFDictionary)
-        guard !value.isEmpty, let data = value.data(using: .utf8) else { return }
-
-        var query = keychainQuery()
-        query[kSecValueData as String] = data
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        SecItemAdd(query as CFDictionary, nil)
+        let parts = path.split(separator: "?", maxSplits: 1).map(String.init)
+        let route = parts[0].hasPrefix("/") ? String(parts[0].dropFirst()) : parts[0]
+        let page = base.appendingPathComponent(route)
+        guard parts.count == 2,
+              var components = URLComponents(url: page, resolvingAgainstBaseURL: false) else { return page }
+        components.percentEncodedQuery = parts[1]
+        return components.url ?? page
     }
 }
 

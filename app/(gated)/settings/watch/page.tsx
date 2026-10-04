@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { saveHealthEntry } from "@/app/actions";
 import { AppBar } from "@/components/AppBar";
 import { HealthSharingGuide } from "@/components/HealthSharingEmpty";
@@ -8,7 +7,7 @@ import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { todayISO } from "@/lib/date";
 import { lastSync } from "@/lib/health/read";
-import { pendingCount } from "@/lib/coach/store";
+import { pendingCount } from "@/lib/habits/store";
 
 export const dynamic = "force-dynamic";
 
@@ -93,9 +92,7 @@ export default async function WatchPage() {
         </section>
 
         <p className="fineprint">
-          Health data stays in your own database. It is sent nowhere except, if you enable the coach,
-          to OpenAI as a fourteen-day summary — <Link href="/settings">switch that off</Link> and the
-          guardrails keep working.
+          Health data stays in your own database. It is never sent to a language model.
         </p>
       </Shell>
       <Nav pending={pending} />

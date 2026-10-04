@@ -19,7 +19,7 @@ function formatPace(secPerMi: number): string {
 
 /**
  * Race-feel readiness: longest run, weekly miles, run HR / pace, then today's
- * vitals. Nothing here changes the plan — the coach proposes, you decide.
+ * vitals. A score, not a command.
  */
 export function ReadinessCard({
   recovery,

@@ -5,7 +5,6 @@ import {
   foodLogs,
   fuelChecks,
   groceryChecks,
-  mealPlans,
   pantryItems,
   profile,
   pushSubscriptions,
@@ -13,18 +12,18 @@ import {
   supplementPrefs,
   workoutLogs,
   workouts,
-  type MealPlanRow,
   type Profile,
   type Workout,
   type WorkoutLog,
 } from "@/drizzle/schema";
 import { uid } from "@/lib/auth/current";
-import { addDays, startOfWeek, todayISO } from "@/lib/date";
+import { addDays, todayISO } from "@/lib/date";
 import { generatePlan } from "@/lib/plan/generate";
 import type { WorkoutType } from "@/lib/plan/types";
-import { sumMacros, type PlannedMeal } from "@/lib/nutrition/meal-plan";
+import type { MealEntry } from "@/lib/meals/catalog";
+import { getMealsForDate, mealMacros } from "@/lib/meals/store";
+import { sumMacros } from "@/lib/nutrition/meal-plan";
 import { normalizeGroceryKey } from "@/lib/nutrition/grocery";
-import { candidatesFor, parseAllergies, recipeById, type Diet, type Slot } from "@/lib/nutrition/recipes";
 import {
   computeTargets,
   fuelPlan,
@@ -38,7 +37,7 @@ import { deficitFor, proteinPerKgFor } from "@/lib/strength/abs";
 import { ensureStrengthPlan, regenerateStrengthPlan, strengthFor } from "@/lib/strength/plan";
 import { checkedExercises, strengthLogFor } from "@/lib/strength/log";
 import { recoveryFor, type Recovery } from "@/lib/health/read";
-import { bannedRecipeIds, fuelOverrides, getSetting, KEYS, setSetting } from "@/lib/settings";
+import { fuelOverrides, getSetting, KEYS, setSetting } from "@/lib/settings";
 import { CUP_OZ } from "@/lib/notify/water";
 import type { Phase } from "@/lib/plan/types";
 import type { StrengthLog, StrengthSession } from "@/drizzle/schema";
@@ -199,7 +198,7 @@ export async function updateProfile(patch: Partial<Profile>): Promise<Profile> {
 
 /**
  * How the abs goal bends today's fuelling: a phase-appropriate deficit, any
- * coach override on top, and a protein floor that protects muscle while cutting.
+ * fuel override on top, and a protein floor that protects muscle while cutting.
  */
 export async function fuelAdjustFor(
   current: Profile,
@@ -215,7 +214,7 @@ export async function fuelAdjustFor(
     note:
       overrides.calorieDelta === 0
         ? note
-        : `${note} Coach adjustment of ${overrides.calorieDelta > 0 ? "+" : ""}${overrides.calorieDelta} kcal is applied.`,
+        : `${note} Fuel adjustment of ${overrides.calorieDelta > 0 ? "+" : ""}${overrides.calorieDelta} kcal is applied.`,
   };
 }
 
@@ -410,200 +409,6 @@ export async function annotateWorkoutLog(entry: {
 
 // ---------- nutrition ----------
 
-/** Catalog marker — pantry-first: days stay empty until the runner assigns dishes. */
-const MEALS_CATALOG_VERSION = "meal-prep-v1";
-
-/** Prevents re-entry while catalog sync is in progress, per account. */
-const mealsCatalogSyncing = new Set<string>();
-
-/**
- * One-shot per account: wipe planned meals that reference removed recipes, clear
- * every week after the current one, and leave this week empty for pantry-first
- * picks.
- */
-export async function syncMealsToCurrentCatalog(): Promise<void> {
-  await ready();
-  const user = await uid();
-  if (mealsCatalogSyncing.has(user)) return;
-
-  const currentVersion = await getSetting(KEYS.mealsCatalogVersion);
-  if (currentVersion === MEALS_CATALOG_VERSION) return;
-
-  mealsCatalogSyncing.add(user);
-  try {
-    const weekStart = startOfWeek(todayISO());
-    const weekEnd = addDays(weekStart, 6);
-
-    // Future weeks stay empty — runner fills them by hand.
-    await db
-      .delete(mealPlans)
-      .where(and(eq(mealPlans.userId, user), gt(mealPlans.date, weekEnd)));
-
-    // Drop anything pointing at a recipe that is no longer in the catalog.
-    const stale = await db
-      .select({ id: mealPlans.id, recipeId: mealPlans.recipeId })
-      .from(mealPlans)
-      .where(eq(mealPlans.userId, user));
-    const staleIds = stale
-      .filter((row) => !row.recipeId || !recipeById(row.recipeId))
-      .map((row) => row.id);
-    if (staleIds.length > 0) {
-      await db
-        .delete(mealPlans)
-        .where(and(eq(mealPlans.userId, user), inArray(mealPlans.id, staleIds)));
-    }
-
-    // Clear this week — meals are chosen from Can cook now / the picker, not auto-filled.
-    await db
-      .delete(mealPlans)
-      .where(
-        and(
-          eq(mealPlans.userId, user),
-          gte(mealPlans.date, weekStart),
-          lte(mealPlans.date, weekEnd),
-        ),
-      );
-
-    await setSetting(KEYS.mealsCatalogVersion, MEALS_CATALOG_VERSION);
-  } finally {
-    mealsCatalogSyncing.delete(user);
-  }
-}
-
-export async function ensureMealPlan(
-  date: string,
-  current: Profile,
-  workout: Pick<Workout, "type" | "distanceMi" | "durationMin">,
-  targets: DayTargets,
-  excludeIds?: string[],
-): Promise<MealPlanRow[]> {
-  await ready();
-  await syncMealsToCurrentCatalog();
-  const user = await uid();
-
-  // Pantry-first: never auto-fill slots. The runner assigns from Can cook now
-  // or the meal picker. (Args kept for call-site compatibility.)
-  void current;
-  void workout;
-  void targets;
-  void excludeIds;
-
-  return db
-    .select()
-    .from(mealPlans)
-    .where(and(eq(mealPlans.userId, user), eq(mealPlans.date, date)))
-    .orderBy(asc(mealPlans.id));
-}
-
-/** Repicks every meal the runner has not eaten yet, so a stale week can be refreshed. */
-export async function reshuffleWeekMeals(weekStart: string): Promise<void> {
-  await ready();
-  const user = await uid();
-  const current = await getProfile();
-  const allergies = parseAllergies(current.allergies);
-  const diet = current.dietPref as Diet;
-  const excludeIds = await bannedRecipeIds();
-
-  const rows = await db
-    .select()
-    .from(mealPlans)
-    .where(
-      and(
-        eq(mealPlans.userId, user),
-        gte(mealPlans.date, weekStart),
-        lte(mealPlans.date, addDays(weekStart, 6)),
-        eq(mealPlans.eaten, 0),
-      ),
-    );
-
-  for (const row of rows) {
-    const options = candidatesFor(row.slot as Slot, diet, allergies, excludeIds).filter(
-      (option) => option.id !== row.recipeId,
-    );
-    if (options.length === 0) continue;
-
-    const next = options[Math.floor(Math.random() * options.length)];
-    await db
-      .update(mealPlans)
-      .set({
-        recipeId: next.id,
-        name: next.name,
-        calories: next.calories,
-        protein: next.protein,
-        carbs: next.carbs,
-        fat: next.fat,
-      })
-      .where(and(eq(mealPlans.userId, user), eq(mealPlans.id, row.id)));
-  }
-}
-
-export async function setMealEaten(date: string, slot: string, eaten: boolean): Promise<void> {
-  await ready();
-  const user = await uid();
-  await db
-    .update(mealPlans)
-    .set({ eaten: eaten ? 1 : 0 })
-    .where(
-      and(eq(mealPlans.userId, user), eq(mealPlans.date, date), eq(mealPlans.slot, slot)),
-    );
-}
-
-export async function replaceMeal(date: string, slot: string, meal: PlannedMeal): Promise<void> {
-  await ready();
-  const user = await uid();
-  await db
-    .insert(mealPlans)
-    .values({
-      userId: user,
-      date,
-      slot,
-      recipeId: meal.recipeId,
-      name: meal.name,
-      calories: meal.calories,
-      protein: meal.protein,
-      carbs: meal.carbs,
-      fat: meal.fat,
-      eaten: 0,
-    })
-    .onConflictDoUpdate({
-      target: [mealPlans.userId, mealPlans.date, mealPlans.slot],
-      set: {
-        recipeId: meal.recipeId,
-        name: meal.name,
-        calories: meal.calories,
-        protein: meal.protein,
-        carbs: meal.carbs,
-        fat: meal.fat,
-        eaten: 0,
-      },
-    });
-}
-
-export async function removeMealSlot(date: string, slot: string): Promise<void> {
-  await ready();
-  const user = await uid();
-  await db
-    .delete(mealPlans)
-    .where(
-      and(eq(mealPlans.userId, user), eq(mealPlans.date, date), eq(mealPlans.slot, slot)),
-    );
-}
-
-export async function clearMealPlan(from: string, to: string): Promise<void> {
-  await ready();
-  const user = await uid();
-  await db
-    .delete(mealPlans)
-    .where(
-      and(
-        eq(mealPlans.userId, user),
-        gte(mealPlans.date, from),
-        lte(mealPlans.date, to),
-        eq(mealPlans.eaten, 0),
-      ),
-    );
-}
-
 export async function getFoodLogs(date: string) {
   await ready();
   const user = await uid();
@@ -612,58 +417,6 @@ export async function getFoodLogs(date: string) {
     .from(foodLogs)
     .where(and(eq(foodLogs.userId, user), eq(foodLogs.date, date)))
     .orderBy(desc(foodLogs.id));
-}
-
-/** Days with eaten meals or extra foods logged, newest first. No day cap. */
-export interface MealHistoryDay {
-  date: string;
-  meals: number;
-  extras: number;
-  calories: number;
-  protein: number;
-}
-
-export async function getMealHistory(): Promise<MealHistoryDay[]> {
-  await ready();
-  const user = await uid();
-  const [eaten, extras] = await Promise.all([
-    db
-      .select()
-      .from(mealPlans)
-      .where(and(eq(mealPlans.userId, user), eq(mealPlans.eaten, 1)))
-      .orderBy(desc(mealPlans.date)),
-    db.select().from(foodLogs).where(eq(foodLogs.userId, user)).orderBy(desc(foodLogs.date)),
-  ]);
-
-  const byDate = new Map<string, MealHistoryDay>();
-  for (const meal of eaten) {
-    const row = byDate.get(meal.date) ?? {
-      date: meal.date,
-      meals: 0,
-      extras: 0,
-      calories: 0,
-      protein: 0,
-    };
-    row.meals += 1;
-    row.calories += meal.calories;
-    row.protein += meal.protein;
-    byDate.set(meal.date, row);
-  }
-  for (const food of extras) {
-    const row = byDate.get(food.date) ?? {
-      date: food.date,
-      meals: 0,
-      extras: 0,
-      calories: 0,
-      protein: 0,
-    };
-    row.extras += 1;
-    row.calories += food.calories;
-    row.protein += food.protein;
-    byDate.set(food.date, row);
-  }
-
-  return [...byDate.values()].sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
 export async function addFoodLog(entry: {
@@ -1026,7 +779,7 @@ export interface DayBundle {
   workout: Workout;
   workoutLog: WorkoutLog | undefined;
   targets: DayTargets;
-  meals: MealPlanRow[];
+  meals: MealEntry[];
   extras: Awaited<ReturnType<typeof getFoodLogs>>;
   consumed: { calories: number; protein: number; carbs: number; fat: number };
   dayLog: { date: string; waterOz: number; sodiumMg: number; notes: string | null };
@@ -1061,10 +814,8 @@ export async function getDayBundle(date: string): Promise<DayBundle | null> {
     adjust,
   );
 
-  const meals = await ensureMealPlan(date, current, workout, targets);
-  const extras = await getFoodLogs(date);
-  const eaten = meals.filter((meal) => meal.eaten === 1);
-  const consumed = sumMacros([...eaten, ...extras]);
+  const [meals, extras] = await Promise.all([getMealsForDate(date), getFoodLogs(date)]);
+  const consumed = sumMacros([mealMacros(meals), ...extras]);
 
   const proteinGap = consumed.protein < targets.protein * 0.8;
   const disabled = await getDisabledSupplements();
@@ -1099,77 +850,4 @@ export async function getDayBundle(date: string): Promise<DayBundle | null> {
     ),
     supplementsTaken: await getSupplementLog(date),
   };
-}
-
-export async function weekRecipeIds(weekStart: string): Promise<(string | null)[]> {
-  await ready();
-  const user = await uid();
-  const rows = await db
-    .select()
-    .from(mealPlans)
-    .where(
-      and(
-        eq(mealPlans.userId, user),
-        gte(mealPlans.date, weekStart),
-        lte(mealPlans.date, addDays(weekStart, 6)),
-      ),
-    );
-  return rows.map((row) => row.recipeId);
-}
-
-/** Read-only week meals — no planning side effects. */
-export async function getWeekMeals(weekStart: string): Promise<MealPlanRow[]> {
-  await ready();
-  const user = await uid();
-  return db
-    .select()
-    .from(mealPlans)
-    .where(
-      and(
-        eq(mealPlans.userId, user),
-        gte(mealPlans.date, weekStart),
-        lte(mealPlans.date, addDays(weekStart, 6)),
-      ),
-    )
-    .orderBy(asc(mealPlans.date), asc(mealPlans.id));
-}
-
-/**
- * Ensures a whole week of meals exists. Skips days that already have rows so
- * Fuel tab switches stay cheap after the first visit in a week.
- */
-export async function ensureWeekMeals(weekStart: string): Promise<MealPlanRow[]> {
-  const { meals } = await loadFuelWeek(weekStart);
-  return meals;
-}
-
-/** One round-trip bundle for the Fuel week page — profile, workouts, meals, pantry. */
-export async function loadFuelWeek(weekStart: string): Promise<{
-  profile: Profile;
-  workouts: Workout[];
-  meals: MealPlanRow[];
-  pantry: Set<string>;
-}> {
-  await ready();
-  await syncMealsToCurrentCatalog();
-
-  const weekEnd = addDays(weekStart, 6);
-  const [current, days, meals, pantry] = await Promise.all([
-    getProfile(),
-    getWorkouts(weekStart, weekEnd),
-    getWeekMeals(weekStart),
-    getPantryHaveKeys(),
-  ]);
-
-  // Meals stay empty until assigned from Can cook now or the picker.
-  return { profile: current, workouts: days, meals, pantry };
-}
-
-export function slotOrder(slot: string): number {
-  const order: Slot[] = ["breakfast", "lunch", "dinner", "snack", "fuel_pre", "fuel_during", "fuel_post"];
-  return order.indexOf(slot as Slot);
-}
-
-export function currentWeek(today = todayISO()): string {
-  return startOfWeek(today);
 }

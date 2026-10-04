@@ -6,7 +6,7 @@ import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { WaterCard } from "@/components/WaterCard";
 import { addDays, formatShort, todayISO, weekdayShort } from "@/lib/date";
-import { pendingCount } from "@/lib/coach/store";
+import { pendingCount } from "@/lib/habits/store";
 import { CUP_OZ, formatCups, ozToMl } from "@/lib/notify/water";
 import { computeTargets } from "@/lib/nutrition/targets";
 import type { WorkoutType } from "@/lib/plan/types";

@@ -11,7 +11,7 @@ import { formatShort, startOfWeek, todayISO } from "@/lib/date";
 import { personalBestPace } from "@/lib/format";
 import { closeOutMissedDays, longRunOptions } from "@/lib/plan/adapt";
 import { getAllWorkouts, getDayBundle, getProfile, getTrainingWorkoutLogs } from "@/lib/store";
-import { pendingSuggestions, refreshCoach } from "@/lib/coach/store";
+import { pendingCount } from "@/lib/habits/store";
 import type { Phase } from "@/lib/plan/types";
 
 export const dynamic = "force-dynamic";
@@ -21,12 +21,9 @@ export default async function TodayPage() {
   const current = await getProfile();
   await closeOutMissedDays(today);
 
-  // Guardrails are cheap. The model runs at most once a day, from cron or Coach.
-  await refreshCoach(current, { skipModel: true });
-
   const [bundle, pending, runLogs] = await Promise.all([
     getDayBundle(today),
-    pendingSuggestions(),
+    pendingCount(),
     getTrainingWorkoutLogs(),
   ]);
   const all = await getAllWorkouts();
@@ -38,7 +35,7 @@ export default async function TodayPage() {
     return (
       <>
         <Shell>
-          <AppBar title={<BrandRow />} pending={pending.length} />
+          <AppBar title={<BrandRow />} pending={pending} />
           <TodayHero
             today={today}
             raceDate={current.raceDate}
@@ -72,7 +69,7 @@ export default async function TodayPage() {
             </div>
           </section>
         </Shell>
-        <Nav pending={pending.length} />
+        <Nav pending={pending} />
         <ServiceWorkerRegister />
       </>
     );
@@ -83,7 +80,7 @@ export default async function TodayPage() {
   return (
     <>
       <Shell>
-        <AppBar title={<BrandRow />} pending={pending.length} />
+        <AppBar title={<BrandRow />} pending={pending} />
         <TodayHero
           today={today}
           raceDate={current.raceDate}
@@ -100,7 +97,7 @@ export default async function TodayPage() {
           longRunOptions={options.map((day) => ({ date: day.date, title: day.title }))}
         />
       </Shell>
-      <Nav pending={pending.length} />
+      <Nav pending={pending} />
       <ServiceWorkerRegister />
     </>
   );

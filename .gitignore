@@ -13,6 +13,7 @@ npm-debug.log*
 next-env.d.ts
 local.db
 local.db-*
+data/meal-photos/
 .playwright-mcp
 
 # Xcode

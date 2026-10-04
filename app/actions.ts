@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { startOfWeek, todayISO } from "@/lib/date";
 import { holdWeek, markDone, markPlanned, moveLongRun, skipWorkout } from "@/lib/plan/adapt";
-import { recipeById, type Slot } from "@/lib/nutrition/recipes";
+import { recipeById } from "@/lib/nutrition/recipes";
 import { saveManualHealth } from "@/lib/health/manual";
 import {
   completeStrength,
@@ -12,11 +12,29 @@ import {
   skipStrength,
   toggleExercise,
 } from "@/lib/strength/log";
+import { isHabitId } from "@/lib/habits/catalog";
+import { toggleStar } from "@/lib/habits/store";
+import { uid } from "@/lib/auth/current";
 import {
-  applySuggestion,
-  deleteSuggestion,
-  dismissSuggestion,
-} from "@/lib/coach/store";
+  isMealMark,
+  isMealSlot,
+  isMealSource,
+  parseRecipeRef,
+  SLOT_NAME,
+} from "@/lib/meals/catalog";
+import { deleteMealPhoto, PhotoError, saveMealPhoto } from "@/lib/meals/photos";
+import {
+  createMeal,
+  deleteMeal,
+  deleteUserRecipe,
+  getMeal,
+  linkMealRecipe,
+  renameIngredient,
+  saveUserRecipe,
+  setMealPhoto,
+  setMealStar,
+  updateMeal,
+} from "@/lib/meals/store";
 import { KEYS, setSetting } from "@/lib/settings";
 import { buildBrief } from "@/lib/notify/brief";
 import { sendPush } from "@/lib/notify/push";
@@ -26,15 +44,10 @@ import {
   annotateWorkoutLog,
   completeOnboarding,
   deleteFoodLog,
-  ensureWeekMeals,
   getProfile,
   parseExperience,
-  removeMealSlot,
-  replaceMeal,
   resetGroceryChecks,
-  reshuffleWeekMeals,
   saveWorkoutLog,
-  setMealEaten,
   setPantryHave,
   setSupplementEnabled,
   toggleFuelCheck,
@@ -52,7 +65,7 @@ function refresh(date?: string, exerciseId?: string) {
   revalidatePath("/fuel/supplements");
   revalidatePath("/progress");
   revalidatePath("/core");
-  revalidatePath("/coach");
+  revalidatePath("/habits");
   revalidatePath("/runs");
   revalidatePath("/meals");
   revalidatePath("/water");
@@ -149,71 +162,6 @@ export async function moveLongRunTo(formData: FormData): Promise<void> {
 }
 
 // ---------- nutrition ----------
-
-export async function toggleMeal(formData: FormData): Promise<void> {
-  const date = str(formData.get("date"));
-  const slot = str(formData.get("slot"));
-  const eaten = str(formData.get("eaten")) === "1";
-  if (!date || !slot) return;
-  await setMealEaten(date, slot, eaten);
-  refresh(date);
-}
-
-export async function swapMeal(formData: FormData): Promise<void> {
-  const date = str(formData.get("date"));
-  const slot = str(formData.get("slot"));
-  const recipeId = str(formData.get("recipeId"));
-  if (!date || !slot) return;
-
-  const recipe = recipeById(recipeId);
-  if (!recipe) return;
-
-  await replaceMeal(date, slot, {
-    slot: recipe.slot,
-    recipeId: recipe.id,
-    name: recipe.name,
-    calories: recipe.calories,
-    protein: recipe.protein,
-    carbs: recipe.carbs,
-    fat: recipe.fat,
-  });
-  refresh(date);
-}
-
-/** Adds a recipe to a day for its slot (or an override slot). */
-export async function addRecipeToDay(formData: FormData): Promise<void> {
-  const date = str(formData.get("date"));
-  const recipeId = str(formData.get("recipeId"));
-  const slotOverride = str(formData.get("slot"));
-  if (!date || !recipeId) return;
-
-  const recipe = recipeById(recipeId);
-  if (!recipe) return;
-
-  const slot = (slotOverride || recipe.slot) as Slot;
-  await replaceMeal(date, slot, {
-    slot,
-    recipeId: recipe.id,
-    name: recipe.name,
-    calories: recipe.calories,
-    protein: recipe.protein,
-    carbs: recipe.carbs,
-    fat: recipe.fat,
-  });
-  revalidatePath("/fuel");
-  revalidatePath("/fuel/grocery");
-  refresh(date);
-}
-
-export async function clearDayMeal(formData: FormData): Promise<void> {
-  const date = str(formData.get("date"));
-  const slot = str(formData.get("slot"));
-  if (!date || !slot) return;
-  await removeMealSlot(date, slot);
-  revalidatePath("/fuel");
-  revalidatePath("/fuel/grocery");
-  refresh(date);
-}
 
 export async function togglePantryItem(formData: FormData): Promise<void> {
   const itemKey = str(formData.get("itemKey"));
@@ -315,13 +263,157 @@ export async function clearGrocery(_formData: FormData): Promise<void> {
   revalidatePath("/fuel/grocery");
 }
 
-/** Reshuffles a week of meals — useful when the plan stops sounding appetizing. */
-export async function reshuffleWeek(formData: FormData): Promise<void> {
-  const weekStart = str(formData.get("weekStart"));
-  if (!weekStart) return;
-  await ensureWeekMeals(weekStart);
-  await reshuffleWeekMeals(weekStart);
-  refresh();
+// ---------- meal log ----------
+
+function mealRefresh(date?: string) {
+  revalidatePath("/");
+  revalidatePath("/fuel");
+  revalidatePath("/fuel/recipes", "layout");
+  revalidatePath("/fuel/grocery");
+  revalidatePath("/meals");
+  revalidatePath("/recipe", "layout");
+  if (date) revalidatePath(`/day/${date}`);
+}
+
+function isoDate(value: string): string | null {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
+
+function photoFrom(formData: FormData): File | null {
+  const value = formData.get("photo");
+  return value instanceof File && value.size > 0 ? value : null;
+}
+
+function recipeNameFor(ref: string): string | null {
+  const parsed = parseRecipeRef(ref);
+  return parsed?.kind === "catalog" ? (recipeById(parsed.id)?.name ?? null) : null;
+}
+
+export type MealResult = { ok: true; id: number } | { ok: false; error: string };
+
+/** Logs a new meal, or updates one when `id` is set. The photo is optional either way. */
+export async function saveMeal(formData: FormData): Promise<MealResult> {
+  const id = num(formData.get("id"));
+  const date = isoDate(str(formData.get("date")));
+  const slot = str(formData.get("slot"));
+  const source = str(formData.get("source"));
+  const mark = str(formData.get("mark"));
+  const recipeRef = str(formData.get("recipeRef")) || null;
+  if (!date && id === null) return { ok: false, error: "Pick a day for this meal." };
+  if (!isMealSlot(slot)) return { ok: false, error: "Pick breakfast, lunch, dinner, or snack." };
+  if (!isMealSource(source)) return { ok: false, error: "Pick where the meal came from." };
+
+  const typedName = str(formData.get("name"));
+  const name =
+    typedName ||
+    (recipeRef ? recipeNameFor(recipeRef) : null) ||
+    (recipeRef ? str(formData.get("recipeName")) : "") ||
+    SLOT_NAME[slot];
+
+  const photo = photoFrom(formData);
+  let photoUrl: string | null = null;
+  if (photo) {
+    try {
+      photoUrl = await saveMealPhoto(await uid(), photo);
+    } catch (error) {
+      return { ok: false, error: error instanceof PhotoError ? error.message : "The photo did not upload." };
+    }
+  }
+
+  const input = { slot, name, source, mark: isMealMark(mark) ? mark : null, recipeRef };
+  let savedId: number;
+  if (id !== null) {
+    const existing = await getMeal(id);
+    if (!existing) return { ok: false, error: "That meal is gone." };
+    await updateMeal(id, input);
+    if (photoUrl) await deleteMealPhoto(await setMealPhoto(id, photoUrl));
+    else if (str(formData.get("removePhoto")) === "1") await deleteMealPhoto(await setMealPhoto(id, null));
+    savedId = id;
+    mealRefresh(existing.date);
+  } else {
+    savedId = await createMeal({ ...input, date: date!, photoUrl });
+    mealRefresh(date!);
+  }
+  return { ok: true, id: savedId };
+}
+
+export async function addMealPhoto(formData: FormData): Promise<MealResult> {
+  const id = num(formData.get("id"));
+  const photo = photoFrom(formData);
+  if (id === null || !photo) return { ok: false, error: "Pick a photo." };
+  const meal = await getMeal(id);
+  if (!meal) return { ok: false, error: "That meal is gone." };
+  try {
+    const url = await saveMealPhoto(await uid(), photo);
+    await deleteMealPhoto(await setMealPhoto(id, url));
+  } catch (error) {
+    return { ok: false, error: error instanceof PhotoError ? error.message : "The photo did not upload." };
+  }
+  mealRefresh(meal.date);
+  return { ok: true, id };
+}
+
+export async function starMeal(formData: FormData): Promise<void> {
+  const id = num(formData.get("id"));
+  if (id === null) return;
+  await setMealStar(id, str(formData.get("starred")) === "1");
+  mealRefresh(str(formData.get("date")) || undefined);
+}
+
+export async function removeMeal(formData: FormData): Promise<void> {
+  const id = num(formData.get("id"));
+  if (id === null) return;
+  await deleteMealPhoto(await deleteMeal(id));
+  mealRefresh(str(formData.get("date")) || undefined);
+}
+
+export type RecipeResult = { ok: true; id: number } | { ok: false; error: string };
+
+/** Saves a recipe you wrote, then links it to a meal if one is waiting for it. */
+export async function saveRecipe(input: {
+  id?: number;
+  name: string;
+  steps: string[];
+  ingredients: { name: string; amount: string }[];
+  mealId?: number;
+}): Promise<RecipeResult> {
+  if (!str(input.name)) return { ok: false, error: "Give the recipe a name." };
+  const id = await saveUserRecipe({
+    id: input.id,
+    name: input.name,
+    steps: Array.isArray(input.steps) ? input.steps.map(String) : [],
+    ingredients: Array.isArray(input.ingredients)
+      ? input.ingredients.map((line) => ({ name: String(line?.name ?? ""), amount: String(line?.amount ?? "") }))
+      : [],
+  });
+  if (id === null) return { ok: false, error: "That recipe is gone." };
+
+  if (typeof input.mealId === "number") {
+    const meal = await getMeal(input.mealId);
+    if (meal) {
+      await linkMealRecipe(meal.id, `user:${id}`);
+      mealRefresh(meal.date);
+    }
+  }
+  mealRefresh();
+  revalidatePath(`/fuel/recipes/${id}`);
+  return { ok: true, id };
+}
+
+export async function removeRecipe(formData: FormData): Promise<void> {
+  const id = num(formData.get("id"));
+  if (id === null) return;
+  await deleteUserRecipe(id);
+  mealRefresh();
+  redirect("/fuel/recipes");
+}
+
+export async function renameIngredientLabel(formData: FormData): Promise<void> {
+  const key = str(formData.get("key"));
+  const label = str(formData.get("label"));
+  if (!key || !label) return;
+  await renameIngredient(key, label);
+  mealRefresh();
 }
 
 // ---------- profile ----------
@@ -399,7 +491,6 @@ export async function saveGoals(formData: FormData): Promise<void> {
     absGoal,
     targetBodyFatPct: target === null ? null : Math.max(8, Math.min(30, target)),
     strengthDays: Math.max(0, Math.min(3, num(formData.get("strengthDays")) ?? current.strengthDays)),
-    aiEnabled: str(formData.get("aiEnabled")) === "1" ? 1 : 0,
   });
 
   refresh();
@@ -480,42 +571,15 @@ export async function saveHealthEntry(formData: FormData): Promise<void> {
   revalidatePath("/settings/watch");
 }
 
-// ---------- coach ----------
+// ---------- habits ----------
 
-export async function applySuggestionAction(formData: FormData): Promise<void> {
-  const id = num(formData.get("id"));
-  if (id === null) return;
-  const current = await getProfile();
-  await applySuggestion(id, current);
-  refresh();
-}
-
-export async function dismissSuggestionAction(formData: FormData): Promise<void> {
-  const id = num(formData.get("id"));
-  if (id === null) return;
-  await dismissSuggestion(id);
-  refresh();
-}
-
-export async function deleteSuggestionAction(formData: FormData): Promise<void> {
-  const id = num(formData.get("id"));
-  if (id === null) return;
-  await deleteSuggestion(id);
-  refresh();
-}
-
-export async function saveCoachSettings(formData: FormData): Promise<void> {
-  const key = str(formData.get("openaiKey"));
-  const model = str(formData.get("openaiModel"));
-
-  // An empty field clears the stored value rather than writing an empty string.
-  if (key !== "" || str(formData.get("clearKey")) === "1") {
-    await setSetting(KEYS.openaiKey, key);
-  }
-  await setSetting(KEYS.openaiModel, model);
-
-  refresh();
-  revalidatePath("/settings");
+export async function toggleHabitStar(formData: FormData): Promise<void> {
+  const date = str(formData.get("date"));
+  const habitId = str(formData.get("habitId"));
+  if (!date || !isHabitId(habitId)) return;
+  await toggleStar(date, habitId);
+  revalidatePath("/habits");
+  revalidatePath("/");
 }
 
 export async function clearFuelOverrides(): Promise<void> {

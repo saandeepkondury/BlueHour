@@ -65,39 +65,39 @@ node scripts/verify-legacy-upgrade.mjs check  # first account should inherit it
 | Area | Where |
 | --- | --- |
 | Plan generation and adaptation | `lib/plan/` |
-| Nutrition targets, recipes, meals, grocery | `lib/nutrition/` |
+| Nutrition targets, Instagram recipes, grocery | `lib/nutrition/` |
+| Meal photo log, your own recipes, ingredient names | `lib/meals/` |
 | Strength, core, and the abs math | `lib/strength/` |
 | Apple Health ingest and readiness | `lib/health/` |
-| Coach snapshot, guardrail rules, OpenAI | `lib/coach/` |
+| Daily habit stars | `lib/habits/` |
 | Morning brief and web push | `lib/notify/` |
 | Screens | `app/` |
 
 Everything is a server component with server actions, so the client bundle stays near 100 kB and
 the app works on a bad connection at 5 a.m.
 
-## The coach
+## Fuel
 
-Two layers, and the first one is free:
+Fuel is a photo log. Each meal gets a photo, a source (home cooked, meal prepped, or out), an
+optional healthy or cheat mark, and a star if you liked it. Today shows the same log.
 
-1. **Guardrails** — deterministic rules in `lib/coach/rules.ts` that watch resting heart rate
-   against its own baseline, HRV, sleep debt, missed runs, skipped rest, weekly mileage jumps,
-   protein and calorie adherence, uneaten meals, ignored recipes, strength adherence, and whether
-   the body-fat target still fits the calendar. They run on every page load and after every Watch
-   sync. No API key, no data leaving the machine.
-2. **Daily review** — once per Austin calendar day (morning cron, or the first open of Coach), a
-   compact summary goes to OpenAI: planned versus completed running and rest, sleep, meals eaten or
-   ignored, grocery checks, strength, body-fat trend, and which suggestions you already applied or
-   dismissed. No name, no email, no chat prompt. It can only answer in the operation vocabulary in
-   `lib/coach/types.ts`; anything else it invents is dropped, and out-of-range values are clamped.
+Home-cooked meals can carry your own recipe: typed ingredients and numbered steps. Ingredient names
+go through `resolveIngredientIdentity`, so "shallots" and "onions" land on one line, and the first
+name you save for an ingredient is the one shown everywhere (rename it under Recipes). Those lines
+join the grocery list under the same keys as the Instagram catalog. Only Instagram recipes carry
+macros, so only those count toward the calorie ring.
 
-Nothing either layer proposes is applied until you press Apply. **No thanks** archives the card
-under Already decided. **Delete** removes it entirely. Dismissed fingerprints do not come back the
-same week.
+Photos are stored in Vercel Blob when `BLOB_READ_WRITE_TOKEN` is set (private by default, see
+`BLOB_ACCESS`) and in `data/meal-photos/` otherwise. Either way they are served through
+`/api/meal-photos/…`, which only answers the account that owns them.
 
-Add the key in **Settings → OpenAI** (stored in the database) or set `OPENAI_API_KEY` in the
-environment, which takes precedence.
+## Habits
 
-## Apple Watch
+The fifth tab is a sticker sheet, not a model. Three habits (good sleep, meal prepped, did the
+plan) get a gold star when you tap them. Logs live per account and per day. `/coach` still
+redirects here so old links keep working.
+
+## Apple Health
 
 The iPhone app in `ios/` reads HealthKit and posts to `/api/health/ingest` every time you open it,
 and also in the background when new Watch data lands (HealthKit background delivery) or on a

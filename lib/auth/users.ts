@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { db, LEGACY_USER_ID, ready } from "@/lib/db";
 import {
   coachSuggestions,
+  habitStars,
   dayLogs,
   deviceTokens,
   foodLogs,
@@ -10,6 +11,8 @@ import {
   groceryChecks,
   healthDays,
   healthSync,
+  ingredientLabels,
+  mealEntries,
   mealPlans,
   pantryItems,
   profile,
@@ -22,6 +25,8 @@ import {
   strengthSessions,
   supplementLogs,
   supplementPrefs,
+  userRecipeIngredients,
+  userRecipes,
   users,
   workoutLogs,
   workouts,
@@ -37,6 +42,10 @@ const OWNED_TABLES = [
   healthDays,
   healthSync,
   mealPlans,
+  mealEntries,
+  userRecipes,
+  userRecipeIngredients,
+  ingredientLabels,
   foodLogs,
   dayLogs,
   groceryChecks,
@@ -50,6 +59,7 @@ const OWNED_TABLES = [
   strengthChecks,
   strengthLogs,
   coachSuggestions,
+  habitStars,
   settings,
 ];
 

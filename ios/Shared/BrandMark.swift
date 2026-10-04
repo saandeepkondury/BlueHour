@@ -70,4 +70,6 @@ enum Palette {
     static let limestone = Color(red: 0.902, green: 0.867, blue: 0.816)
     static let dawn = Color(red: 0.831, green: 0.659, blue: 0.416)
     static let warn = Color(red: 0.957, green: 0.812, blue: 0.616)
+    /// Water on the dusk card: light enough to read on `skyDeep`, distinct from star gold.
+    static let mist = Color(red: 0.604, green: 0.800, blue: 0.929)
 }

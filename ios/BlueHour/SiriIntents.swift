@@ -136,7 +136,7 @@ enum OpenScreen: String, AppEnum {
     static var caseDisplayRepresentations: [OpenScreen: DisplayRepresentation] = [
         .today: "Today",
         .water: "Water",
-        .coach: "Coach",
+        .coach: "Habits",
         .fuel: "Fuel",
         .plan: "Plan",
         .progress: "Progress",
@@ -146,7 +146,7 @@ enum OpenScreen: String, AppEnum {
         switch self {
         case .today: return .today
         case .water: return .water
-        case .coach: return .coach
+        case .coach: return .habits
         case .fuel: return .fuel
         case .plan: return .plan
         case .progress: return .progress

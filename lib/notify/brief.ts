@@ -1,7 +1,8 @@
 import { daysBetween } from "@/lib/date";
 import { formatMiles } from "@/lib/format";
 import { isRun, type WorkoutType } from "@/lib/plan/types";
-import { pendingSuggestions } from "@/lib/coach/store";
+import { HABITS, starKey } from "@/lib/habits/catalog";
+import { starsInRange } from "@/lib/habits/store";
 import { getDayBundle } from "@/lib/store";
 import { parseBlocks } from "@/lib/strength/exercises";
 
@@ -24,7 +25,8 @@ export async function buildBrief(date: string, appUrl: string): Promise<Brief | 
   const { workout, targets, profile, recovery, strength } = bundle;
   const type = workout.type as WorkoutType;
   const toRace = Math.max(0, daysBetween(date, profile.raceDate));
-  const pending = await pendingSuggestions();
+  const stars = await starsInRange(date, date);
+  const missing = HABITS.filter((habit) => !stars.has(starKey(date, habit.id)));
 
   const lines: string[] = [];
 
@@ -66,17 +68,17 @@ export async function buildBrief(date: string, appUrl: string): Promise<Brief | 
     lines.push("", ...bundle.fuel.map((stage) => `${stage.timing}: ${stage.label}`));
   }
 
-  const meals = bundle.meals.map((meal) => `${meal.name} (${meal.calories} kcal)`);
+  const meals = bundle.meals.map((meal) =>
+    meal.calories > 0 ? `${meal.name} (${meal.calories} kcal)` : meal.name,
+  );
   if (meals.length > 0) {
     lines.push("", "Meals: " + meals.join("; "));
   }
 
-  if (pending.length > 0) {
-    lines.push(
-      "",
-      `Coach: ${pending[0].title}${pending.length > 1 ? ` (and ${pending.length - 1} more)` : ""}`,
-      `${appUrl}/coach`,
-    );
+  if (missing.length > 0 && missing.length < HABITS.length) {
+    lines.push("", `Habits left: ${missing.map((habit) => habit.label.toLowerCase()).join(", ")}.`);
+  } else if (missing.length === 0) {
+    lines.push("", "All three habits are in for today.");
   }
 
   lines.push("", `${toRace} days to ${profile.raceName}.`);

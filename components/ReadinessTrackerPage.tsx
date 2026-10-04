@@ -7,7 +7,7 @@ import { ReadinessChart } from "@/components/ReadinessChart";
 import { Ring } from "@/components/Ring";
 import { Shell } from "@/components/Shell";
 import { formatShort, formatWithYear, todayISO, weekdayShort } from "@/lib/date";
-import { pendingCount } from "@/lib/coach/store";
+import { pendingCount } from "@/lib/habits/store";
 import { getReadinessHistory, lastSync, type ReadinessDay } from "@/lib/health/read";
 
 function titleFor(day: ReadinessDay | null): string {

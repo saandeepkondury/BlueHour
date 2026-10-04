@@ -1,11 +1,9 @@
 import { revalidatePath } from "next/cache";
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { authenticate, isDenied } from "@/lib/auth/request";
 import { runAsUser } from "@/lib/auth/scope";
 import { ingestHealth, parsePayload, PayloadError } from "@/lib/health/ingest";
 import { lastSync } from "@/lib/health/read";
-import { refreshCoach } from "@/lib/coach/store";
-import { getProfile } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,25 +30,11 @@ export async function POST(request: Request) {
 
     revalidatePath("/");
     revalidatePath("/core");
-    revalidatePath("/coach");
+    revalidatePath("/habits");
     revalidatePath("/runs");
     revalidatePath("/sleep");
     revalidatePath("/rest-hr");
     revalidatePath("/hrv");
-
-    // Coach refresh is useful but must not block the phone — a cold Next compile
-    // plus rules can exceed the iOS URLSession timeout and look like a failed sync.
-    after(async () => {
-      try {
-        await runAsUser(auth.userId, async () => {
-          const current = await getProfile();
-          await refreshCoach(current, { skipModel: true });
-        });
-        revalidatePath("/coach");
-      } catch (error) {
-        console.error("post-ingest coach refresh failed", error);
-      }
-    });
 
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {

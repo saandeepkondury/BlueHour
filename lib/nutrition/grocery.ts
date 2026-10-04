@@ -127,9 +127,12 @@ function finalizeAmounts(amounts: QtyAmount[]): Pick<GroceryItem, "qty" | "unit"
 
 /**
  * Constant pantry inventory: one line per deduped ingredient identity across
- * the full recipe catalog. Membership does not depend on the week plan.
+ * the full recipe catalog plus the user's own recipes. Membership does not depend on the week plan.
+ * User lines must already carry identity keys; ones the catalog never uses land in the pantry aisle.
  */
-export function buildPantryInventory(): GroceryLine[] {
+export function buildPantryInventory(
+  userLines: { key: string; label: string; recipeName: string }[] = [],
+): GroceryLine[] {
   const merged = new Map<
     string,
     {
@@ -154,6 +157,16 @@ export function buildPantryInventory(): GroceryLine[] {
           dishes: [recipe.name],
         });
       }
+    }
+  }
+
+  for (const line of userLines) {
+    const existing = merged.get(line.key);
+    if (existing) {
+      existing.item = line.label;
+      if (!existing.dishes.includes(line.recipeName)) existing.dishes.push(line.recipeName);
+    } else {
+      merged.set(line.key, { key: line.key, item: line.label, aisle: "pantry", dishes: [line.recipeName] });
     }
   }
 

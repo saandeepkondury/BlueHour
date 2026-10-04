@@ -20,6 +20,8 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>AppIdentifierPrefix</key>
+	<string>$(AppIdentifierPrefix)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -44,6 +46,10 @@
 	</array>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Blue Hour reads your workouts, sleep, heart rate, HRV, steps, active energy, weight, body fat, waist, height, and date of birth so the training plan, fueling, and Body &amp; core stay current. It never writes to Health.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Blue Hour uses the camera to take a photo of each meal you log on Fuel.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Blue Hour lets you pick a meal photo from your library when you log it on Fuel.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

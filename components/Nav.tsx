@@ -13,7 +13,7 @@ const TABS: { href: string; label: string; icon: IconName }[] = [
   { href: "/plan", label: "Plan", icon: "calendar" },
   { href: "/fuel", label: "Fuel", icon: "fuel" },
   { href: "/core", label: "Body", icon: "body" },
-  { href: "/coach", label: "Coach", icon: "coach" },
+  { href: "/habits", label: "Habits", icon: "star" },
 ];
 
 export function Nav({ pending = 0 }: { pending?: number }) {
@@ -33,14 +33,14 @@ export function Nav({ pending = 0 }: { pending?: number }) {
               pathname.startsWith("/runs") ||
               pathname.startsWith("/meals")
             : pathname.startsWith(tab.href);
-        const badge = tab.href === "/coach" && pending > 0;
+        const badge = tab.href === "/habits" && pending > 0;
 
         return (
           <Link
             key={tab.href}
             className="tab"
             href={tab.href}
-            aria-label={badge ? `${tab.label}, ${pending} waiting` : tab.label}
+            aria-label={badge ? `${tab.label}, ${pending} left today` : tab.label}
             aria-current={active ? "page" : undefined}
           >
             <Icon name={tab.icon} size={23} strokeWidth={active ? 2 : 1.7} />

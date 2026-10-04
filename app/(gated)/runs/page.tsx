@@ -6,7 +6,7 @@ import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { addDays, formatShort, formatWithYear, startOfWeek, todayISO, weekdayShort } from "@/lib/date";
 import { formatDuration, formatMiles, formatPace, formatPacePerMi } from "@/lib/format";
-import { pendingCount } from "@/lib/coach/store";
+import { pendingCount } from "@/lib/habits/store";
 import { lastSync } from "@/lib/health/read";
 import { TYPE_LABEL, isRun, type WorkoutType } from "@/lib/plan/types";
 import { getProfile, getTrainingWorkoutLogs, getWorkouts } from "@/lib/store";

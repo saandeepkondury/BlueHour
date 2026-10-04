@@ -4,29 +4,38 @@ import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { formatShort, todayISO, weekdayShort } from "@/lib/date";
-import { pendingCount } from "@/lib/coach/store";
-import { getMealHistory } from "@/lib/store";
+import { pendingCount } from "@/lib/habits/store";
+import { getMealHistory } from "@/lib/meals/store";
 
 export const dynamic = "force-dynamic";
+
+function plural(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
 
 export default async function MealsPage() {
   const today = todayISO();
   const [pending, history] = await Promise.all([pendingCount(), getMealHistory()]);
 
-  const totalMeals = history.reduce((sum, row) => sum + row.meals + row.extras, 0);
-  const totalKcal = history.reduce((sum, row) => sum + row.calories, 0);
-  const totalProtein = history.reduce((sum, row) => sum + row.protein, 0);
+  const total = (pick: (row: (typeof history)[number]) => number) =>
+    history.reduce((sum, row) => sum + pick(row), 0);
+  const totalMeals = total((row) => row.meals);
+  const home = total((row) => row.home);
+  const healthy = total((row) => row.healthy);
+  const cheat = total((row) => row.cheat);
+  const starred = total((row) => row.starred);
+  const homePct = totalMeals === 0 ? 0 : Math.round((home / totalMeals) * 100);
 
   return (
     <>
       <Shell>
-        <AppBar title="Meals" back="/" pending={pending} />
+        <AppBar title="Meals" back="/more" pending={pending} />
 
         <section className="block block--tight">
           <div className="stack">
             <div className="card">
               <p className="tile__label">
-                <Icon name="fuel" size={14} />
+                <Icon name="camera" size={14} />
                 Meals logged
               </p>
               <p className="tile__value" style={{ marginTop: "0.3rem" }}>
@@ -34,32 +43,32 @@ export default async function MealsPage() {
                 <small>{totalMeals === 1 ? "meal" : "meals"}</small>
               </p>
               <p className="card__sub" style={{ marginTop: "0.35rem" }}>
-                {history.length === 0
-                  ? "Nothing logged yet"
-                  : `${history.length} day${history.length === 1 ? "" : "s"}`}
+                {history.length === 0 ? "Nothing logged yet" : `Across ${plural(history.length, "day")}`}
               </p>
             </div>
 
-            <div className="bento bento--3">
-              <div className="tile">
-                <p className="tile__label">Days</p>
-                <p className="tile__value">{history.length}</p>
+            {totalMeals > 0 ? (
+              <div className="bento bento--3">
+                <div className="tile">
+                  <p className="tile__label">Home cooked</p>
+                  <p className="tile__value">
+                    {homePct}
+                    <small>%</small>
+                  </p>
+                </div>
+                <div className="tile">
+                  <p className="tile__label">Healthy</p>
+                  <p className="tile__value">
+                    {healthy}
+                    <small>/ {cheat} cheat</small>
+                  </p>
+                </div>
+                <div className="tile">
+                  <p className="tile__label">Starred</p>
+                  <p className="tile__value">{starred}</p>
+                </div>
               </div>
-              <div className="tile">
-                <p className="tile__label">Calories</p>
-                <p className="tile__value">
-                  {history.length === 0 ? "—" : totalKcal}
-                  {history.length > 0 ? <small>kcal</small> : null}
-                </p>
-              </div>
-              <div className="tile">
-                <p className="tile__label">Protein</p>
-                <p className="tile__value">
-                  {history.length === 0 ? "—" : totalProtein}
-                  {history.length > 0 ? <small>g</small> : null}
-                </p>
-              </div>
-            </div>
+            ) : null}
           </div>
         </section>
 
@@ -72,11 +81,9 @@ export default async function MealsPage() {
             {history.length === 0 ? (
               <div className="empty">
                 <span className="empty__icon">
-                  <Icon name="fuel" size={20} />
+                  <Icon name="camera" size={20} />
                 </span>
-                <p className="small sub">
-                  Mark meals eaten on Today or log extras, and every day shows up here.
-                </p>
+                <p className="small sub">Snap a photo of each meal on Fuel and every day shows up here.</p>
                 <Link className="btn btn--ghost btn--sm" href="/fuel">
                   Open Fuel
                 </Link>
@@ -84,28 +91,29 @@ export default async function MealsPage() {
             ) : (
               <div className="rows">
                 {history.map((row) => {
-                  const href = row.date === today ? "/" : `/day/${row.date}`;
-                  const parts: string[] = [];
-                  if (row.meals > 0) {
-                    parts.push(`${row.meals} meal${row.meals === 1 ? "" : "s"}`);
-                  }
-                  if (row.extras > 0) {
-                    parts.push(`${row.extras} extra${row.extras === 1 ? "" : "s"}`);
-                  }
+                  const href = row.date === today ? "/fuel" : `/fuel?d=${row.date}`;
+                  const parts = [plural(row.meals, "meal")];
+                  if (row.home > 0) parts.push(`${row.home} home`);
+                  if (row.prepped > 0) parts.push(`${row.prepped} prepped`);
+                  if (row.out > 0) parts.push(`${row.out} out`);
+                  if (row.cheat > 0) parts.push(plural(row.cheat, "cheat"));
                   return (
                     <Link className="row" href={href} key={row.date}>
                       <span className="row__date">{weekdayShort(row.date)}</span>
-                      <span className="row__lead row__lead--accent">
-                        <Icon name="fuel" size={17} />
-                      </span>
                       <span className="row__body">
                         <span className="row__title">
                           {row.date === today ? "Today" : formatShort(row.date)}
+                          {row.starred > 0 ? " ★" : ""}
                         </span>
-                        <span className="row__sub">
-                          {parts.join(" · ")} · {row.calories} kcal · {row.protein}g protein
-                        </span>
+                        <span className="row__sub">{parts.join(" · ")}</span>
                       </span>
+                      {row.photos.length > 0 ? (
+                        <span className="meal-strip" aria-hidden="true">
+                          {row.photos.map((photo) => (
+                            <img key={photo} src={photo} alt="" loading="lazy" />
+                          ))}
+                        </span>
+                      ) : null}
                       <Icon name="chevron" size={14} />
                     </Link>
                   );

@@ -1,373 +1,168 @@
 import Link from "next/link";
-import { CanCookNow } from "@/components/CanCookNow";
-import { DayMealSlots } from "@/components/DayMealSlots";
 import { Icon } from "@/components/Icon";
-import { MacroBars } from "@/components/MacroBars";
-import { Ring } from "@/components/Ring";
-import {
-  addDays,
-  formatRange,
-  formatShort,
-  startOfWeek,
-  todayISO,
-  weekdayShort,
-} from "@/lib/date";
-import { buildBrowseCatalog, readyToCook } from "@/lib/nutrition/grocery";
-import {
-  candidatesFor,
-  MEAL_SLOTS,
-  parseAllergies,
-  type Diet,
-  type Slot,
-} from "@/lib/nutrition/recipes";
-import { computeTargets } from "@/lib/nutrition/targets";
-import { PHASE_LABEL, TYPE_LABEL, type Phase, type WorkoutType } from "@/lib/plan/types";
-import { fuelOverrides } from "@/lib/settings";
-import { deficitFor, proteinPerKgFor } from "@/lib/strength/abs";
-import { getAllWorkouts, loadFuelWeek } from "@/lib/store";
+import { MealDay } from "@/components/meals/MealDay";
+import { MealTags } from "@/components/meals/MealCard";
+import { addDays, formatLong, formatShort, todayISO, weekdayShort } from "@/lib/date";
+import { MARK_NAME, MEAL_MARKS, MEAL_SOURCES, SOURCE_NAME, type MealEntry } from "@/lib/meals/catalog";
+import { getMealsForDate, getStarredMeals, recipeOptions } from "@/lib/meals/store";
 
 export const dynamic = "force-dynamic";
 
-const ALL_SLOTS: Slot[] = [
-  ...MEAL_SLOTS,
-  "fuel_pre",
-  "fuel_during",
-  "fuel_post",
-];
+function dayLabel(date: string, today: string): string {
+  if (date === today) return "Today";
+  if (date === addDays(today, -1)) return "Yesterday";
+  return `${weekdayShort(date)} ${formatShort(date)}`;
+}
 
-export default async function FuelWeekPage({
+function Tally({ meals }: { meals: MealEntry[] }) {
+  const sources = MEAL_SOURCES.map((source) => ({
+    ...source,
+    count: meals.filter((meal) => meal.source === source.id).length,
+  })).filter((source) => source.count > 0);
+  const marks = MEAL_MARKS.map((mark) => ({
+    ...mark,
+    count: meals.filter((meal) => meal.mark === mark.id).length,
+  })).filter((mark) => mark.count > 0);
+
+  if (meals.length === 0) return null;
+  return (
+    <div className="meal-tally">
+      {sources.map((source) => (
+        <span className={`pill meal-tag meal-tag--${source.id}`} key={source.id}>
+          {source.count} {SOURCE_NAME[source.id].toLowerCase()}
+        </span>
+      ))}
+      {marks.map((mark) => (
+        <span className={`pill ${mark.id === "healthy" ? "pill--good" : "pill--warn"}`} key={mark.id}>
+          {mark.count} {MARK_NAME[mark.id].toLowerCase()}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function ViewSwitch({ view, date, today }: { view: "day" | "starred"; date: string; today: string }) {
+  const dayHref = date === today ? "/fuel" : `/fuel?d=${date}`;
+  return (
+    <div className="seg" role="tablist" aria-label="Meal log view">
+      <Link href={dayHref} role="tab" aria-selected={view === "day"} prefetch>
+        Day
+      </Link>
+      <Link href="/fuel?view=starred" role="tab" aria-selected={view === "starred"} prefetch>
+        Starred
+      </Link>
+    </div>
+  );
+}
+
+async function StarredView({ today }: { today: string }) {
+  const meals = await getStarredMeals();
+  return (
+    <>
+      <section className="block block--tight">
+        <ViewSwitch view="starred" date={today} today={today} />
+      </section>
+      <section className="block block--tight">
+        {meals.length === 0 ? (
+          <div className="card">
+            <div className="empty">
+              <span className="empty__icon">
+                <Icon name="star" size={20} />
+              </span>
+              <p className="small sub">Star a meal you liked and it shows up here with its photo.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="meal-grid">
+            {meals.map((meal) => (
+              <Link
+                className="meal-tile"
+                key={meal.id}
+                href={meal.date === today ? "/fuel" : `/fuel?d=${meal.date}`}
+                prefetch={false}
+              >
+                <span className="meal-tile__media">
+                  {meal.photoUrl ? (
+                    <img src={meal.photoUrl} alt={meal.name} loading="lazy" />
+                  ) : (
+                    <Icon name="fuel" size={22} />
+                  )}
+                </span>
+                <span className="meal-tile__name">{meal.name}</span>
+                <span className="meal-tile__when">{formatShort(meal.date)}</span>
+                <MealTags meal={meal} />
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+export default async function FuelLogPage({
   searchParams,
 }: {
-  searchParams: Promise<{ w?: string; week?: string; d?: string }>;
+  searchParams: Promise<{ d?: string; view?: string; log?: string; compose?: string }>;
 }) {
-  const { w, week: weekParam, d } = await searchParams;
+  const { d, view, log, compose } = await searchParams;
   const today = todayISO();
-  const thisWeek = startOfWeek(today);
+  if (view === "starred") return <StarredView today={today} />;
 
-  const allWorkouts = await getAllWorkouts();
-  const weekStarts = [
-    ...new Set(allWorkouts.map((workout) => startOfWeek(workout.date))),
-  ].sort();
-
-  const requestedRaw = w || weekParam;
-  const requested =
-    requestedRaw && /^\d{4}-\d{2}-\d{2}$/.test(requestedRaw)
-      ? startOfWeek(requestedRaw)
-      : thisWeek;
-  const weekIndex = Math.max(0, weekStarts.indexOf(requested));
-  const weekStart = weekStarts[weekIndex] ?? requested;
-  const weekNumber =
-    allWorkouts.find((workout) => startOfWeek(workout.date) === weekStart)?.week ??
-    weekIndex + 1;
-  const phase = (allWorkouts.find((workout) => startOfWeek(workout.date) === weekStart)
-    ?.phase ?? "base") as Phase;
-
-  const [{ profile, workouts, meals, pantry }, overrides] = await Promise.all([
-    loadFuelWeek(weekStart),
-    fuelOverrides(),
-  ]);
-
-  const diet = profile.dietPref as Diet;
-  const allergies = parseAllergies(profile.allergies);
-  const allowedIds = new Set(
-    ALL_SLOTS.flatMap((s) => candidatesFor(s, diet, allergies)).map((r) => r.id),
-  );
-  const catalog = buildBrowseCatalog(pantry, (recipe) => allowedIds.has(recipe.id));
-  const cookNow = readyToCook(catalog, { minPct: 50, limit: 8 });
-
-  const byDate = new Map<string, typeof meals>();
-  for (const meal of meals) {
-    const list = byDate.get(meal.date) ?? [];
-    list.push(meal);
-    byDate.set(meal.date, list);
-  }
-
-  const body = {
-    weightKg: profile.weightKg,
-    heightCm: profile.heightCm,
-    age: profile.age,
-    sex: profile.sex,
-  };
-
-  const dayTargets = new Map(
-    workouts.map((workout) => {
-      const type = workout.type as WorkoutType;
-      const { kcal } = deficitFor(workout.phase as Phase, type, profile.absGoal === 1);
-      return [
-        workout.date,
-        computeTargets(
-          body,
-          { type, distanceMi: workout.distanceMi, durationMin: workout.durationMin },
-          workout.date,
-          {
-            deficitKcal: kcal - overrides.calorieDelta,
-            proteinPerKg: overrides.proteinFloor ?? proteinPerKgFor(kcal, type),
-          },
-        ),
-      ] as const;
-    }),
-  );
-
-  const dayCount = workouts.length || 1;
-  const weekCalories = meals.reduce((sum, meal) => sum + meal.calories, 0);
-  const weekProtein = meals.reduce((sum, meal) => sum + meal.protein, 0);
-  const weekCarbs = meals.reduce((sum, meal) => sum + meal.carbs, 0);
-  const weekTargetCalories = [...dayTargets.values()].reduce((sum, t) => sum + t.calories, 0);
-  const weekTargetProtein = [...dayTargets.values()].reduce((sum, t) => sum + t.protein, 0);
-  const weekTargetCarbs = [...dayTargets.values()].reduce((sum, t) => sum + t.carbs, 0);
-
-  const avgDay = Math.round(weekCalories / dayCount);
-  const avgProtein = Math.round(weekProtein / dayCount);
-  const avgCarbs = Math.round(weekCarbs / dayCount);
-  const avgTargetCalories = Math.round(weekTargetCalories / dayCount);
-  const avgTargetProtein = Math.round(weekTargetProtein / dayCount);
-  const avgTargetCarbs = Math.round(weekTargetCarbs / dayCount);
-
-  const datesInWeek = new Set(workouts.map((workout) => workout.date));
-  const selectedDate =
-    d && /^\d{4}-\d{2}-\d{2}$/.test(d) && datesInWeek.has(d)
-      ? d
-      : datesInWeek.has(today)
-        ? today
-        : (workouts[0]?.date ?? today);
-
-  const selectedMeals = byDate.get(selectedDate) ?? [];
-  const selectedWorkout = workouts.find((workout) => workout.date === selectedDate);
-  const selectedTargets = dayTargets.get(selectedDate);
-  const dayCalories = selectedMeals.reduce((sum, meal) => sum + meal.calories, 0);
-  const dayProtein = selectedMeals.reduce((sum, meal) => sum + meal.protein, 0);
-  const dayCarbs = selectedMeals.reduce((sum, meal) => sum + meal.carbs, 0);
-  const dayFat = selectedMeals.reduce((sum, meal) => sum + meal.fat, 0);
-  const caloriePct =
-    selectedTargets && selectedTargets.calories > 0
-      ? (dayCalories / selectedTargets.calories) * 100
-      : 0;
-
-  const previous = weekStarts[weekIndex - 1];
-  const next = weekStarts[weekIndex + 1];
-  const weekEnd = workouts[workouts.length - 1]?.date ?? addDays(weekStart, 6);
-  const dayHref =
-    selectedDate === today ? "/" : `/day/${selectedDate}?from=fuel&week=${weekStart}`;
+  const date = d && /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= today ? d : today;
+  const [meals, recipes] = await Promise.all([getMealsForDate(date), recipeOptions()]);
+  const previous = addDays(date, -1);
+  const next = addDays(date, 1);
+  const preset = log && recipes.some((recipe) => recipe.ref === log) ? log : undefined;
 
   return (
     <>
-      {weekStarts.length > 0 ? (
-        <div className="chiprow" style={{ marginTop: "0.25rem" }}>
-          {weekStarts.map((start, index) => {
-            const isActive = start === weekStart;
-            const isNow = start === thisWeek;
-            const number =
-              allWorkouts.find((workout) => startOfWeek(workout.date) === start)?.week ??
-              index + 1;
-            return (
-              <Link
-                key={start}
-                className={`chip${isActive ? " chip--accent" : isNow ? " chip--on" : ""}`}
-                href={`/fuel?w=${start}`}
-                aria-current={isActive ? "page" : undefined}
-                prefetch
-              >
-                W{number}
-              </Link>
-            );
-          })}
-        </div>
-      ) : null}
+      <section className="block block--tight">
+        <ViewSwitch view="day" date={date} today={today} />
+      </section>
 
       <section className="block block--tight">
-        <div className="card card--pad-lg">
-          <div className="card__head">
-            <div>
-              <div className="btnrow" style={{ gap: "0.35rem" }}>
-                <span className="pill pill--accent">{PHASE_LABEL[phase]}</span>
-                {weekStart === thisWeek ? <span className="pill pill--good">This week</span> : null}
-              </div>
-              <h2 className="card__title" style={{ marginTop: "0.5rem" }}>
-                Week {weekNumber}
-              </h2>
-              <p className="card__sub">{formatRange(weekStart, weekEnd)}</p>
+        <div className="card">
+          <div className="day-nav">
+            <Link className="iconbtn" href={`/fuel?d=${previous}`} aria-label="Previous day" prefetch>
+              <Icon name="back" size={18} />
+            </Link>
+            <div className="day-nav__title">
+              <p className="day-nav__day">{dayLabel(date, today)}</p>
+              <p className="day-nav__date">{formatLong(date)}</p>
             </div>
-            {selectedTargets ? (
-              <Ring
-                pct={caloriePct}
-                tone={caloriePct > 108 ? "warn" : caloriePct >= 92 ? "good" : "accent"}
-                size={72}
-                thickness={7}
-                value={`${Math.min(999, Math.round(caloriePct))}%`}
-                caption="day"
-                label={`${dayCalories} of ${selectedTargets.calories} calories from meals`}
-              />
-            ) : null}
-          </div>
-
-          <div className="bento bento--3 bento--macros" style={{ marginTop: "0.85rem" }}>
-            <div className="tile tile--sunk">
-              <p className="tile__label">
-                <Icon name="flame" size={13} />
-                Avg day
-              </p>
-              <p className="tile__value">{avgDay}</p>
-              <p className="tile__foot">of {avgTargetCalories}</p>
-            </div>
-            <div className="tile tile--sunk">
-              <p className="tile__label">Protein</p>
-              <p className="tile__value">
-                {avgProtein}
-                <small>g</small>
-              </p>
-              <p className="tile__foot">of {avgTargetProtein}g</p>
-            </div>
-            <div className="tile tile--sunk">
-              <p className="tile__label">Carbs</p>
-              <p className="tile__value tile__value--accent">
-                {avgCarbs}
-                <small>g</small>
-              </p>
-              <p className="tile__foot">of {avgTargetCarbs}g</p>
-            </div>
-          </div>
-
-          <hr className="card__divide" />
-
-          <div className="rows">
-            {workouts.map((workout) => {
-              const dayMeals = byDate.get(workout.date) ?? [];
-              const kcal = dayMeals.reduce((sum, meal) => sum + meal.calories, 0);
-              const protein = dayMeals.reduce((sum, meal) => sum + meal.protein, 0);
-              const carbs = dayMeals.reduce((sum, meal) => sum + meal.carbs, 0);
-              const targets = dayTargets.get(workout.date);
-              const isToday = workout.date === today;
-              const isSelected = workout.date === selectedDate;
-              const picked = dayMeals.filter((meal) =>
-                MEAL_SLOTS.includes(meal.slot as Slot),
-              ).length;
-              const hit =
-                targets && targets.calories > 0
-                  ? Math.round((kcal / targets.calories) * 100)
-                  : 0;
-
-              return (
-                <Link
-                  key={workout.date}
-                  className={`row${isToday ? " row--now" : ""}${isSelected ? " row--selected" : ""}`}
-                  href={`/fuel?w=${weekStart}&d=${workout.date}`}
-                  prefetch
-                  aria-current={isSelected ? "true" : undefined}
-                >
-                  <span className="row__date">{weekdayShort(workout.date)}</span>
-                  <span
-                    className={`row__lead${isSelected || isToday ? " row__lead--accent" : ""}`}
-                  >
-                    <Icon name="fuel" size={17} />
-                  </span>
-                  <span className="row__body">
-                    <span className="row__title">
-                      {formatShort(workout.date)}
-                      {isToday ? " · today" : ""}
-                    </span>
-                    <span className="row__sub row__sub--wrap">
-                      {TYPE_LABEL[workout.type as WorkoutType]}
-                      {picked > 0
-                        ? ` · ${picked} meal${picked === 1 ? "" : "s"} · ${protein}p / ${carbs}c`
-                        : " · no meals yet"}
-                    </span>
-                  </span>
-                  <span className="row__meta">{kcal > 0 ? `${hit}%` : "—"}</span>
-                </Link>
-              );
-            })}
-          </div>
-
-          <hr className="card__divide" />
-
-          <div className="btnrow btnrow--split">
-            {previous ? (
-              <Link className="btn btn--ghost btn--sm" href={`/fuel?w=${previous}`}>
-                <Icon name="back" size={15} />
-                Prev week
+            {date < today ? (
+              <Link
+                className="iconbtn"
+                href={next === today ? "/fuel" : `/fuel?d=${next}`}
+                aria-label="Next day"
+                prefetch
+              >
+                <Icon name="chevron" size={18} />
               </Link>
             ) : (
-              <span />
-            )}
-            {next ? (
-              <Link className="btn btn--ghost btn--sm" href={`/fuel?w=${next}`}>
-                Next week
-                <Icon name="chevron" size={15} />
-              </Link>
-            ) : (
-              <span />
+              <span className="iconbtn" aria-hidden="true" />
             )}
           </div>
+          <p className="day-nav__count">
+            {meals.length === 0
+              ? "No meals yet"
+              : `${meals.length} meal${meals.length === 1 ? "" : "s"}`}
+          </p>
+          <Tally meals={meals} />
         </div>
       </section>
 
-      {selectedWorkout && selectedTargets ? (
-        <section className="block block--tight">
-          <div className="block__head">
-            <h2 className="block__title">Day</h2>
-            <Link className="block__link" href="/fuel/recipes">
-              Recipes
-            </Link>
-          </div>
-          <div className="card">
-            <div className="row-between" style={{ marginBottom: "0.35rem" }}>
-              <div>
-                <p className="label">
-                  {weekdayShort(selectedDate)} {formatShort(selectedDate)}
-                  {selectedDate === today ? " · today" : ""}
-                </p>
-                <p className="tile__value" style={{ marginTop: "0.25rem" }}>
-                  {dayCalories}
-                  <small>/ {selectedTargets.calories} kcal</small>
-                </p>
-              </div>
-              <div className="btnrow" style={{ gap: "0.5rem", alignItems: "center" }}>
-                <Ring
-                  pct={caloriePct}
-                  tone={caloriePct > 108 ? "warn" : caloriePct >= 92 ? "good" : "accent"}
-                  size={56}
-                  thickness={5}
-                  value={`${Math.min(999, Math.round(caloriePct))}%`}
-                  label={`${dayCalories} of ${selectedTargets.calories} calories from meals`}
-                />
-                <Link className="btn btn--ghost btn--sm" href={dayHref} prefetch={false}>
-                  Open
-                  <Icon name="chevron" size={15} />
-                </Link>
-              </div>
-            </div>
-
-            <MacroBars
-              rows={[
-                { label: "Protein", value: dayProtein, target: selectedTargets.protein, unit: "g" },
-                { label: "Carbs", value: dayCarbs, target: selectedTargets.carbs, unit: "g" },
-                { label: "Fat", value: dayFat, target: selectedTargets.fat, unit: "g" },
-              ]}
-            />
-
-            <hr className="card__divide" />
-
-            <DayMealSlots
-              date={selectedDate}
-              weekStart={weekStart}
-              weekday={`${weekdayShort(selectedDate)} ${formatShort(selectedDate)}`}
-              meals={selectedMeals}
-              catalog={catalog}
-            />
-
-            <hr className="card__divide" />
-
-            <CanCookNow
-              date={selectedDate}
-              weekStart={weekStart}
-              pantryCount={pantry.size}
-              recipes={cookNow}
-              meals={selectedMeals}
-              compact
-            />
-          </div>
-        </section>
-      ) : null}
+      <section className="block block--tight">
+        <MealDay
+          key={date}
+          date={date}
+          meals={meals}
+          recipes={recipes}
+          presetRecipe={preset}
+          composeOnLoad={compose === "1"}
+        />
+      </section>
     </>
   );
 }

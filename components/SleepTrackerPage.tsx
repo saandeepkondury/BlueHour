@@ -5,7 +5,7 @@ import { Icon } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { formatWithYear, todayISO, weekdayShort } from "@/lib/date";
-import { pendingCount } from "@/lib/coach/store";
+import { pendingCount } from "@/lib/habits/store";
 import { formatSleep, getSleepSummary, lastSync } from "@/lib/health/read";
 
 function stageLine(row: {

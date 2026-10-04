@@ -163,7 +163,9 @@ struct SyncClient {
         request.httpBody = try JSONSerialization.data(withJSONObject: ["date": date, "oz": oz])
 
         do {
-            return try await decode(WaterLogResponse.self, request: request)
+            let logged = try await decode(WaterLogResponse.self, request: request)
+            WidgetSync.broadcast()
+            return logged
         } catch let error as URLError where error.code == .timedOut {
             throw SyncError.timeout
         } catch let error as URLError where Self.unreachableCodes.contains(error.code) {

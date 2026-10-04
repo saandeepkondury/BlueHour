@@ -8,18 +8,17 @@ import {
   toggleSupplement,
 } from "@/app/actions";
 import { AddExtraFood, type ExtraFoodOption } from "@/components/AddExtraFood";
-import { CanCookNow } from "@/components/CanCookNow";
 import { Check } from "@/components/Check";
-import { DayMealSlots } from "@/components/DayMealSlots";
 import { Icon } from "@/components/Icon";
 import { MacroBars } from "@/components/MacroBars";
+import { MealDay } from "@/components/meals/MealDay";
 import { ReadinessCard } from "@/components/ReadinessCard";
 import { Ring } from "@/components/Ring";
 import { SessionCard } from "@/components/SessionCard";
 import { StrengthCard } from "@/components/StrengthCard";
 import { WaterCard } from "@/components/WaterCard";
-import { dayOfWeek, formatShort, startOfWeek, weekdayShort } from "@/lib/date";
-import { buildBrowseCatalog, readyToCook } from "@/lib/nutrition/grocery";
+import { dayOfWeek, formatShort, startOfWeek, todayISO, weekdayShort } from "@/lib/date";
+import { recipeOptions } from "@/lib/meals/store";
 import {
   candidatesFor,
   MEAL_SLOTS,
@@ -28,7 +27,7 @@ import {
   type Slot,
 } from "@/lib/nutrition/recipes";
 import { isRun, type Phase, type WorkoutType } from "@/lib/plan/types";
-import { getPantryHaveKeys, type DayBundle } from "@/lib/store";
+import type { DayBundle } from "@/lib/store";
 
 const DOW_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -77,13 +76,7 @@ export async function DayView({
   const weekStart = startOfWeek(date);
   const caloriePct = targets.calories > 0 ? (consumed.calories / targets.calories) * 100 : 0;
   const foodCatalog = extraFoodCatalog(diet, allergies);
-
-  const pantry = await getPantryHaveKeys();
-  const allowedIds = new Set(
-    CATALOG_SLOTS.flatMap((slot) => candidatesFor(slot, diet, allergies)).map((recipe) => recipe.id),
-  );
-  const catalog = buildBrowseCatalog(pantry, (recipe) => allowedIds.has(recipe.id));
-  const cookNow = readyToCook(catalog, { minPct: 50, limit: 8 });
+  const recipes = await recipeOptions();
 
   return (
     <>
@@ -189,9 +182,9 @@ export async function DayView({
 
       <section className="block">
         <div className="block__head">
-          <h2 className="block__title">Fuel</h2>
-          <Link className="block__link" href="/fuel/recipes">
-            Recipes
+          <h2 className="block__title">Meals</h2>
+          <Link className="block__link" href={date === todayISO() ? "/fuel" : `/fuel?d=${date}`}>
+            Fuel log
           </Link>
         </div>
 
@@ -228,25 +221,7 @@ export async function DayView({
 
             <hr className="card__divide" />
 
-            <DayMealSlots
-              date={date}
-              weekStart={weekStart}
-              weekday={`${weekdayShort(date)} ${formatShort(date)}`}
-              meals={meals}
-              catalog={catalog}
-              showEaten
-            />
-
-            <hr className="card__divide" />
-
-            <CanCookNow
-              date={date}
-              weekStart={weekStart}
-              pantryCount={pantry.size}
-              recipes={cookNow}
-              meals={meals}
-              compact
-            />
+            <MealDay date={date} meals={meals} recipes={recipes} variant="compact" canLog={date <= todayISO()} />
 
             {extras.length > 0 ? (
               <>

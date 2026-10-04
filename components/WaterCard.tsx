@@ -5,6 +5,7 @@ import { useEffect, useState, useTransition } from "react";
 import { Icon } from "@/components/Icon";
 import { Ring } from "@/components/Ring";
 import { CUP_OZ, formatCups, ozToMl } from "@/lib/notify/water";
+import { pingNative } from "@/lib/native";
 
 /**
  * Hydration is the most-tapped control in the app, so it reads and writes
@@ -39,7 +40,7 @@ export function WaterCard({
     const data = new FormData();
     data.set("date", date);
     data.set("oz", String(oz));
-    start(() => action(data));
+    start(() => action(data).then(() => pingNative("reloadWidgets")));
   }
 
   const pct = target > 0 ? (local / target) * 100 : 0;

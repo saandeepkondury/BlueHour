@@ -4,10 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/fuel", label: "Week" },
+  { href: "/fuel", label: "Log" },
   { href: "/fuel/recipes", label: "Recipes" },
-  { href: "/fuel/grocery", label: "Grocery" },
-  { href: "/fuel/supplements", label: "Supplements" },
 ];
 
 export function FuelTabs() {

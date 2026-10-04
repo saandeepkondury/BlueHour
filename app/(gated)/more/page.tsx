@@ -5,7 +5,7 @@ import { Icon, type IconName } from "@/components/Icon";
 import { Nav } from "@/components/Nav";
 import { Shell } from "@/components/Shell";
 import { daysBetween, formatShort, todayISO } from "@/lib/date";
-import { pendingCount } from "@/lib/coach/store";
+import { pendingCount } from "@/lib/habits/store";
 import { getProfile } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +14,7 @@ const GROUPS: { title: string; links: { href: string; label: string; icon: IconN
   {
     title: "Training",
     links: [
+      { href: "/habits", label: "Habits", icon: "star" },
       { href: "/readiness", label: "Race readiness", icon: "flag" },
       { href: "/progress", label: "Progress", icon: "chart" },
       { href: "/runs", label: "Run history", icon: "run" },

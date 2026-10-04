@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import WidgetKit
 
 /// Blue Hour's own pages, wrapped so the native side can trigger a refresh
 /// after Health data lands — and so the web Sync button can ask for one.
@@ -10,6 +11,7 @@ struct WebView: UIViewRepresentable {
     let path: String
     var notice: SyncNotice?
     var onRequestSync: () -> Void
+    var widgetToken: Int = 0
 
     func makeCoordinator() -> Coordinator {
         Coordinator(url: url, onRequestSync: onRequestSync)
@@ -38,10 +40,11 @@ struct WebView: UIViewRepresentable {
         // then load. Loading inside the task keeps the first request from racing
         // the cookie and bouncing to the sign-in page.
         let store = config.websiteDataStore.httpCookieStore
-        let target = url
+        let coordinator = context.coordinator
         Task { @MainActor in
             await WebSession.install(into: store)
-            context.coordinator.load(target)
+            coordinator.sessionReady = true
+            coordinator.load(coordinator.deepLinkURL ?? coordinator.parentURL)
         }
         return view
     }
@@ -53,10 +56,19 @@ struct WebView: UIViewRepresentable {
             context.coordinator.lastNoticeId = notice.id
             context.coordinator.notifySync(ok: notice.ok, message: notice.message)
         }
+        if context.coordinator.loadedWidgetToken != widgetToken {
+            context.coordinator.loadedWidgetToken = widgetToken
+            context.coordinator.notifyWidget()
+        }
         if context.coordinator.loadedPathToken != pathToken {
             context.coordinator.loadedPathToken = pathToken
             if let page = Settings.pageURL(path: path) {
-                context.coordinator.load(page)
+                // A widget or Siri link can arrive on cold launch before the
+                // session cookie is in; the session task loads it once it is.
+                context.coordinator.deepLinkURL = page
+                if context.coordinator.sessionReady {
+                    context.coordinator.load(page)
+                }
             }
         }
         guard context.coordinator.loadedToken != reloadToken else { return }
@@ -71,8 +83,11 @@ struct WebView: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var loadedToken = 0
         var loadedPathToken = 0
+        var loadedWidgetToken = 0
         var lastNoticeId: UUID?
         var parentURL: URL
+        var deepLinkURL: URL?
+        var sessionReady = false
         var onRequestSync: () -> Void
         private weak var webView: WKWebView?
         private var isLoading = false
@@ -104,6 +119,10 @@ struct WebView: UIViewRepresentable {
             webView.reload()
         }
 
+        func notifyWidget() {
+            webView?.evaluateJavaScript("window.__blueHourOnWidget && window.__blueHourOnWidget()")
+        }
+
         func notifySync(ok: Bool, message: String) {
             let payload = #"{"ok":\#(ok ? "true" : "false"),"message":\#(Self.jsonString(message))}"#
             webView?.evaluateJavaScript("window.__blueHourOnSync && window.__blueHourOnSync(\(payload))")
@@ -124,6 +143,8 @@ struct WebView: UIViewRepresentable {
             }
             if action == "syncHealth" {
                 onRequestSync()
+            } else if action == "reloadWidgets" {
+                WidgetCenter.shared.reloadAllTimelines()
             }
         }
 
@@ -134,6 +155,9 @@ struct WebView: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             isLoading = false
             retries = 0
+            if webView.url?.path != "/signin" {
+                deepLinkURL = nil
+            }
             if pendingReload {
                 pendingReload = false
                 webView.reload()
@@ -147,7 +171,8 @@ struct WebView: UIViewRepresentable {
                 let store = webView.configuration.websiteDataStore.httpCookieStore
                 Task { @MainActor [weak self] in
                     await WebSession.install(into: store)
-                    self?.load(self?.parentURL ?? webView.url!)
+                    guard let self else { return }
+                    self.load(self.deepLinkURL ?? self.parentURL)
                 }
             }
         }
