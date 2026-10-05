@@ -66,6 +66,8 @@ export interface Recovery {
 }
 
 const SHORT_SLEEP_MIN = 6 * 60;
+/** Hours of sleep that score neutral on readiness. The 10pm preview uses this as the target. */
+export const SLEEP_TARGET_HOURS = 7.5;
 const RHR_ELEVATED_BPM = 5;
 const BASELINE_MIN_SAMPLES = 4;
 /** How far back Today may reach for sleep / rest HR when this morning is empty. */
@@ -316,7 +318,7 @@ function racePrepFromData(
   let recoveryPts = 0;
   if (day?.asleepMin !== null && day?.asleepMin !== undefined) {
     const hours = day.asleepMin / 60;
-    recoveryPts += Math.max(-10, Math.min(6, Math.round((hours - 7.5) * 4)));
+    recoveryPts += Math.max(-10, Math.min(6, Math.round((hours - SLEEP_TARGET_HOURS) * 4)));
   }
   if (day?.restingHr !== null && day?.restingHr !== undefined && restingBaseline !== null) {
     recoveryPts -= Math.max(-4, Math.min(10, Math.round((day.restingHr - restingBaseline) * 2)));

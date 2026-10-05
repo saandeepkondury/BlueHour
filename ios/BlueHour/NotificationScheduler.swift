@@ -21,7 +21,7 @@ struct ScheduleResponse: Decodable {
     let items: [ScheduledPing]
 }
 
-/// Native local notifications for morning briefs and water pings.
+/// Native local notifications for morning briefs, the 10pm next-day preview, and water pings.
 /// The server owns copy and timing; this just asks iOS to fire them.
 enum NotificationScheduler {
     static let waterCategory = "water"

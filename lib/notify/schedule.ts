@@ -1,9 +1,10 @@
 import { addDays, todayISO, wallTimeInZone } from "@/lib/date";
 import { buildBrief } from "@/lib/notify/brief";
+import { buildEveningPreview, EVENING_HOUR } from "@/lib/notify/evening";
 import { behindPace, waterPush, waterReminderSlots } from "@/lib/notify/water";
 import { getDayBundle, getDayLog, getProfile } from "@/lib/store";
 
-export type LocalPingKind = "morning" | "water";
+export type LocalPingKind = "morning" | "water" | "evening";
 
 export interface LocalPing {
   id: string;
@@ -93,6 +94,22 @@ export async function buildLocalSchedule(appUrl: string): Promise<LocalSchedule>
       );
       if (water) items.push(water);
     }
+  }
+
+  for (let offset = 1; offset <= HORIZON_DAYS; offset += 1) {
+    const day = addDays(start, offset);
+    const evening = addDays(day, -1);
+    const preview = await buildEveningPreview(day);
+    if (!preview) continue;
+    const item = ping(
+      `evening-${evening}`,
+      "evening",
+      preview.title,
+      preview.body,
+      evening,
+      EVENING_HOUR,
+    );
+    if (item) items.push(item);
   }
 
   return {

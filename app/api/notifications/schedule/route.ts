@@ -7,8 +7,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Upcoming morning briefs and water pings for the iPhone shell to schedule as
- * native local notifications, built from the signed-in account's plan.
+ * Upcoming morning briefs, 10pm previews of the next day, and water pings for
+ * the iPhone shell to schedule as native local notifications.
  */
 export async function GET(request: Request) {
   const auth = await authenticate(request);
