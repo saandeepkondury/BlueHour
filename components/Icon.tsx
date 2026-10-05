@@ -37,7 +37,8 @@ export type IconName =
   | "person"
   | "camera"
   | "book"
-  | "edit";
+  | "edit"
+  | "trash";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   camera: (
@@ -217,6 +218,14 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M19.5 4.5v4h-4" />
       <path d="M19.5 12a7.5 7.5 0 0 1-12.4 5.7L5 15.5" />
       <path d="M5 19.5v-4h4" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M5 7.5h14" />
+      <path d="M9.5 7.4V5.2h5v2.2" />
+      <path d="M7.2 7.5l.7 11a1.6 1.6 0 0 0 1.6 1.5h5a1.6 1.6 0 0 0 1.6-1.5l.7-11" />
+      <path d="M10.2 11v5.2M13.8 11v5.2" />
     </>
   ),
 };

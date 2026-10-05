@@ -37,6 +37,9 @@ export function MealDay({
     if (presetRecipe) return { preset: presetRecipe };
     return composeOnLoad ? {} : null;
   });
+  const [openId, setOpenId] = useState<number | null>(null);
+  const [gone, setGone] = useState<number[]>([]);
+  const visible = meals.filter((meal) => !gone.includes(meal.id));
 
   const close = useCallback(() => {
     setComposer(null);
@@ -51,7 +54,7 @@ export function MealDay({
 
   return (
     <>
-      {meals.length === 0 ? (
+      {visible.length === 0 ? (
         <div className="empty">
           <span className="empty__icon">
             <Icon name="camera" size={20} />
@@ -62,12 +65,20 @@ export function MealDay({
         </div>
       ) : (
         <div className={variant === "full" ? "meal-list" : "meal-list meal-list--compact"}>
-          {meals.map((meal) => (
+          {visible.map((meal) => (
             <MealCard
               key={meal.id}
               meal={meal}
               variant={variant}
+              shut={openId !== null && openId !== meal.id}
               onEdit={(picked) => setComposer({ meal: picked })}
+              onOpen={() => setOpenId(meal.id)}
+              onClose={() => setOpenId((id) => (id === meal.id ? null : id))}
+              onRemoved={() => {
+                setGone((ids) => (ids.includes(meal.id) ? ids : [...ids, meal.id]));
+                setOpenId((id) => (id === meal.id ? null : id));
+              }}
+              onRestored={() => setGone((ids) => ids.filter((id) => id !== meal.id))}
             />
           ))}
         </div>

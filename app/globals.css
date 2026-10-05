@@ -2736,6 +2736,80 @@ pre {
   gap: 0.5rem;
 }
 
+.meal-swipe {
+  position: relative;
+  overflow: hidden;
+  background: var(--bad);
+  transition: height 0.28s var(--ease), opacity 0.22s ease;
+}
+
+.meal-swipe--full {
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+}
+
+.meal-swipe--compact {
+  border-radius: var(--r-tile);
+}
+
+.meal-swipe--leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.meal-swipe__face {
+  position: relative;
+  z-index: 1;
+  background: var(--surface);
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.28s var(--ease);
+}
+
+.meal-swipe__face.is-dragging {
+  transition: none;
+  user-select: none;
+}
+
+.meal-swipe__delete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 7rem;
+  border: 0;
+  background: var(--bad);
+  color: #fff;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.meal-swipe__delete:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -6px;
+}
+
+.meal-swipe .meal-card {
+  border-radius: 0;
+}
+
+.meal-swipe--full .meal-card {
+  box-shadow: none;
+}
+
+.meal-swipe--compact .meal-card {
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
 .meal-card {
   position: relative;
   display: grid;
